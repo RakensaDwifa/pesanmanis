@@ -2,19 +2,24 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronDown,
   CloudUpload,
+  CreditCard,
   ImagePlus,
   Loader2,
+  Mail,
+  MessageSquareHeart,
   Music,
+  PartyPopper,
   Plus,
   Redo2,
   Undo2,
-  Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { getTemplate, fillContentDefaults } from "@/lib/templates";
@@ -38,15 +43,22 @@ import { useContentHistory } from "@/lib/history";
 import { useKeyboardShortcuts } from "@/lib/shortcuts";
 import ShortcutsHelpModal from "@/components/ui/shortcuts-help";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
+import { BRAND } from "@/lib/brand";
 
-const STEPS = ["Identitas", "Pesan", "Galeri & Musik", "Bayar"];
+const SECTIONS = [
+  { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
+  { id: "pesan", label: "Pesan", icon: MessageSquareHeart, hint: "Tulis perasaanmu" },
+  { id: "media", label: "Galeri & Musik", icon: ImagePlus, hint: "Foto & lagu kenangan" },
+  { id: "selesai", label: "Selesaikan", icon: PartyPopper, hint: "Kirim kejutan" },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]["id"];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function BuilderPage({ slug, editId }: { slug: string; editId?: string }) {
   const template = getTemplate(slug);
   const router = useRouter();
-  const [step, setStep] = useState(0);
   const [content, setContent] = useState<Partial<UcapanContent>>(() => {
     if (editId) {
       const existing = getUcapan(editId);
@@ -68,6 +80,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [uploading, setUploading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [openSection, setOpenSection] = useState<SectionId>("identitas");
   const [previewMode, setPreviewMode] = useState<"mobile" | "desktop">("mobile");
 
   useEffect(() => {
@@ -162,82 +175,17 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const { canUndo, canRedo, undo, redo, markRestored } =
     useContentHistory<Partial<UcapanContent>>(content, applyContent);
 
-  // Ref ke aksi builder — diisi setelah fungsi-fungsi didefinisikan (di bawah).
-  const actionsRef = useRef<{
-    undo: () => void;
-    redo: () => void;
-    next: () => void;
-    prev: () => void;
-    save: () => void;
-    gotoStep: (i: number) => void;
-  }>({
-    undo: () => {},
-    redo: () => {},
-    next: () => {},
-    prev: () => {},
-    save: () => {},
-    gotoStep: () => {},
-  });
-
-  useKeyboardShortcuts(
-    {
-      "ctrl+z": () => actionsRef.current.undo(),
-      "ctrl+shift+z": () => actionsRef.current.redo(),
-      "ctrl+y": () => actionsRef.current.redo(),
-      "ctrl+s": () => actionsRef.current.save(),
-      "ctrl+enter": () => actionsRef.current.next(),
-      escape: () => actionsRef.current.prev(),
-      "alt+1": () => actionsRef.current.gotoStep(0),
-      "alt+2": () => actionsRef.current.gotoStep(1),
-      "alt+3": () => actionsRef.current.gotoStep(2),
-      "alt+4": () => actionsRef.current.gotoStep(3),
-      "?": () => setShowShortcuts(true),
-      "shift+?": () => setShowShortcuts(true),
-    }
-  );
-
-  if (!template) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
-        <p className="text-headline-md text-on-surface mb-3">Template tidak ditemukan</p>
-        <a href="/templates" className="text-primary font-semibold">
-          Kembali ke daftar template
-        </a>
-      </div>
-    );
-  }
-
   const isValidEmail = useCallback((email: string) => EMAIL_REGEX.test(email.trim()), []);
 
-  const canNext = step === 0
-    ? Boolean(content.toName?.trim() && content.email?.trim() && isValidEmail(content.email))
-    : step === 1
-      ? Boolean(content.message?.trim())
-      : true;
+  const identitasComplete = Boolean(
+    content.toName?.trim() && content.email?.trim() && isValidEmail(content.email ?? "")
+  );
+  const pesanComplete = Boolean(content.message?.trim());
+  const mediaComplete = true; // galeri & musik opsional
+  const canPay = identitasComplete && pesanComplete;
 
   const set = <K extends keyof UcapanContent>(key: K, value: UcapanContent[K]) =>
     setContent((c) => ({ ...c, [key]: value }));
-
-  const next = () => {
-    AnalyticsEvents.builderStepCompleted(step, slug);
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  };
-  const prev = () => {
-    AnalyticsEvents.builderStepCompleted(step, slug);
-    setStep((s) => Math.max(s - 1, 0));
-  };
-
-  actionsRef.current.undo = undo;
-  actionsRef.current.redo = redo;
-  actionsRef.current.next = () => {
-    if (!canNext) return;
-    next();
-  };
-  actionsRef.current.prev = prev;
-  // Lompat langkah hanya ke belakang (konsisten dengan progress pills)
-  actionsRef.current.gotoStep = (i: number) => {
-    if (i >= 0 && i < STEPS.length && i < step) setStep(i);
-  };
 
   const uploadPhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -264,7 +212,16 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   };
 
   const goToPayment = async () => {
-    AnalyticsEvents.paymentStarted(slug, 8900);
+    if (!canPay) {
+      setOpenSection(!identitasComplete ? "identitas" : "pesan");
+      toast.error(
+        !identitasComplete
+          ? "Lengkapi dulu nama & email di bagian Identitas"
+          : "Tulis dulu pesanmu di bagian Pesan"
+      );
+      return;
+    }
+    AnalyticsEvents.paymentStarted(slug, BRAND.price);
     setSaving(true);
     try {
       if (isRemote()) {
@@ -311,28 +268,141 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
   };
 
+  // Ref ke aksi builder — diisi setelah fungsi-fungsi didefinisikan (di bawah).
+  const actionsRef = useRef<{
+    undo: () => void;
+    redo: () => void;
+    save: () => void;
+    gotoSection: (i: number) => void;
+  }>({
+    undo: () => {},
+    redo: () => {},
+    save: () => {},
+    gotoSection: () => {},
+  });
+
+  useKeyboardShortcuts({
+    "ctrl+z": () => actionsRef.current.undo(),
+    "ctrl+shift+z": () => actionsRef.current.redo(),
+    "ctrl+y": () => actionsRef.current.redo(),
+    "ctrl+s": () => actionsRef.current.save(),
+    "ctrl+enter": () => actionsRef.current.save(),
+    "alt+1": () => actionsRef.current.gotoSection(0),
+    "alt+2": () => actionsRef.current.gotoSection(1),
+    "alt+3": () => actionsRef.current.gotoSection(2),
+    "alt+4": () => actionsRef.current.gotoSection(3),
+    "?": () => setShowShortcuts(true),
+    "shift+?": () => setShowShortcuts(true),
+  });
+
+  if (!template) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
+        <p className="text-headline-md text-on-surface mb-3">Template tidak ditemukan</p>
+        <a href="/templates" className="text-primary font-semibold">
+          Kembali ke daftar template
+        </a>
+      </div>
+    );
+  }
+
+  actionsRef.current.undo = undo;
+  actionsRef.current.redo = redo;
   actionsRef.current.save = () => {
     if (!saving) void goToPayment();
+  };
+  actionsRef.current.gotoSection = (i: number) => {
+    const section = SECTIONS[i];
+    if (section) setOpenSection(section.id);
+  };
+
+  const openSectionIndex = SECTIONS.findIndex((s) => s.id === openSection);
+
+  const switchSection = (id: SectionId) => {
+    if (id === openSection) return;
+    if (openSectionIndex >= 0) {
+      AnalyticsEvents.builderStepCompleted(openSectionIndex, slug);
+    }
+    setOpenSection(id);
+  };
+
+  const sectionComplete: Record<SectionId, boolean> = {
+    identitas: identitasComplete,
+    pesan: pesanComplete,
+    media: mediaComplete,
+    selesai: canPay,
   };
 
   const inputClass =
     "w-full rounded-2xl border border-outline-variant bg-white px-4 py-3 text-body-md text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow";
 
-  return (
-    <div className="min-h-screen bg-surface pt-20">
-      <div className="max-w-[1200px] mx-auto px-5 md:px-16 py-10">
-        <a
-          href="/templates"
-          className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-6"
+  const sectionHeader = (section: (typeof SECTIONS)[number]) => {
+    const Icon = section.icon;
+    const active = openSection === section.id;
+    const complete = sectionComplete[section.id];
+    return (
+      <button
+        onClick={() => switchSection(section.id)}
+        aria-expanded={active}
+        className={`w-full flex items-center gap-3.5 px-5 md:px-7 py-4.5 text-left transition-colors ${
+          active ? "bg-primary-fixed/20" : "hover:bg-surface-container-low/60"
+        }`}
+      >
+        <span
+          className={`flex items-center justify-center h-10 w-10 rounded-2xl shrink-0 transition-colors ${
+            active
+              ? "bg-primary text-white shadow-[0_4px_14px_rgba(222,112,56,0.35)]"
+              : complete
+                ? "bg-primary-fixed text-on-primary-fixed-variant"
+                : "bg-surface-container-high text-on-surface-variant"
+          }`}
         >
-          <ArrowLeft className="h-4 w-4" /> Kembali
-        </a>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-title-md font-semibold text-on-surface">
+            {section.label}
+          </span>
+          <span className="block text-label-md text-on-surface-variant truncate">
+            {section.hint}
+          </span>
+        </span>
+        {complete && !active && (
+          <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white shrink-0">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        )}
+        <ChevronDown
+          className={`h-4.5 w-4.5 shrink-0 text-on-surface-variant transition-transform duration-300 ${
+            active ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+    );
+  };
 
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-heading text-headline-md text-primary">
-            Buat Ucapan — {template.name}
-          </h1>
-          <div className="flex items-center gap-3">
+  return (
+    <div className="min-h-screen bg-surface pt-24 pb-28 lg:pb-10">
+      <div className="max-w-[1400px] mx-auto px-5 md:px-10">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-4 min-w-0">
+            <a
+              href="/templates"
+              aria-label="Kembali ke daftar template"
+              className="p-2.5 rounded-full bg-white border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+            >
+              <ArrowLeft className="h-4.5 w-4.5" />
+            </a>
+            <div className="min-w-0">
+              <h1 className="font-heading text-title-lg text-on-surface truncate">
+                Buat Ucapan — {template.name}
+              </h1>
+              <p className="text-label-md text-on-surface-variant">
+                Semua perubahan tersimpan otomatis
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
             {isRemote() && (
               <span
                 className={`hidden sm:inline-flex items-center gap-1.5 text-label-md font-semibold px-3 py-1.5 rounded-full transition-colors ${
@@ -354,417 +424,405 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                 )}
                 {syncStatus === "saved" && (
                   <>
-                    <CloudUpload className="h-3.5 w-3.5" /> Tersimpan otomatis
+                    <CloudUpload className="h-3.5 w-3.5" /> Tersimpan
                   </>
                 )}
                 {syncStatus === "error" && <>⚠️ Sinkron gagal</>}
               </span>
             )}
+            <div className="flex items-center rounded-full bg-white border border-outline-variant/30 p-1">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                aria-label="Undo"
+                title="Undo (Ctrl+Z)"
+                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                aria-label="Redo"
+                title="Redo (Ctrl+Shift+Z)"
+                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40"
+              >
+                <Redo2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setShowShortcuts(true)}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts (?)"
+                className="px-3 py-2 rounded-full text-label-md font-semibold text-on-surface hover:bg-surface-container-low transition-colors"
+              >
+                ⌨️
+              </button>
+            </div>
             <span className="text-label-lg font-bold text-primary bg-primary-fixed/40 px-4 py-1.5 rounded-full">
-              Rp 8.900
+              {BRAND.priceLabel}
             </span>
           </div>
         </div>
 
-        {/* progress */}
-        <div className="flex items-center gap-2 mb-8">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center gap-2 flex-1 last:flex-none">
-              <button
-                onClick={() => i < step && setStep(i)}
-                className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-label-md font-semibold transition-all ${
-                  i < step
-                    ? "bg-primary text-white"
-                    : i === step
-                      ? "bg-primary-fixed/50 text-primary"
-                      : "bg-surface-container-low text-on-surface-variant"
-                }`}
-              >
-                {i < step ? <Check className="h-3.5 w-3.5" /> : <span>{i + 1}</span>}
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-              {i < STEPS.length - 1 && (
-                <div
-                  className={`h-0.5 flex-1 rounded ${
-                    i < step ? "bg-primary" : "bg-outline-variant"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* undo/redo toolbar */}
-        <div className="flex items-center justify-end gap-2 mb-4">
-          <button
-            onClick={undo}
-            disabled={!canUndo}
-            aria-label="Undo"
-            title="Undo (Ctrl+Z)"
-            className="p-2.5 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors disabled:opacity-40 disabled:hover:bg-surface-container-low"
-          >
-            <Undo2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={redo}
-            disabled={!canRedo}
-            aria-label="Redo"
-            title="Redo (Ctrl+Shift+Z)"
-            className="p-2.5 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors disabled:opacity-40 disabled:hover:bg-surface-container-low"
-          >
-            <Redo2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setShowShortcuts(true)}
-            aria-label="Keyboard shortcuts"
-            title="Keyboard shortcuts (?)"
-            className="px-3 py-2.5 rounded-full bg-surface-container-low text-label-md font-semibold text-on-surface hover:bg-surface-container transition-colors"
-          >
-            ⌨️ Shortcuts
-          </button>
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* FORM */}
-          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
-            {step === 0 && (
-              <div className="space-y-5">
-                <h2 className="font-heading text-title-lg text-on-surface">Siapa untuk siapa?</h2>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Nama Pacar Kamu *
-                  </label>
-                  <input
-                    className={inputClass}
-                    placeholder="cth: Nabila"
-                    value={content.toName ?? ""}
-                    onChange={(e) => set("toName", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Nama Kamu
-                  </label>
-                  <input
-                    className={inputClass}
-                    placeholder="cth: Raka"
-                    value={content.fromName ?? ""}
-                    onChange={(e) => set("fromName", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Judul Surat
-                  </label>
-                  <input
-                    className={inputClass}
-                    placeholder="cth: Untuk Kamu"
-                    value={content.title ?? ""}
-                    onChange={(e) => set("title", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Email Kamu (untuk notifikasi) *
-                  </label>
-                  <input
-                    type="email"
-                    className={inputClass}
-                    placeholder="cth: kamu@gmail.com"
-                    value={content.email ?? ""}
-                    onChange={(e) => set("email", e.target.value)}
-                    onBlur={(e) => {
-                      const email = e.target.value;
-                      if (email && !isValidEmail(email)) {
-                        toast.error("Format email tidak valid");
-                      }
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {step === 1 && (
-              <div className="space-y-5">
-                <h2 className="font-heading text-title-lg text-on-surface">Tulis pesanmu 💌</h2>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Isi Pesan *
-                  </label>
-                  <textarea
-                    className={`${inputClass} min-h-56 resize-y`}
-                    placeholder="Ceritakan perasaanmu…"
-                    value={content.message ?? ""}
-                    onChange={(e) => set("message", e.target.value)}
-                  />
-                  <p className="text-label-md text-on-surface-variant mt-1.5">
-                    {content.message?.length ?? 0} karakter
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-5">
-                <h2 className="font-heading text-title-lg text-on-surface">
-                  Galeri kenangan & musik
-                </h2>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Foto Kenangan
-                  </label>
-                  <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/50 px-4 py-8 cursor-pointer hover:border-primary/50 hover:bg-primary-fixed/10 transition-colors">
-                    <ImagePlus className="h-8 w-8 text-primary" />
-                    <span className="text-body-md font-semibold text-on-surface">
-                      {uploading ? "Mengunggah…" : "Pilih Foto dari Galeri / Kamera"}
-                    </span>
-                    <span className="text-label-md text-on-surface-variant">
-                      Otomatis dikompres & diunggah · maks 10MB/foto
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      disabled={uploading}
-                      onChange={(e) => {
-                        void uploadPhotos(e.target.files);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {(content.photos ?? []).length > 0 && (
-                    <div className="grid grid-cols-3 gap-3 mt-4">
-                      {(content.photos ?? []).map((photo, i) => (
-                        <div
-                          key={`${photo}-${i}`}
-                          className="relative aspect-square rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low"
-                        >
-                          <img
-                            src={photo}
-                            alt={`Foto ${i + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <button
-                            onClick={() =>
-                              set("photos", (content.photos ?? []).filter((_, j) => j !== i))
-                            }
-                            aria-label="Hapus foto"
-                            className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-label-md font-semibold text-primary">
-                      atau tempel URL gambar
-                    </summary>
-                    <div className="flex flex-col gap-2 mt-2">
-                      {(content.photos ?? []).map((photo, i) => (
-                        <div key={`url-${i}`} className="flex items-center gap-2">
-                          <input
-                            className={inputClass}
-                            value={photo}
-                            onChange={(e) => {
-                              const photos = [...(content.photos ?? [])];
-                              photos[i] = e.target.value;
-                              set("photos", photos);
-                            }}
-                          />
-                          <button
-                            onClick={() =>
-                              set("photos", (content.photos ?? []).filter((_, j) => j !== i))
-                            }
-                            aria-label="Hapus foto"
-                            className="p-2.5 rounded-full text-on-surface-variant hover:text-primary transition-colors shrink-0"
-                          >
-                            <X className="h-5 w-5" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => set("photos", [...(content.photos ?? []), ""])}
-                        className="inline-flex items-center gap-2 self-start text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
+        <div className="grid lg:grid-cols-[minmax(360px,440px)_1fr] gap-6 lg:gap-8 items-start">
+          {/* PANEL KIRI — accordion editor */}
+          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden lg:sticky lg:top-24">
+            <div className="divide-y divide-outline-variant/25">
+              {SECTIONS.map((section) => (
+                <div key={section.id}>
+                  {sectionHeader(section)}
+                  <AnimatePresence initial={false}>
+                    {openSection === section.id && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.28, ease: "easeInOut" }}
+                        className="overflow-hidden"
                       >
-                        <Plus className="h-4 w-4" /> Tambah URL
-                      </button>
-                    </div>
-                  </details>
-                </div>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Musik Latar (URL MP3)
-                  </label>
-                  <div className="relative">
-                    <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
-                    <input
-                      className={`${inputClass} pl-11`}
-                      placeholder="https://…/lagu.mp3"
-                      value={content.musicUrl ?? ""}
-                      onChange={(e) => set("musicUrl", e.target.value)}
-                    />
-                  </div>
-                </div>
+                        <div className="px-5 md:px-7 py-6">
+                          {section.id === "identitas" && (
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Nama Pacar Kamu *
+                                </label>
+                                <input
+                                  className={inputClass}
+                                  placeholder="cth: Nabila"
+                                  value={content.toName ?? ""}
+                                  onChange={(e) => set("toName", e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Nama Kamu
+                                </label>
+                                <input
+                                  className={inputClass}
+                                  placeholder="cth: Raka"
+                                  value={content.fromName ?? ""}
+                                  onChange={(e) => set("fromName", e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Judul Surat
+                                </label>
+                                <input
+                                  className={inputClass}
+                                  placeholder="cth: Untuk Kamu"
+                                  value={content.title ?? ""}
+                                  onChange={(e) => set("title", e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="flex items-center gap-1.5 block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  <Mail className="h-3.5 w-3.5 text-primary" />
+                                  Email Kamu (untuk notifikasi) *
+                                </label>
+                                <input
+                                  type="email"
+                                  className={inputClass}
+                                  placeholder="cth: kamu@gmail.com"
+                                  value={content.email ?? ""}
+                                  onChange={(e) => set("email", e.target.value)}
+                                  onBlur={(e) => {
+                                    const email = e.target.value;
+                                    if (email && !isValidEmail(email)) {
+                                      toast.error("Format email tidak valid");
+                                    }
+                                  }}
+                                  required
+                                />
+                              </div>
+                              {identitasComplete && (
+                                <button
+                                  onClick={() => switchSection("pesan")}
+                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                >
+                                  Lanjut tulis pesan <ArrowRight className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
 
-                <div className="border-t border-outline-variant/30 pt-6">
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1">
-                    Timeline / Momen Penting (Opsional)
-                  </label>
-                  <p className="text-body-md text-on-surface-variant mb-4">
-                    Tambahkan tanggal dan momen spesial kalian (misal: Kencan Pertama, Jadian).
-                  </p>
-                  <div className="space-y-3">
-                    {(content.timeline ?? []).map((item, i) => (
-                      <div key={i} className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-label-md font-bold text-primary">Momen #{i + 1}</span>
-                          <button
-                            onClick={() => {
-                              const t = [...(content.timeline ?? [])];
-                              t.splice(i, 1);
-                              set("timeline", t);
-                            }}
-                            className="text-red-500 hover:text-red-700 text-label-md font-semibold"
-                          >
-                            Hapus
-                          </button>
+                          {section.id === "pesan" && (
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Isi Pesan *
+                                </label>
+                                <textarea
+                                  className={`${inputClass} min-h-56 resize-y`}
+                                  placeholder="Ceritakan perasaanmu…"
+                                  value={content.message ?? ""}
+                                  onChange={(e) => set("message", e.target.value)}
+                                />
+                                <p className="text-label-md text-on-surface-variant mt-1.5">
+                                  {content.message?.length ?? 0} karakter
+                                </p>
+                              </div>
+                              {pesanComplete && (
+                                <button
+                                  onClick={() => switchSection("media")}
+                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                >
+                                  Tambah foto & musik <ArrowRight className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {section.id === "media" && (
+                            <div className="space-y-5">
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Foto Kenangan
+                                </label>
+                                <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/50 px-4 py-8 cursor-pointer hover:border-primary/50 hover:bg-primary-fixed/10 transition-colors">
+                                  <ImagePlus className="h-8 w-8 text-primary" />
+                                  <span className="text-body-md font-semibold text-on-surface">
+                                    {uploading ? "Mengunggah…" : "Pilih Foto dari Galeri / Kamera"}
+                                  </span>
+                                  <span className="text-label-md text-on-surface-variant">
+                                    Otomatis dikompres & diunggah · maks 10MB/foto
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    disabled={uploading}
+                                    onChange={(e) => {
+                                      void uploadPhotos(e.target.files);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                                {(content.photos ?? []).length > 0 && (
+                                  <div className="grid grid-cols-3 gap-3 mt-4">
+                                    {(content.photos ?? []).map((photo, i) => (
+                                      <div
+                                        key={`${photo}-${i}`}
+                                        className="relative aspect-square rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low"
+                                      >
+                                        <img
+                                          src={photo}
+                                          alt={`Foto ${i + 1}`}
+                                          className="w-full h-full object-cover"
+                                        />
+                                        <button
+                                          onClick={() =>
+                                            set("photos", (content.photos ?? []).filter((_, j) => j !== i))
+                                          }
+                                          aria-label="Hapus foto"
+                                          className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <details className="mt-3">
+                                  <summary className="cursor-pointer text-label-md font-semibold text-primary">
+                                    atau tempel URL gambar
+                                  </summary>
+                                  <div className="flex flex-col gap-2 mt-2">
+                                    {(content.photos ?? []).map((photo, i) => (
+                                      <div key={`url-${i}`} className="flex items-center gap-2">
+                                        <input
+                                          className={inputClass}
+                                          value={photo}
+                                          onChange={(e) => {
+                                            const photos = [...(content.photos ?? [])];
+                                            photos[i] = e.target.value;
+                                            set("photos", photos);
+                                          }}
+                                        />
+                                        <button
+                                          onClick={() =>
+                                            set("photos", (content.photos ?? []).filter((_, j) => j !== i))
+                                          }
+                                          aria-label="Hapus foto"
+                                          className="p-2.5 rounded-full text-on-surface-variant hover:text-primary transition-colors shrink-0"
+                                        >
+                                          <X className="h-5 w-5" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <button
+                                      onClick={() => set("photos", [...(content.photos ?? []), ""])}
+                                      className="inline-flex items-center gap-2 self-start text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
+                                    >
+                                      <Plus className="h-4 w-4" /> Tambah URL
+                                    </button>
+                                  </div>
+                                </details>
+                              </div>
+                              <div>
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                  Musik Latar (URL MP3)
+                                </label>
+                                <div className="relative">
+                                  <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
+                                  <input
+                                    className={`${inputClass} pl-11`}
+                                    placeholder="https://…/lagu.mp3"
+                                    value={content.musicUrl ?? ""}
+                                    onChange={(e) => set("musicUrl", e.target.value)}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="border-t border-outline-variant/30 pt-5">
+                                <label className="block text-label-lg font-semibold text-on-surface mb-1">
+                                  Timeline / Momen Penting (Opsional)
+                                </label>
+                                <p className="text-body-md text-on-surface-variant mb-4">
+                                  Tambahkan tanggal dan momen spesial kalian (misal: Kencan Pertama, Jadian).
+                                </p>
+                                <div className="space-y-3">
+                                  {(content.timeline ?? []).map((item, i) => (
+                                    <div key={i} className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-label-md font-bold text-primary">Momen #{i + 1}</span>
+                                        <button
+                                          onClick={() => {
+                                            const t = [...(content.timeline ?? [])];
+                                            t.splice(i, 1);
+                                            set("timeline", t);
+                                          }}
+                                          className="text-red-500 hover:text-red-700 text-label-md font-semibold"
+                                        >
+                                          Hapus
+                                        </button>
+                                      </div>
+                                      <div className="grid sm:grid-cols-2 gap-3">
+                                        <input
+                                          className={inputClass}
+                                          placeholder="Tanggal (cth: 14 Feb 2024)"
+                                          value={item.date}
+                                          onChange={(e) => {
+                                            const t = [...(content.timeline ?? [])];
+                                            t[i] = { ...t[i], date: e.target.value };
+                                            set("timeline", t);
+                                          }}
+                                        />
+                                        <input
+                                          className={inputClass}
+                                          placeholder="Judul Momen (cth: Kencan Pertama)"
+                                          value={item.title}
+                                          onChange={(e) => {
+                                            const t = [...(content.timeline ?? [])];
+                                            t[i] = { ...t[i], title: e.target.value };
+                                            set("timeline", t);
+                                          }}
+                                        />
+                                      </div>
+                                      <input
+                                        className={inputClass}
+                                        placeholder="Deskripsi singkat (opsional)"
+                                        value={item.description ?? ""}
+                                        onChange={(e) => {
+                                          const t = [...(content.timeline ?? [])];
+                                          t[i] = { ...t[i], description: e.target.value };
+                                          set("timeline", t);
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                  <button
+                                    onClick={() =>
+                                      set("timeline", [
+                                        ...(content.timeline ?? []),
+                                        { date: "", title: "", description: "" },
+                                      ])
+                                    }
+                                    className="inline-flex items-center gap-2 text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
+                                  >
+                                    <Plus className="h-4 w-4" /> Tambah Momen Timeline
+                                  </button>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => switchSection("selesai")}
+                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                              >
+                                Siap kirim kejutan <ArrowRight className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+
+                          {section.id === "selesai" && (
+                            <div className="space-y-5">
+                              <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
+                                {[
+                                  ["Template", template.name],
+                                  ["Untuk", content.toName || "—"],
+                                  ["Dari", content.fromName || "—"],
+                                  ["Judul", content.title || "—"],
+                                  ["Pesan", `${content.message?.length ?? 0} karakter`],
+                                  ["Foto", `${content.photos?.filter(Boolean).length ?? 0} foto`],
+                                  ["Harga", `${BRAND.priceLabel} (sekali bayar)`],
+                                ].map(([label, value]) => (
+                                  <div key={label} className="flex justify-between gap-4">
+                                    <span className="text-body-md text-on-surface-variant">{label}</span>
+                                    <span className="text-body-md font-semibold text-on-surface text-right">
+                                      {value}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                ✅ Link aktif selamanya · ✅ Edit 7 hari setelah bayar · ✅ Bisa dibagikan via
+                                link & QR · ✅ Jejak kunjungan real-time
+                              </p>
+                              <button
+                                onClick={() => void goToPayment()}
+                                disabled={saving || !canPay}
+                                title={!canPay ? "Lengkapi Identitas & Pesan dulu" : undefined}
+                                className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0"
+                              >
+                                {saving ? (
+                                  <>
+                                    <Loader2 className="h-5 w-5 animate-spin" /> Menyimpan…
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="h-4.5 w-4.5" />
+                                    Lanjut ke Pembayaran — {BRAND.priceLabel}
+                                  </>
+                                )}
+                              </button>
+                              {!canPay && (
+                                <p className="text-label-md text-on-surface-variant text-center">
+                                  Lengkapi bagian{" "}
+                                  <button onClick={() => switchSection(!identitasComplete ? "identitas" : "pesan")} className="text-primary font-semibold underline underline-offset-2">
+                                    {!identitasComplete ? "Identitas" : "Pesan"}
+                                  </button>{" "}
+                                  dulu ya
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <input
-                            className={inputClass}
-                            placeholder="Tanggal (cth: 14 Feb 2024)"
-                            value={item.date}
-                            onChange={(e) => {
-                              const t = [...(content.timeline ?? [])];
-                              t[i] = { ...t[i], date: e.target.value };
-                              set("timeline", t);
-                            }}
-                          />
-                          <input
-                            className={inputClass}
-                            placeholder="Judul Momen (cth: Kencan Pertama)"
-                            value={item.title}
-                            onChange={(e) => {
-                              const t = [...(content.timeline ?? [])];
-                              t[i] = { ...t[i], title: e.target.value };
-                              set("timeline", t);
-                            }}
-                          />
-                        </div>
-                        <input
-                          className={inputClass}
-                          placeholder="Deskripsi singkat (opsional)"
-                          value={item.description ?? ""}
-                          onChange={(e) => {
-                            const t = [...(content.timeline ?? [])];
-                            t[i] = { ...t[i], description: e.target.value };
-                            set("timeline", t);
-                          }}
-                        />
-                      </div>
-                    ))}
-                    <button
-                      onClick={() =>
-                        set("timeline", [
-                          ...(content.timeline ?? []),
-                          { date: "", title: "", description: "" },
-                        ])
-                      }
-                      className="inline-flex items-center gap-2 text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
-                    >
-                      <Plus className="h-4 w-4" /> Tambah Momen Timeline
-                    </button>
-                  </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-5">
-                <h2 className="font-heading text-title-lg text-on-surface">Siap kirim kejutan?</h2>
-                <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                    Email Kamu (untuk notifikasi)
-                  </label>
-                  <div className="w-full rounded-2xl border border-outline-variant bg-white px-4 py-3 text-body-md text-on-surface">
-                    {content.email ?? "—"}
-                  </div>
-                  <p className="text-label-md text-on-surface-variant mt-1.5">
-                    Digunakan untuk notifikasi link ucapan & konfirmasi pembayaran.
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
-                  {[
-                    ["Template", template.name],
-                    ["Untuk", content.toName || "—"],
-                    ["Dari", content.fromName || "—"],
-                    ["Judul", content.title || "—"],
-                    ["Pesan", `${content.message?.length ?? 0} karakter`],
-                    ["Foto", `${content.photos?.filter(Boolean).length ?? 0} foto`],
-                    ["Harga", "Rp 8.900 (sekali bayar)"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between gap-4">
-                      <span className="text-body-md text-on-surface-variant">{label}</span>
-                      <span className="text-body-md font-semibold text-on-surface text-right">
-                        {value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-label-md text-on-surface-variant leading-relaxed">
-                  ✅ Link aktif selamanya · ✅ Edit 7 hari setelah bayar · ✅ Bisa dibagikan via
-                  link & QR · ✅ Jejak kunjungan real-time
-                </p>
-                <button
-                  onClick={() => void goToPayment()}
-                  disabled={saving}
-                  className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:hover:translate-y-0"
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" /> Menyimpan…
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="hidden" />
-                      Lanjut ke Pembayaran — Rp 8.900
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-outline-variant/30">
-              <button
-                onClick={prev}
-                disabled={step === 0}
-                className="inline-flex items-center gap-1.5 px-6 py-3 rounded-full text-label-lg font-semibold text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-40"
-              >
-                <ArrowLeft className="h-4 w-4" /> Sebelumnya
-              </button>
-              {step < STEPS.length - 1 && (
-                <button
-                  onClick={next}
-                  disabled={!canNext}
-                  className="inline-flex items-center gap-1.5 px-8 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:hover:translate-y-0"
-                >
-                  Lanjut <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* PREVIEW */}
+          {/* PANEL KANAN — live preview permanen */}
           <div className="lg:sticky lg:top-24 self-start">
             <div className="flex items-center justify-between mb-3">
               <p className="text-label-lg font-semibold text-on-surface-variant flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" /> Live Preview
               </p>
-              <div className="flex items-center rounded-full bg-surface-container-low p-1" role="group" aria-label="Mode preview">
+              <div className="flex items-center rounded-full bg-white border border-outline-variant/30 p-1" role="group" aria-label="Mode preview">
                 {(
                   [
                     { mode: "mobile" as const, icon: "📱", label: "Mobile" },
@@ -777,7 +835,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                     aria-pressed={previewMode === mode}
                     className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-label-md font-semibold transition-all ${
                       previewMode === mode
-                        ? "bg-white text-primary shadow-sm"
+                        ? "bg-primary-fixed/50 text-primary"
                         : "text-on-surface-variant hover:text-on-surface"
                     }`}
                   >
@@ -788,7 +846,6 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               </div>
             </div>
             <motion.div
-              key={step}
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
@@ -803,6 +860,23 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           </div>
         </div>
       </div>
+
+      {/* CTA mobile mengambang */}
+      <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 backdrop-blur border-t border-outline-variant/30 px-5 py-3.5 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
+          <p className="text-title-md font-bold text-primary">{BRAND.priceLabel}</p>
+        </div>
+        <button
+          onClick={() => void goToPayment()}
+          disabled={saving || !canPay}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] disabled:opacity-50 transition-all"
+        >
+          {saving ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <CreditCard className="h-4.5 w-4.5" />}
+          Bayar
+        </button>
+      </div>
+
       <ShortcutsHelpModal open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );
