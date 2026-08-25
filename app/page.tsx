@@ -99,7 +99,7 @@ export default function HomePage() {
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 w-full sm:w-auto">
                 <Link
                   href="/templates"
-                  className="w-full sm:w-auto px-16 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(217,108,138,0.3)] hover:-translate-y-1 transition-all duration-300 text-center inline-block"
+                  className="w-full sm:w-auto px-16 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.3)] hover:-translate-y-1 transition-all duration-300 text-center inline-block"
                 >
                   Buat Kejutan Sekarang
                 </Link>
@@ -277,7 +277,7 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/templates"
-                className="w-full sm:w-auto px-12 py-5 bg-primary text-white text-body-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(217,108,138,0.3)] hover:shadow-[0_12px_40px_rgba(217,108,138,0.4)] hover:-translate-y-1 transition-all duration-300 inline-block"
+                className="w-full sm:w-auto px-12 py-5 bg-primary text-white text-body-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.3)] hover:shadow-[0_12px_40px_rgba(222,112,56,0.4)] hover:-translate-y-1 transition-all duration-300 inline-block"
               >
                 Buat Kejutan Sekarang Rp 8.900
               </Link>

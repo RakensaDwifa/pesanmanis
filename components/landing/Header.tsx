@@ -142,7 +142,7 @@ export default function Header({
           <ThemeToggle />
           <Link
             href="/templates"
-            className="inline-flex items-center justify-center px-8 py-3.5 bg-primary text-white text-body-md font-semibold rounded-full shadow-[0_4px_14px_0_rgba(217,108,138,0.39)] hover:shadow-[0_6px_20px_rgba(217,108,138,0.23)] hover:-translate-y-0.5 transition-all duration-200"
+            className="inline-flex items-center justify-center px-8 py-3.5 bg-primary text-white text-body-md font-semibold rounded-full shadow-[0_4px_14px_0_rgba(222,112,56,0.39)] hover:shadow-[0_6px_20px_rgba(222,112,56,0.23)] hover:-translate-y-0.5 transition-all duration-200"
           >
             Buat Ucapan
           </Link>

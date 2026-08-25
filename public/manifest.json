@@ -4,8 +4,8 @@
   "description": "Buat website ucapan personal untuk pacar kamu. Birthday, anniversary, love letter — kirim kejutan yang bikin dia tersenyum. Cuma Rp 8.900.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fff9f7",
-  "theme_color": "#d96c8a",
+  "background_color": "#fff9f5",
+  "theme_color": "#de7038",
   "orientation": "portrait-primary",
   "icons": [
     {

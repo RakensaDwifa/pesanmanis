@@ -722,7 +722,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                 <button
                   onClick={() => void goToPayment()}
                   disabled={saving}
-                  className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(217,108,138,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:hover:translate-y-0"
+                  className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   {saving ? (
                     <>
@@ -792,7 +792,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
-              className={`rounded-3xl overflow-hidden border-4 border-white shadow-[0_20px_60px_rgba(217,108,138,0.2)] transition-[max-width] duration-300 ${
+              className={`rounded-3xl overflow-hidden border-4 border-white shadow-[0_20px_60px_rgba(222,112,56,0.2)] transition-[max-width] duration-300 ${
                 previewMode === "mobile" ? "max-w-[375px] mx-auto" : "max-w-full"
               }`}
             >
