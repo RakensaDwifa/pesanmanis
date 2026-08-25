@@ -55,7 +55,7 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      siteName: "UcapanPacar",
+      siteName: "PesanManis",
       locale: "id_ID",
     },
     twitter: {

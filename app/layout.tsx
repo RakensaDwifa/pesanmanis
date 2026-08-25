@@ -9,6 +9,7 @@ import CaptureReferral from "@/components/referral/CaptureReferral";
 import { ToasterWrapper } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
+import { BRAND } from "@/lib/brand";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -24,11 +25,10 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "UcapanPacar — Buat Momen Spesial Jadi Tak Terlupakan",
-    template: "%s — UcapanPacar",
+    default: `${BRAND.name} — ${BRAND.tagline}`,
+    template: `%s — ${BRAND.name}`,
   },
-  description:
-    "Buat website ucapan personal untuk pacar kamu. Birthday, anniversary, love letter — kirim kejutan yang bikin dia tersenyum. Cuma Rp 8.900.",
+  description: BRAND.description,
 };
 
 export default async function RootLayout({
@@ -56,7 +56,7 @@ export default async function RootLayout({
         <meta name="theme-color" content="#de7038" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="UcapanPacar" />
+        <meta name="apple-mobile-web-app-title" content={BRAND.name} />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <script
           dangerouslySetInnerHTML={{

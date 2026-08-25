@@ -60,7 +60,7 @@ export default function NotFound() {
           </div>
 
           <p className="text-label-md text-on-surface-variant mt-8">
-            Atau kirim email ke <a href="mailto:hello@ucapanpacar.com" className="text-primary hover:underline">hello@ucapanpacar.com</a>
+            Atau kirim email ke <a href="mailto:hello@pesanmanis.com" className="text-primary hover:underline">hello@pesanmanis.com</a>
           </p>
         </div>
       </div>

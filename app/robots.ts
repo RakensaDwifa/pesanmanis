@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BRAND } from "@/lib/brand";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -10,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/t/", "/dashboard", "/admin", "/api/", "/checkout", "/buat"],
       },
     ],
-    sitemap: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://ucapanpacar.vercel.app"}/sitemap.xml`,
+    sitemap: `${BRAND.baseUrl}/sitemap.xml`,
   };
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 export default function Logo({
   light = false,
@@ -21,7 +22,7 @@ export default function Logo({
           light ? "text-white" : "text-primary"
         )}
       >
-        UcapanPacar
+        {BRAND.name}
       </span>
     </Link>
   );

@@ -1,4 +1,4 @@
--- Skema v2 UcapanPacar — jalankan di Supabase SQL Editor (aman dijalankan ulang)
+-- Skema v2 PesanManis — jalankan di Supabase SQL Editor (aman dijalankan ulang)
 -- Isi: tabel + RLS (publik baca ucapan paid, tracking anonim) + realtime + bucket foto
 
 create table if not exists public.templates (

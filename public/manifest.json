@@ -1,7 +1,7 @@
 {
-  "name": "UcapanPacar — Buat Momen Spesial",
-  "short_name": "UcapanPacar",
-  "description": "Buat website ucapan personal untuk pacar kamu. Birthday, anniversary, love letter — kirim kejutan yang bikin dia tersenyum. Cuma Rp 8.900.",
+  "name": "PesanManis — Kirim rasa, bukan sekadar kata",
+  "short_name": "PesanManis",
+  "description": "Buat website ucapan personal untuk orang spesial kamu. Birthday, anniversary, love letter — kirim kejutan manis yang bikin dia tersenyum. Cuma Rp 8.900.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff9f5",

@@ -6,7 +6,7 @@ import LoginForm from "@/components/auth/LoginForm";
 
 export const metadata: Metadata = {
   title: "Masuk",
-  description: "Masuk ke dashboard UcapanPacar.",
+  description: "Masuk ke dashboard PesanManis.",
 };
 
 export default async function LoginPage() {
