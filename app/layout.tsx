@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Serif_Display, Poppins } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import Header from "@/components/landing/Header";
@@ -10,16 +10,16 @@ import { ToasterWrapper } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const dmSerif = DM_Serif_Display({
-  variable: "--font-dm-serif",
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  weight: ["400"],
+  axes: ["SOFT", "WONK"],
 });
 
 export const metadata: Metadata = {
@@ -50,10 +50,10 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="id" className={`${poppins.variable} ${dmSerif.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="id" className={`${jakarta.variable} ${fraunces.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#d96c8a" />
+        <meta name="theme-color" content="#de7038" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="UcapanPacar" />

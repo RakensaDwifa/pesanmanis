@@ -237,7 +237,7 @@ export function OpenButton({ onClick, label = "Buka" }: { onClick: () => void; l
       whileHover={{ scale: 1.06 }}
       whileTap={{ scale: 0.94 }}
       onClick={onClick}
-      className="px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(217,108,138,0.35)]"
+      className="px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)]"
     >
       {label}
     </motion.button>
