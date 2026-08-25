@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CreditCard, Loader2, Lock, QrCode, Wallet } from "lucide-react";
+import { ArrowLeft, Loader2, Lock, QrCode, Wallet } from "lucide-react";
 import { getUcapan } from "@/lib/store";
+import { getTemplate, templateEmoji } from "@/lib/templates";
+import { BRAND } from "@/lib/brand";
 import type { StoredUcapan } from "@/lib/store";
 
 const PAYMENT_METHODS = [
@@ -98,6 +100,8 @@ export default function Checkout({ id }: { id: string }) {
     }
   };
 
+  const templateMeta = getTemplate(ucapan.templateSlug);
+
   return (
     <div className="min-h-screen bg-surface pt-20">
       <div className="max-w-lg mx-auto px-5 py-10">
@@ -108,23 +112,38 @@ export default function Checkout({ id }: { id: string }) {
           <ArrowLeft className="h-4 w-4" /> Kembali edit
         </a>
 
-        <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-primary-fixed/40 flex items-center justify-center text-primary">
-              <CreditCard className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="font-heading text-title-lg text-on-surface">Pembayaran</h1>
-              <p className="text-body-md text-on-surface-variant">
-                Template {ucapan.templateSlug}
+        <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden">
+          {/* Ringkasan pesanan */}
+          <div
+            className={`bg-gradient-to-br ${templateMeta?.gradient ?? "from-primary-fixed to-surface-container-high"} px-6 py-7 flex items-center gap-4`}
+          >
+            <span className="text-5xl drop-shadow-md">{templateEmoji(ucapan.templateSlug)}</span>
+            <div className="min-w-0">
+              <h1 className="font-heading text-title-lg text-on-surface truncate">
+                {templateMeta?.name ?? ucapan.templateSlug}
+              </h1>
+              <p className="text-body-md text-on-surface-variant truncate">
+                Untuk {ucapan.toName} · dari {ucapan.fromName || "seseorang"}
               </p>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-surface-container-low p-5 flex items-center justify-between mb-6">
-            <span className="text-body-md font-medium text-on-surface-variant">Total</span>
-            <span className="text-headline-md font-bold text-primary">Rp 8.900</span>
-          </div>
+          <div className="p-6 md:p-8">
+            <div className="rounded-2xl bg-surface-container-low p-5 mb-6">
+              <div className="flex justify-between text-body-md text-on-surface-variant mb-2">
+                <span>Website ucapan personal</span>
+                <span className="font-semibold text-on-surface">{BRAND.priceLabel}</span>
+              </div>
+              <div className="flex justify-between text-body-md text-on-surface-variant mb-3">
+                <span>Biaya layanan</span>
+                <span className="font-semibold text-on-surface">Rp 0</span>
+              </div>
+              <div className="h-px bg-outline-variant/40 mb-3" />
+              <div className="flex items-center justify-between">
+                <span className="text-body-md font-medium text-on-surface">Total</span>
+                <span className="text-headline-md font-bold text-primary">{BRAND.priceLabel}</span>
+              </div>
+            </div>
 
           {demoMode ? (
             <div className="rounded-2xl border border-primary/20 bg-primary-fixed/20 p-5 mb-6 space-y-2">
@@ -178,13 +197,14 @@ export default function Checkout({ id }: { id: string }) {
             ) : (
               <>
                 <Lock className="h-4 w-4" />
-                {demoMode ? "Aktifkan Sekarang (Demo)" : "Bayar Rp 8.900"}
+                {demoMode ? "Aktifkan Sekarang (Demo)" : `Bayar ${BRAND.priceLabel}`}
               </>
             )}
           </button>
           <p className="text-label-md text-on-surface-variant text-center mt-4 flex items-center justify-center gap-1.5">
             <Lock className="h-3.5 w-3.5" /> Pembayaran aman via Midtrans
           </p>
+          </div>
         </div>
       </div>
     </div>

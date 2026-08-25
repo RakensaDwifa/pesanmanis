@@ -3,8 +3,9 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, MailCheck, Mail } from "lucide-react";
+import { ArrowLeft, Check, Heart, Loader2, MailCheck, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BRAND } from "@/lib/brand";
 
 function GoogleLogo() {
   return (
@@ -86,21 +87,69 @@ function LoginFormInner({ remote }: { remote: boolean }) {
   };
 
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-16">
-      <div className="max-w-md mx-auto px-5">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" /> Kembali
-        </Link>
-
-        <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
-          <h1 className="font-heading text-headline-lg text-primary mb-2">Masuk</h1>
-          <p className="text-body-md text-on-surface-variant mb-6">
-            Kelola ucapanmu, lihat siapa yang sudah membuka link, dan edit dalam
-            masa aktif. Cukup masukkan email — link masuk tanpa password.
+    <div className="min-h-screen grid lg:grid-cols-[1.05fr_1fr] bg-surface">
+      {/* Panel brand — hanya desktop */}
+      <div className="hidden lg:flex relative flex-col justify-between p-14 overflow-hidden bg-gradient-to-br from-primary via-[#e8813f] to-[#c85a28]">
+        <Heart
+          aria-hidden
+          className="absolute -top-10 -right-10 h-56 w-56 text-white/10 rotate-12"
+          fill="currentColor"
+        />
+        <Heart
+          aria-hidden
+          className="absolute bottom-16 -left-14 h-44 w-44 text-white/10 rotate-[-18deg]"
+          fill="currentColor"
+        />
+        <div className="relative">
+          <Link href="/" className="inline-flex items-center gap-2 text-white">
+            <Heart className="h-6 w-6" fill="currentColor" />
+            <span className="font-heading text-2xl italic tracking-tight">{BRAND.name}</span>
+          </Link>
+        </div>
+        <div className="relative max-w-md">
+          <h2 className="font-heading text-[42px] leading-tight text-white mb-5">
+            {BRAND.tagline}
+          </h2>
+          <p className="text-body-lg text-white/90 mb-8">
+            Semua ucapan yang pernah kamu buat, statistik pembukaannya, dan
+            kemudahan edit — ada di satu dashboard.
           </p>
+          <div className="space-y-3.5">
+            {[
+              "Kelola semua ucapan dari satu tempat",
+              "Lihat jejak kapan dia membuka link",
+              "Bagikan ulang via link atau QR kapan saja",
+            ].map((item) => (
+              <p key={item} className="flex items-center gap-3 text-body-md text-white/95">
+                <span className="flex items-center justify-center h-6 w-6 rounded-full bg-white/20 shrink-0">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                {item}
+              </p>
+            ))}
+          </div>
+        </div>
+        <p className="relative text-label-md text-white/70">
+          © 2026 {BRAND.name}.com — Dibuat dengan penuh cinta
+        </p>
+      </div>
+
+      {/* Form */}
+      <div className="flex flex-col justify-center px-5 py-10 lg:px-14 xl:px-20">
+        <div className="max-w-md w-full mx-auto">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-6"
+          >
+            <ArrowLeft className="h-4 w-4" /> Kembali
+          </Link>
+
+          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
+            <h1 className="font-heading text-headline-lg text-primary mb-2">Masuk</h1>
+            <p className="text-body-md text-on-surface-variant mb-6">
+              Kelola ucapanmu, lihat siapa yang sudah membuka link, dan edit dalam
+              masa aktif. Cukup masukkan email — link masuk tanpa password.
+            </p>
 
           {!remote && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-6">
@@ -191,6 +240,7 @@ function LoginFormInner({ remote }: { remote: boolean }) {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
