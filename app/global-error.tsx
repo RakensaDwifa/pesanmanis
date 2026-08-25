@@ -18,7 +18,7 @@ export default function GlobalError({
   return (
     <html lang="id">
       <head>
-        <title>Error - UcapanPacar</title>
+        <title>Error - PesanManis</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className="min-h-screen flex items-center justify-center bg-surface px-5">

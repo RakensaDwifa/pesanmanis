@@ -1,4 +1,4 @@
--- Skema v4 UcapanPacar — perbaikan keamanan & performa (aman dijalankan ulang)
+-- Skema v4 PesanManis — perbaikan keamanan & performa (aman dijalankan ulang)
 
 -- 1. RLS templates: aktifkan + publik hanya bisa baca
 alter table public.templates enable row level security;

@@ -1,4 +1,4 @@
--- Skema Supabase untuk UcapanPacar
+-- Skema Supabase untuk PesanManis
 -- Jalankan di Supabase SQL Editor saat siap upgrade dari mode localStorage.
 
 -- Template (seed opsional; frontend punya registry sendiri)

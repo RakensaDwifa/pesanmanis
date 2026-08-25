@@ -57,7 +57,7 @@ export async function createSnapTransaction(input: {
         ],
         customer_details: {
           first_name: input.customerName.slice(0, 50),
-          email: input.customerEmail ?? "pelanggan@ucapanpacar.com",
+          email: input.customerEmail ?? "pelanggan@pesanmanis.com",
         },
         enabled_payments: ["qris", "gopay", "shopeepay", "ovo", "dana"],
         callbacks: {

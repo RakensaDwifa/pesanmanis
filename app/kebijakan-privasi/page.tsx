@@ -1,6 +1,6 @@
 export const metadata = {
   title: "Kebijakan Privasi",
-  description: "Kebijakan privasi UcapanPacar.",
+  description: "Kebijakan privasi PesanManis.",
 };
 
 export default function PrivacyPage() {

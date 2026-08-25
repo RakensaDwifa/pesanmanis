@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Camera, Heart, Music } from "lucide-react";
 import Logo from "./Logo";
 import NewsletterSignup from "./NewsletterSignup";
+import { BRAND } from "@/lib/brand";
 
 const LINKS = [
   { label: "Kebijakan Privasi", href: "/kebijakan-privasi" },
@@ -42,7 +43,7 @@ export default function Footer() {
 
         <div className="flex items-center justify-center gap-4">
           <a
-            href="https://www.instagram.com"
+            href={BRAND.socials.instagram}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-white/90 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
@@ -51,7 +52,7 @@ export default function Footer() {
             <span>Instagram</span>
           </a>
           <a
-            href="https://www.tiktok.com"
+            href={BRAND.socials.tiktok}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-white/90 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
@@ -63,7 +64,7 @@ export default function Footer() {
 
         <div className="w-full h-px bg-white/20"></div>
         <p className="text-label-md font-normal text-white/80 flex items-center gap-1 justify-center">
-          © 2026 UcapanPacar.com — Dibuat dengan penuh cinta{" "}
+          © 2026 {BRAND.name}.com — Dibuat dengan penuh cinta{" "}
           <Heart className="h-4 w-4 fill-current" />
         </p>
       </div>
