@@ -9,7 +9,7 @@ export const TEMPLATES: TemplateMeta[] = [
       "Sebuah surat cinta klasik. Klik amplopnya, dan pesanmu terbuka dengan lembut.",
     active: true,
     order: 1,
-    gradient: "from-[#FFD9E2] to-[#FFB0C6]",
+    gradient: "from-[#FFE3D2] to-[#FFB98F]",
   },
   {
     slug: "botol-kenangan",
@@ -59,7 +59,7 @@ export const TEMPLATES: TemplateMeta[] = [
       "Hati berdenyut yang menyimpan surat berlapis. Untuk hari-hari penuh cinta kalian.",
     active: true,
     order: 6,
-    gradient: "from-[#FFDDE3] to-[#FF9DB0]",
+    gradient: "from-[#FFDCC8] to-[#FFA37C]",
   },
   {
     slug: "permintaan-maaf",

@@ -169,7 +169,7 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
     <div
       className={cn(
         "relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center text-on-surface",
-        className ?? "bg-gradient-to-b from-[#FFF0F3] via-[#FFE3EA] to-[#FFD9E2]"
+        className ?? "bg-gradient-to-b from-[#FFF6EE] via-[#FFE9D8] to-[#FFDCC8]"
       )}
     >
       <FloatingHearts />
@@ -221,7 +221,7 @@ export function PhotoGrid({ photos }: { photos: string[] }) {
               className="w-full h-36 object-cover rounded-md"
             />
           ) : (
-            <div className="w-full h-36 rounded-md bg-gradient-to-br from-[#FFD9E2] to-[#F5A8BF] flex items-center justify-center text-4xl">
+            <div className="w-full h-36 rounded-md bg-gradient-to-br from-[#FFE3D2] to-[#F5A15A] flex items-center justify-center text-4xl">
               💞
             </div>
           )}

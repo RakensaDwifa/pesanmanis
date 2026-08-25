@@ -9,7 +9,7 @@ export default function AmplopCinta({ content, preview }: TemplateRenderProps) {
   const [opened, setOpened] = useState(Boolean(preview));
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#FFF9F7] to-[#FFE3EA]">
+    <TemplateShell content={content} className="bg-gradient-to-b from-[#FFF9F5] to-[#FFE3D2]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div
@@ -34,7 +34,7 @@ export default function AmplopCinta({ content, preview }: TemplateRenderProps) {
               onClick={() => setOpened(true)}
             >
               {/* body */}
-              <div className="absolute inset-0 rounded-lg bg-[#E95D83] shadow-[0_14px_35px_rgba(233,93,131,0.4)]" />
+              <div className="absolute inset-0 rounded-lg bg-[#DE7038] shadow-[0_14px_35px_rgba(222,112,56,0.4)]" />
               {/* flap */}
               <motion.div
                 className="absolute inset-x-0 top-0 h-24 origin-top"
@@ -52,15 +52,15 @@ export default function AmplopCinta({ content, preview }: TemplateRenderProps) {
                 transition={{ duration: 0.5, delay: 0.15 }}
                 initial={false}
               >
-                <div className="h-1.5 w-3/4 rounded bg-[#FFD9E2] mb-1.5" />
-                <div className="h-1.5 w-1/2 rounded bg-[#FFD9E2]" />
+                <div className="h-1.5 w-3/4 rounded bg-[#FFE3D2] mb-1.5" />
+                <div className="h-1.5 w-1/2 rounded bg-[#FFE3D2]" />
               </motion.div>
               {/* front panel */}
               <div className="absolute inset-x-0 bottom-0 h-24" style={{ clipPath: "polygon(0 0, 50% 45%, 100% 0, 100% 100%, 0 100%)" }}>
-                <div className="w-full h-full rounded-b-lg bg-[#E95D83]" />
+                <div className="w-full h-full rounded-b-lg bg-[#DE7038]" />
               </div>
               {/* heart cutout */}
-              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-10 h-8 bg-[#FFD9E2] rounded-full [clip-path:path('M10,6 C10,2 4,1 4,6 C4,10 10,14 10,14 C10,14 16,10 16,6 C16,1 10,2 10,6 Z')] scale-x-[1.8] opacity-90" />
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-10 h-8 bg-[#FFE3D2] rounded-full [clip-path:path('M10,6 C10,2 4,1 4,6 C4,10 10,14 10,14 C10,14 16,10 16,6 C16,1 10,2 10,6 Z')] scale-x-[1.8] opacity-90" />
             </motion.div>
 
             <p className="text-body-md text-on-surface-variant mt-6 italic text-center">

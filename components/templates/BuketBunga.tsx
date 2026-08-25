@@ -109,7 +109,7 @@ export default function BuketBunga({ content, preview }: TemplateRenderProps) {
               </motion.div>
               {/* ribbon */}
               <motion.div
-                className="absolute left-1/2 -translate-x-1/2 bottom-6 w-20 h-6 rounded-full bg-[#E95D83]"
+                className="absolute left-1/2 -translate-x-1/2 bottom-6 w-20 h-6 rounded-full bg-[#DE7038]"
                 initial={{ scale: 0 }}
                 animate={assembled ? { scale: 1 } : {}}
                 transition={{ delay: 1.2, type: "spring", bounce: 0.6 }}
