@@ -90,3 +90,59 @@ create trigger trg_ucapan_updated_at
 -- ============================================================
 alter table public.ucapan
   add column if not exists timeline JSONB default null;
+
+-- ============================================================
+-- 7. Reaksi (dua arah): penerima bisa membalas perasaan lewat emoji.
+--    Publik (anon) boleh insert + select (ucapan_id unguessable).
+-- ============================================================
+create table if not exists public.reactions (
+  id uuid primary key default gen_random_uuid(),
+  ucapan_id uuid not null references public.ucapan (id) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists reactions_ucapan_id_idx
+  on public.reactions (ucapan_id);
+
+alter table public.reactions enable row level security;
+
+create policy if not exists "publik bisa baca reactions"
+  on public.reactions
+  for select
+  using (true);
+
+create policy if not exists "publik bisa insert reactions"
+  on public.reactions
+  for insert
+  with check (char_length(emoji) between 1 and 8);
+
+-- ============================================================
+-- 8. Balasan (dua arah): penerima bisa membalas ucapan.
+--    Publik (anon) boleh insert + select.
+-- ============================================================
+create table if not exists public.replies (
+  id uuid primary key default gen_random_uuid(),
+  ucapan_id uuid not null references public.ucapan (id) on delete cascade,
+  from_name text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists replies_ucapan_id_idx
+  on public.replies (ucapan_id);
+
+alter table public.replies enable row level security;
+
+create policy if not exists "publik bisa baca replies"
+  on public.replies
+  for select
+  using (true);
+
+create policy if not exists "publik bisa insert replies"
+  on public.replies
+  for insert
+  with check (
+    char_length(from_name) between 1 and 60
+    and char_length(message) between 1 and 1000
+  );

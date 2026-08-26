@@ -31,6 +31,8 @@ import { isRemote, supabaseUrl } from "@/lib/supabase/config";
 import { compressImage } from "@/lib/image";
 import TemplateRenderer from "@/components/templates/registry";
 import MoodSelector from "@/components/MoodSelector";
+import { MUSIC_LIBRARY } from "@/lib/music-library";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   saveDraftRemote,
@@ -669,10 +671,40 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                               </div>
                               <div>
                                 <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                  Musik Latar (URL MP3)
+                                  Musik Latar
                                 </label>
+                                <p className="text-label-md text-on-surface-variant mb-3">
+                                  Pilih dari galeri royalty-free, atau (versi berbayar) tempel
+                                  URL MP3 sendiri.
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {MUSIC_LIBRARY.map((t) => {
+                                    const active = content.musicUrl === t.url;
+                                    return (
+                                      <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => set("musicUrl", t.url)}
+                                        className={cn(
+                                          "text-left rounded-xl border px-3 py-2 transition-all",
+                                          active
+                                            ? "border-transparent text-white shadow-md"
+                                            : "border-outline-variant bg-white text-on-surface-variant hover:border-primary/40"
+                                        )}
+                                        style={active ? { background: "var(--color-primary)" } : undefined}
+                                      >
+                                        <span className="block text-label-md font-semibold">
+                                          {t.title}
+                                        </span>
+                                        <span className="block text-label-sm opacity-80">
+                                          {t.artist} · {t.license}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                                 {plan.music ? (
-                                  <div className="relative">
+                                  <div className="relative mt-3">
                                     <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
                                     <input
                                       className={`${inputClass} pl-11`}
@@ -682,15 +714,29 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                     />
                                   </div>
                                 ) : (
-                                  <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-4 text-center">
-                                    <p className="text-body-md text-on-surface-variant mb-1">
-                                      Musik latar hanya untuk versi berbayar.
-                                    </p>
+                                  <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-3 mt-3 text-center">
                                     <p className="text-label-md text-on-surface-variant">
-                                      Selesaikan & upgrade untuk menambahkan lagu kenangan.
+                                      URL MP3 sendiri hanya untuk versi berbayar. Galeri di atas
+                                      gratis digunakan.
                                     </p>
                                   </div>
                                 )}
+
+                                <div className="mt-4">
+                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                    Video Ucapan (URL)
+                                  </label>
+                                  <input
+                                    className={inputClass}
+                                    placeholder="https://…/video.mp4"
+                                    value={content.videoUrl ?? ""}
+                                    onChange={(e) => set("videoUrl", e.target.value)}
+                                  />
+                                  <p className="text-label-md text-on-surface-variant mt-1.5">
+                                    Upload video menyusul (butuh akun berbayar + storage). Untuk
+                                    sekarang cukup tempel URL video publik.
+                                  </p>
+                                </div>
                               </div>
 
                               <div className="rounded-2xl bg-surface-container-low p-4 border border-outline-variant/30">

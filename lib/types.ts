@@ -40,6 +40,7 @@ export interface UcapanContent {
   message: string;
   photos: string[];
   musicUrl?: string;
+  videoUrl?: string;
   mood?: MoodKey;
   email?: string;
   timeline?: TimelineItem[];
