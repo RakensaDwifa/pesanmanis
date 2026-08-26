@@ -1,3 +1,5 @@
+import type { MoodKey } from "./mood";
+
 export type TemplateCategory =
   | "ungkapan-sayang"
   | "birthday"
@@ -38,6 +40,7 @@ export interface UcapanContent {
   message: string;
   photos: string[];
   musicUrl?: string;
+  mood?: MoodKey;
   email?: string;
   timeline?: TimelineItem[];
   createdAt?: number;
