@@ -129,6 +129,7 @@ export function fillContentDefaults(
     message: content.message ?? "",
     photos: content.photos ?? [],
     musicUrl: content.musicUrl,
+    mood: content.mood,
     createdAt: content.createdAt ?? Date.now(),
   };
 }

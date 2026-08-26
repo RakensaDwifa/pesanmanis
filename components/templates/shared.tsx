@@ -2,10 +2,16 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Music, Pause, Share2, Check, X } from "lucide-react";
+import { Share2, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UcapanContent } from "@/lib/types";
 import { AnalyticsEvents } from "@/lib/analytics";
+import { getMood } from "@/lib/mood";
+import { playSfx } from "@/lib/sfx";
+import ParallaxBackground from "@/components/ParallaxBackground";
+import CursorTrail from "@/components/CursorTrail";
+import CassettePlayer from "@/components/CassettePlayer";
+import SfxToggle from "@/components/SfxToggle";
 
 const HEART_EMOJIS = ["❤️", "💖", "💕", "🌹", "✨"];
 
@@ -57,41 +63,6 @@ function FloatingHearts({ count = 12 }: { count?: number }) {
         </motion.span>
       ))}
     </div>
-  );
-}
-
-function MusicToggle({ content }: { content: UcapanContent }) {
-  const [playing, setPlaying] = useState(false);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
-
-  if (!content.musicUrl) return null;
-
-  const toggle = () => {
-    if (!audio) {
-      const el = new Audio(content.musicUrl);
-      el.loop = true;
-      el.play().catch(() => {});
-      setAudio(el);
-      setPlaying(true);
-      return;
-    }
-    if (playing) {
-      audio.pause();
-      setPlaying(false);
-    } else {
-      audio.play().catch(() => {});
-      setPlaying(true);
-    }
-  };
-
-  return (
-    <button
-      onClick={toggle}
-      aria-label={playing ? "Jeda musik" : "Putar musik"}
-      className="fixed bottom-6 left-5 z-50 flex items-center justify-center rounded-full bg-white/85 backdrop-blur-md border border-outline-variant/40 text-primary shadow-lg w-12 h-12 hover:scale-105 transition-transform"
-    >
-      {playing ? <Pause className="h-5 w-5" /> : <Music className="h-5 w-5" />}
-    </button>
   );
 }
 
@@ -165,15 +136,33 @@ interface ShellProps {
 }
 
 export function TemplateShell({ content, children, className, closeHref }: ShellProps) {
+  const mood = getMood(content.mood);
+  const moodStyle = {
+    background: mood.gradient,
+    "--color-primary": mood.primary,
+    "--color-primary-container": mood.primaryContainer,
+    "--color-primary-fixed": mood.primaryFixed,
+    "--color-on-primary-fixed": mood.onPrimaryFixed,
+    "--color-on-primary-fixed-variant": mood.onPrimaryFixedVariant,
+    "--color-surface": mood.surface,
+    "--color-surface-container-low": mood.surfaceContainerLow,
+    "--color-on-surface": mood.onSurface,
+    "--color-on-surface-variant": mood.onSurfaceVariant,
+  } as React.CSSProperties;
+
   return (
     <div
       className={cn(
         "relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center text-on-surface",
-        className ?? "bg-gradient-to-b from-[#FFF6EE] via-[#FFE9D8] to-[#FFDCC8]"
+        className
       )}
+      style={moodStyle}
     >
+      <ParallaxBackground mood={mood} />
       <FloatingHearts />
-      <MusicToggle content={content} />
+      <CursorTrail />
+      <CassettePlayer content={content} />
+      <SfxToggle />
       <CloseButton href={closeHref} />
       <ShareCardButton />
       <div className="relative z-10 w-full max-w-xl px-5 py-16">{children}</div>
@@ -236,7 +225,10 @@ export function OpenButton({ onClick, label = "Buka" }: { onClick: () => void; l
     <motion.button
       whileHover={{ scale: 1.06 }}
       whileTap={{ scale: 0.94 }}
-      onClick={onClick}
+      onClick={() => {
+        playSfx("pop");
+        onClick();
+      }}
       className="px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)]"
     >
       {label}

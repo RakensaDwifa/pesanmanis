@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { trackEvent } from "@/lib/analytics";
 import { BRAND } from "@/lib/brand";
+import { playSfx } from "@/lib/sfx";
 
 const TAPS_NEEDED = 3;
 const SPARK_EMOJIS = ["💖", "✨", "🌸", "💕", "⭐"];
@@ -29,12 +30,14 @@ export default function EntryGame({
 
   const finish = useCallback(() => {
     setOpening(true);
+    playSfx("open");
     trackEvent("entry_opened", { toName });
     window.setTimeout(onOpen, 650);
   }, [onOpen, toName]);
 
   const tap = useCallback(() => {
     if (opening) return;
+    playSfx("tap");
     const id = sparkId.current++;
     const spark: Spark = {
       id,

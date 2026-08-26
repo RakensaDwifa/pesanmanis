@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isRemote, supabaseUrl } from "@/lib/supabase/config";
 import { compressImage } from "@/lib/image";
 import TemplateRenderer from "@/components/templates/registry";
+import MoodSelector from "@/components/MoodSelector";
 import { toast } from "sonner";
 import {
   saveDraftRemote,
@@ -690,6 +691,13 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                     </p>
                                   </div>
                                 )}
+                              </div>
+
+                              <div className="rounded-2xl bg-surface-container-low p-4 border border-outline-variant/30">
+                                <MoodSelector
+                                  value={content.mood}
+                                  onChange={(m) => set("mood", m)}
+                                />
                               </div>
 
                               <div className="border-t border-outline-variant/30 pt-5">
