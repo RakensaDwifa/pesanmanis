@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/store";
 import TemplateRenderer from "@/components/templates/registry";
+import Watermark from "@/components/Watermark";
 
 export default function PublicView({
   id,
@@ -41,5 +42,10 @@ export default function PublicView({
     );
   }
 
-  return <TemplateRenderer content={ucapan} />;
+  return (
+    <>
+      <TemplateRenderer content={ucapan} />
+      {!ucapan.paid && <Watermark />}
+    </>
+  );
 }
