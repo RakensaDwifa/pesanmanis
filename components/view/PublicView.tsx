@@ -5,6 +5,10 @@ import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/store";
 import TemplateRenderer from "@/components/templates/registry";
 import Watermark from "@/components/Watermark";
+import EntryGame from "@/components/EntryGame";
+import StoryCardButton from "@/components/StoryCardButton";
+
+const entryKey = (id: string) => `pm:entry:${id}`;
 
 export default function PublicView({
   id,
@@ -14,6 +18,13 @@ export default function PublicView({
   remote?: StoredUcapan | null;
 }) {
   const [ucapan] = useState<StoredUcapan | null>(() => remote ?? getUcapan(id));
+  const [entered, setEntered] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && sessionStorage.getItem(entryKey(id)) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!ucapan) return;
@@ -42,10 +53,27 @@ export default function PublicView({
     );
   }
 
+  if (!entered) {
+    return (
+      <EntryGame
+        toName={ucapan.toName}
+        onOpen={() => {
+          try {
+            sessionStorage.setItem(entryKey(id), "1");
+          } catch {
+            /* ignore */
+          }
+          setEntered(true);
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <TemplateRenderer content={ucapan} />
       {!ucapan.paid && <Watermark />}
+      <StoryCardButton ucapan={ucapan} />
     </>
   );
 }
