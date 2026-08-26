@@ -12,7 +12,8 @@ export const BRAND = {
   price: PAID_AMOUNT,
   priceLabel: PAID_AMOUNT_LABEL,
   socials: {
-    instagram: "https://www.instagram.com",
-    tiktok: "https://www.tiktok.com",
+    instagram:
+      process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "https://www.instagram.com",
+    tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL ?? "https://www.tiktok.com",
   },
 } as const;
