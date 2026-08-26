@@ -165,8 +165,29 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
       <SfxToggle />
       <CloseButton href={closeHref} />
       <ShareCardButton />
-      <div className="relative z-10 w-full max-w-xl px-5 py-16">{children}</div>
+      <div className="relative z-10 w-full max-w-xl px-5 py-16">
+        {content.videoUrl ? <VideoBlock url={content.videoUrl} /> : null}
+        {children}
+      </div>
     </div>
+  );
+}
+
+function VideoBlock({ url }: { url: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="mb-6 overflow-hidden rounded-2xl border border-outline-variant/30 shadow-card bg-black/5"
+    >
+      <video
+        src={url}
+        controls
+        playsInline
+        className="w-full max-h-[60vh] bg-black"
+      />
+    </motion.div>
   );
 }
 

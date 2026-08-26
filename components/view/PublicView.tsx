@@ -7,6 +7,7 @@ import TemplateRenderer from "@/components/templates/registry";
 import Watermark from "@/components/Watermark";
 import EntryGame from "@/components/EntryGame";
 import StoryCardButton from "@/components/StoryCardButton";
+import ReactionBar from "@/components/ReactionBar";
 
 const entryKey = (id: string) => `pm:entry:${id}`;
 
@@ -74,6 +75,7 @@ export default function PublicView({
       <TemplateRenderer content={ucapan} />
       {!ucapan.paid && <Watermark />}
       <StoryCardButton ucapan={ucapan} />
+      <ReactionBar ucapanId={id} />
     </>
   );
 }
