@@ -44,6 +44,7 @@ import { useKeyboardShortcuts } from "@/lib/shortcuts";
 import ShortcutsHelpModal from "@/components/ui/shortcuts-help";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 import { BRAND } from "@/lib/brand";
+import { planForPaid } from "@/lib/plans";
 
 const SECTIONS = [
   { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
@@ -76,6 +77,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
     return fillContentDefaults(getDraft(slug) ?? { templateSlug: slug });
   });
+  const initialPaid = editId ? Boolean(getUcapan(editId)?.paid) : false;
+  const [isPaid] = useState(initialPaid);
+  const plan = planForPaid(isPaid);
+
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -665,15 +670,26 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
                                   Musik Latar (URL MP3)
                                 </label>
-                                <div className="relative">
-                                  <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
-                                  <input
-                                    className={`${inputClass} pl-11`}
-                                    placeholder="https://…/lagu.mp3"
-                                    value={content.musicUrl ?? ""}
-                                    onChange={(e) => set("musicUrl", e.target.value)}
-                                  />
-                                </div>
+                                {plan.music ? (
+                                  <div className="relative">
+                                    <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
+                                    <input
+                                      className={`${inputClass} pl-11`}
+                                      placeholder="https://…/lagu.mp3"
+                                      value={content.musicUrl ?? ""}
+                                      onChange={(e) => set("musicUrl", e.target.value)}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-4 text-center">
+                                    <p className="text-body-md text-on-surface-variant mb-1">
+                                      Musik latar hanya untuk versi berbayar.
+                                    </p>
+                                    <p className="text-label-md text-on-surface-variant">
+                                      Selesaikan & upgrade untuk menambahkan lagu kenangan.
+                                    </p>
+                                  </div>
+                                )}
                               </div>
 
                               <div className="border-t border-outline-variant/30 pt-5">

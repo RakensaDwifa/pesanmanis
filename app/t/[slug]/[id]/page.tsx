@@ -22,7 +22,7 @@ export async function generateMetadata({
         .from("ucapan")
         .select("to_name,from_name,message")
         .eq("id", id)
-        .eq("paid", true)
+  
         .maybeSingle();
       if (data) {
         toName = data.to_name ?? toName;
@@ -80,7 +80,7 @@ export default async function ViewRoute({
       .from("ucapan")
       .select("*")
       .eq("id", id)
-      .eq("paid", true)
+
       .maybeSingle();
     remote = data ? mapUcapanRow(data as UcapanRow) : null;
   }

@@ -3,13 +3,15 @@
 -- Idempoten di mana memungkinkan (IF NOT EXISTS / CREATE OR REPLACE).
 
 -- ============================================================
--- 1. ucapan: izinkan publik (anon) membaca ucapan yang SUDAH TERBIT (paid)
---    Agar penerima bisa melihat ucapan lewat link tanpa login.
+-- 1. ucapan: izinkan publik (anon) membaca ucapan lewat link share.
+--    Baik Free maupun Paid bisa dilihat penerima tanpa login.
+--    ID ucapan berupa UUID (unguessable) sehingga aman dibaca publik.
+--    Pembeda Free vs Paid: watermark (ditampilkan di sisi klien saat !paid).
 -- ============================================================
-create policy if not exists "publik bisa baca ucapan terbit"
+create policy if not exists "publik bisa baca ucapan"
   on public.ucapan
   for select
-  using (paid = true);
+  using (true);
 
 -- ============================================================
 -- 2. payments: RLS sudah aktif tapi belum punya policy.
