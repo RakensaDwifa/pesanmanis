@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSnapTransaction } from "@/lib/midtrans";
 import { getUcapan } from "@/lib/store";
+import { PAID_AMOUNT } from "@/lib/pricing";
 import { isRemote } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
       ucapan_id: ucapanId,
       merchant_ref: merchantRef,
       method: "snap",
-      amount: 8900,
+      amount: PAID_AMOUNT,
       status: "UNPAID",
     });
     if (insertError) {
