@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isRemote } from "@/lib/supabase/config";
+import { PAID_AMOUNT } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
             fromName: ucapan.from_name,
             toName: ucapan.to_name,
             templateSlug: ucapan.template_slug,
-            amount: Number(payload.gross_amount ?? 8900),
+            amount: Number(payload.gross_amount ?? PAID_AMOUNT),
           });
           if (!adminRes.ok) {
             console.warn("[payment-webhook] email admin gagal", adminRes);

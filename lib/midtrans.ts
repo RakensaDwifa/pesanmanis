@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { PAID_AMOUNT } from "./pricing";
 
 const MIDTRANS_MODE = () => process.env.MIDTRANS_MODE ?? "sandbox";
 
@@ -45,12 +46,12 @@ export async function createSnapTransaction(input: {
       body: JSON.stringify({
         transaction_details: {
           order_id: input.merchantRef,
-          gross_amount: 8900,
+          gross_amount: PAID_AMOUNT,
         },
         item_details: [
           {
             id: `TEMPLATE-${input.templateSlug}`,
-            price: 8900,
+            price: PAID_AMOUNT,
             quantity: 1,
             name: `Template Ucapan (${input.templateSlug})`,
           },
