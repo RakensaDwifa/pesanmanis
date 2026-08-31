@@ -30,7 +30,7 @@ export async function createSnapTransaction(input: {
   }
 
   const authString = Buffer.from(`${serverKey}:`).toString("base64");
-  const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const baseUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const callbackUrl = process.env.MIDTRANS_CALLBACK_URL ?? `${baseUrl}/api/payment/webhook`;
   const returnUrl = `${baseUrl}/checkout/${input.ucapanId}/selesai?ref=${input.merchantRef}`;
 

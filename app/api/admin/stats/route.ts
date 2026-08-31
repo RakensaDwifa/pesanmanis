@@ -19,7 +19,10 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
   }
 
-  const adminEmail = process.env.ADMIN_EMAIL || "rakensadwifa@gmail.com";
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) {
+    return NextResponse.json({ ok: false, error: "ADMIN_EMAIL_NOT_CONFIGURED" }, { status: 500 });
+  }
   if (user.email !== adminEmail) {
     return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
   }

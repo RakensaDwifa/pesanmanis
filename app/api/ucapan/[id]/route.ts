@@ -65,7 +65,7 @@ export async function GET(
     return NextResponse.json({ ok: true, demo: true, ucapan: null });
   }
   const { id } = await params;
-  const ucapan = await fetchUcapanAdmin(id);
+  const { ucapan } = await fetchUcapan(id);
   if (!ucapan) {
     return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
   }
