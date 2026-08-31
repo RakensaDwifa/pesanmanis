@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { isRemote } from "@/lib/supabase/config";
 import { PAID_AMOUNT } from "@/lib/pricing";
 
+function maskId(id: string): string {
+  if (!id || id.length <= 8) return "***";
+  return `${id.slice(0, 4)}...${id.slice(-4)}`;
+}
+
+function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "***";
+  const [local, domain] = email.split("@");
+  return `${local[0]}***@${domain}`;
+}
+
+function maskAmount(amount: number): string {
+  return `Rp ${Math.round(amount / 1000) * 1000}K+`;
+}
+
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
@@ -12,11 +27,30 @@ export async function POST(request: Request) {
   const grossAmount: string = String(payload.gross_amount ?? "");
   const transactionStatus: string = payload.transaction_status ?? "";
   const fraudStatus: string | undefined = payload.fraud_status;
+  const transactionId: string = payload.transaction_id ?? "";
 
   const { verifyMidtransSignature } = await import("@/lib/midtrans");
 
   if (!verifyMidtransSignature(orderId, statusCode, grossAmount, signatureKey)) {
     return NextResponse.json({ success: false, message: "Signature tidak valid" }, { status: 401 });
+  }
+
+  // Idempotency: cek apakah transaksi ini sudah diproses (via transaction_id)
+  if (transactionId && isRemote()) {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const { data: existingPayment } = await admin
+      .from("payments")
+      .select("status")
+      .eq("tripay_ref", transactionId)
+      .maybeSingle();
+    if (existingPayment?.status === "PAID") {
+      console.info("[payment-webhook] idempotent skip: transaction_id sudah diproses", {
+        transactionId: maskId(transactionId),
+        merchantRef: maskId(orderId),
+      });
+      return NextResponse.json({ success: true, idempotent: true });
+    }
   }
 
   const isPaid =
@@ -56,7 +90,7 @@ export async function POST(request: Request) {
         .update({
           status: "PAID",
           method: payload.payment_type ?? "snap",
-          tripay_ref: payload.transaction_id ?? null,
+          tripay_ref: transactionId ?? null,
           paid_at: now,
         })
         .eq("merchant_ref", merchantRef);
@@ -85,7 +119,7 @@ export async function POST(request: Request) {
         .eq("id", ucapanId)
         .maybeSingle();
 
-      console.info("[payment-webhook] PAID + DB aktif", { ref: merchantRef, ucapanId });
+      console.info("[payment-webhook] PAID + DB aktif", { ref: maskId(merchantRef), ucapanId: maskId(ucapanId ?? "") });
 
       // Selesaikan referral pending milik pembeli (jika login & pakai kode referral)
       if (ucapan?.owner_id) {
@@ -109,7 +143,7 @@ export async function POST(request: Request) {
           ucapanId,
         });
         if (!successRes.ok) {
-          console.warn("[payment-webhook] email pembeli gagal", successRes);
+          console.warn("[payment-webhook] email pembeli gagal", { to: maskEmail(ucapan.email), error: successRes.error });
         }
         const adminEmail = process.env.ADMIN_EMAIL;
         if (adminEmail) {
@@ -121,20 +155,20 @@ export async function POST(request: Request) {
             amount: Number(payload.gross_amount ?? PAID_AMOUNT),
           });
           if (!adminRes.ok) {
-            console.warn("[payment-webhook] email admin gagal", adminRes);
+            console.warn("[payment-webhook] email admin gagal", { to: maskEmail(adminEmail), error: adminRes.error });
           }
         }
       } else {
-        console.info("[payment-webhook] tidak ada email pembeli", { ucapanId });
+        console.info("[payment-webhook] tidak ada email pembeli", { ucapanId: maskId(ucapanId ?? "") });
       }
     } else {
       console.warn("[payment-webhook] PAID tetapi ucapan tidak ditemukan", {
-        ref: merchantRef,
+        ref: maskId(merchantRef),
       });
     }
   } else {
     console.info("[payment-webhook] status non-PAID", {
-      ref: merchantRef,
+      ref: maskId(merchantRef),
       status: transactionStatus,
       statusCode,
     });
@@ -160,7 +194,7 @@ export async function POST(request: Request) {
           if (!existing) {
             await admin.from("checkout_sessions").insert({
               ucapan_id: u.id,
-              email: u.email ?? null,
+              email: u.email ? maskEmail(u.email) : null,
               started_at: now,
             });
           }

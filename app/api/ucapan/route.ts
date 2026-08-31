@@ -51,8 +51,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
   }
 
-  const ip = request.headers.get("x-forwarded-for") || "127.0.0.1";
-  const { success } = checkRateLimit(ip, 5, 60000);
+  const ip =
+    request.headers.get("x-vercel-ip") ||
+    (request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1");
+  const { success } = await checkRateLimit(ip, 5, 60000);
   if (!success) {
     return NextResponse.json(
       { ok: false, error: "RATE_LIMIT_EXCEEDED", message: "Terlalu banyak permintaan. Coba lagi dalam 1 menit." },
