@@ -8,8 +8,12 @@ import Watermark from "@/components/Watermark";
 import EntryGame from "@/components/EntryGame";
 import StoryCardButton from "@/components/StoryCardButton";
 import ReactionBar from "@/components/ReactionBar";
+import ParticleTouch from "@/components/effects/ParticleTouch";
+import GateOverlay from "@/components/effects/GateOverlay";
+import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
 
 const entryKey = (id: string) => `pm:entry:${id}`;
+const gateKey = (id: string) => `pm:gate:${id}`;
 
 export default function PublicView({
   id,
@@ -22,6 +26,13 @@ export default function PublicView({
   const [entered, setEntered] = useState<boolean>(() => {
     try {
       return typeof window !== "undefined" && sessionStorage.getItem(entryKey(id)) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [gateUnlocked, setGateUnlocked] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && sessionStorage.getItem(gateKey(id)) === "1";
     } catch {
       return false;
     }
@@ -70,10 +81,39 @@ export default function PublicView({
     );
   }
 
+  const requiresGate = Boolean(ucapan.paid && ucapan.gateType && !gateUnlocked);
+
   return (
     <>
+      {requiresGate && (
+        <GateOverlay
+          toName={ucapan.toName}
+          fromName={ucapan.fromName}
+          gateType={ucapan.gateType!}
+          gateData={ucapan.gateData}
+          onUnlock={() => {
+            try {
+              sessionStorage.setItem(gateKey(id), "1");
+            } catch {
+              /* ignore */
+            }
+            setGateUnlocked(true);
+          }}
+        />
+      )}
+      {ucapan.paid && ucapan.touchParticles && (
+        <ParticleTouch type={ucapan.touchParticles} />
+      )}
       <TemplateRenderer content={ucapan} />
       {!ucapan.paid && <Watermark />}
+      {ucapan.paid && ucapan.receiptEnabled && (
+        <LoveReceiptModal
+          toName={ucapan.toName}
+          fromName={ucapan.fromName}
+          dateStr={ucapan.paidAt ? new Date(ucapan.paidAt).toISOString() : undefined}
+          templateSlug={ucapan.templateSlug}
+        />
+      )}
       <StoryCardButton ucapan={ucapan} />
       <ReactionBar ucapanId={id} />
     </>

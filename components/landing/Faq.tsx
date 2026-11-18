@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 
 const FAQS = [
   {
@@ -21,9 +22,9 @@ const FAQS = [
       "Setelah pembayaran berhasil, buka halaman utama, lalu pilih Masuk. Setelah login, pilih menu Bagikan untuk melihat link dan QR Code yang bisa langsung kamu kirim ke pasanganmu.",
   },
   {
-    question: "Benar ya, kak, harganya Rp8.900? Websitenya aktif sampai kapan?",
+    question: `Benar ya, kak, harganya ${BRAND.priceLabel}? Websitenya aktif sampai kapan?`,
     answer:
-      "Betul, kak. Harga setiap template hanya Rp8.900. Website yang sudah dibuat akan aktif selamanya, sedangkan akses untuk mengedit melalui dashboard tersedia selama 7 hari sejak pembayaran berhasil.",
+      `Betul, kak. Harga promo perkenalan setiap template hanya ${BRAND.priceLabel} (harga normal ${BRAND.normalPriceLabel} setelah kuota promo habis). Website yang sudah dibuat akan aktif selamanya, sedangkan akses untuk mengedit melalui dashboard tersedia selama 7 hari sejak pembayaran berhasil.`,
   },
 ];
 

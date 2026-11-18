@@ -47,6 +47,7 @@ import { useKeyboardShortcuts } from "@/lib/shortcuts";
 import ShortcutsHelpModal from "@/components/ui/shortcuts-help";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 import { BRAND } from "@/lib/brand";
+import { usePricing } from "@/lib/use-pricing";
 import { planForPaid } from "@/lib/plans";
 
 const SECTIONS = [
@@ -61,6 +62,7 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function BuilderPage({ slug, editId }: { slug: string; editId?: string }) {
+  const pricing = usePricing();
   const template = getTemplate(slug);
   const router = useRouter();
   const [content, setContent] = useState<Partial<UcapanContent>>(() => {
@@ -467,7 +469,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               </button>
             </div>
             <span className="text-label-lg font-bold text-primary bg-primary-fixed/40 px-4 py-1.5 rounded-full">
-              {BRAND.priceLabel}
+              {pricing.formattedPrice}
             </span>
           </div>
         </div>
@@ -827,6 +829,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
                           {section.id === "selesai" && (
                             <div className="space-y-5">
+                              {pricing.isPromo && (
+                                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-amber-900 text-xs flex items-center justify-between">
+                                  <span>🔥 Promo perkenalan (sisa {pricing.remainingQuota} kuota)</span>
+                                  <span className="font-bold">{pricing.formattedPrice}</span>
+                                </div>
+                              )}
                               <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
                                 {[
                                   ["Template", template.name],
@@ -835,7 +843,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   ["Judul", content.title || "—"],
                                   ["Pesan", `${content.message?.length ?? 0} karakter`],
                                   ["Foto", `${content.photos?.filter(Boolean).length ?? 0} foto`],
-                                  ["Harga", `${BRAND.priceLabel} (sekali bayar)`],
+                                  ["Harga", `${pricing.formattedPrice} (sekali bayar)`],
                                 ].map(([label, value]) => (
                                   <div key={label} className="flex justify-between gap-4">
                                     <span className="text-body-md text-on-surface-variant">{label}</span>
@@ -862,7 +870,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 ) : (
                                   <>
                                     <CreditCard className="h-4.5 w-4.5" />
-                                    Lanjut ke Pembayaran — {BRAND.priceLabel}
+                                    Lanjut ke Pembayaran — {pricing.formattedPrice}
                                   </>
                                 )}
                               </button>
@@ -935,7 +943,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 backdrop-blur border-t border-outline-variant/30 px-5 py-3.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
-          <p className="text-title-md font-bold text-primary">{BRAND.priceLabel}</p>
+          <p className="text-title-md font-bold text-primary">{pricing.formattedPrice}</p>
         </div>
         <button
           onClick={() => void goToPayment()}

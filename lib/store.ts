@@ -5,6 +5,13 @@ export interface StoredUcapan extends UcapanContent {
   paid: boolean;
   paidAt?: number;
   createdAt: number;
+  // Add-on fields (diisi setelah pembayaran lunas)
+  customSlug?: string | null;
+  qrPhotoEnabled?: boolean;
+  touchParticles?: string | null;
+  gateType?: string | null;
+  gateData?: Record<string, unknown> | null;
+  receiptEnabled?: boolean;
 }
 
 const DRAFT_KEY = "up_draft_";

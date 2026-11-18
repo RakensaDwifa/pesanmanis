@@ -11,6 +11,12 @@ export interface UcapanRow {
   music_url: string | null;
   email: string | null;
   timeline: any | null;
+  custom_slug?: string | null;
+  qr_photo_enabled?: boolean;
+  touch_particles?: string | null;
+  gate_type?: string | null;
+  gate_data?: any | null;
+  receipt_enabled?: boolean;
   paid: boolean;
   paid_at: string | null;
   created_at: string;
@@ -36,6 +42,12 @@ export interface StoredUcapan extends UcapanContent {
   paidAt?: number;
   createdAt: number;
   views?: ViewSummary;
+  customSlug?: string | null;
+  qrPhotoEnabled?: boolean;
+  touchParticles?: string | null;
+  gateType?: string | null;
+  gateData?: any | null;
+  receiptEnabled?: boolean;
 }
 
 export function mapUcapanRow(
@@ -56,6 +68,12 @@ export function mapUcapanRow(
     paid: row.paid,
     paidAt: row.paid_at ? Date.parse(row.paid_at) : undefined,
     createdAt: Date.parse(row.created_at),
+    customSlug: row.custom_slug ?? null,
+    qrPhotoEnabled: Boolean(row.qr_photo_enabled),
+    touchParticles: row.touch_particles ?? null,
+    gateType: row.gate_type ?? null,
+    gateData: row.gate_data ?? null,
+    receiptEnabled: Boolean(row.receipt_enabled),
     views: stats
       ? {
           count: stats.total_views ?? 0,
