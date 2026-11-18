@@ -470,11 +470,6 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             {section.hint}
           </span>
         </span>
-        {complete && !active && (
-          <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white shrink-0">
-            <Check className="h-3.5 w-3.5" />
-          </span>
-        )}
         <ChevronDown
           className={`h-4.5 w-4.5 shrink-0 text-on-surface-variant transition-transform duration-300 ${
             active ? "rotate-180" : ""
