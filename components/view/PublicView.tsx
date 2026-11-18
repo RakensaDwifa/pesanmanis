@@ -5,14 +5,16 @@ import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/store";
 import TemplateRenderer from "@/components/templates/registry";
 import Watermark from "@/components/Watermark";
-import EntryGame from "@/components/EntryGame";
+import StoryFlow from "@/components/story/StoryFlow";
 import StoryCardButton from "@/components/StoryCardButton";
 import ReactionBar from "@/components/ReactionBar";
 import ParticleTouch from "@/components/effects/ParticleTouch";
 import GateOverlay from "@/components/effects/GateOverlay";
 import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
+import { getTemplate } from "@/lib/templates";
 
-const entryKey = (id: string) => `pm:entry:${id}`;
+const storyKey = (id: string) => `pm:story:${id}`;
+const legacyEntryKey = (id: string) => `pm:entry:${id}`;
 const gateKey = (id: string) => `pm:gate:${id}`;
 
 export default function PublicView({
@@ -23,9 +25,12 @@ export default function PublicView({
   remote?: StoredUcapan | null;
 }) {
   const [ucapan] = useState<StoredUcapan | null>(() => remote ?? getUcapan(id));
-  const [entered, setEntered] = useState<boolean>(() => {
+  const [storyDone, setStoryDone] = useState<boolean>(() => {
     try {
-      return typeof window !== "undefined" && sessionStorage.getItem(entryKey(id)) === "1";
+      return (
+        sessionStorage.getItem(storyKey(id)) === "1" ||
+        sessionStorage.getItem(legacyEntryKey(id)) === "1"
+      );
     } catch {
       return false;
     }
@@ -65,23 +70,18 @@ export default function PublicView({
     );
   }
 
-  if (!entered) {
+  if (!storyDone) {
     return (
-      <EntryGame
+      <StoryFlow
+        id={id}
+        category={getTemplate(ucapan.templateSlug)?.type}
         toName={ucapan.toName}
-        onOpen={() => {
-          try {
-            sessionStorage.setItem(entryKey(id), "1");
-          } catch {
-            /* ignore */
-          }
-          setEntered(true);
-        }}
+        onDone={() => setStoryDone(true)}
       />
     );
   }
 
-  const requiresGate = Boolean(ucapan.paid && ucapan.gateType && !gateUnlocked);
+  const requiresGate = Boolean(ucapan.paid && ucapan.gateType && storyDone && !gateUnlocked);
 
   return (
     <>
