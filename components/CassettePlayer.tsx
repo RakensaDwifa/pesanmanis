@@ -34,7 +34,7 @@ export default function CassettePlayer({ content }: { content: UcapanContent }) 
   };
 
   return (
-    <div className="fixed bottom-6 left-5 z-50 flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-outline-variant/40 shadow-lg pl-2 pr-3 py-2">
+    <div className="flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-outline-variant/40 shadow-lg pl-2 pr-3 py-2">
       <button
         type="button"
         onClick={toggle}
