@@ -110,6 +110,38 @@ export async function POST(request: Request) {
     }
   }
 
+  // Jika add-on gate dipilih, wajib ada PIN 4-6 digit
+  if (sanitizedAddons.includes("intimate_gate")) {
+    const gateData =
+      body.gateData && typeof body.gateData === "object"
+        ? (body.gateData as Record<string, unknown>)
+        : null;
+    const pin = String(gateData?.pin ?? "").trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "INVALID_GATE",
+          message: "PIN rahasia wajib diisi 4–6 angka.",
+        },
+        { status: 400 }
+      );
+    }
+  }
+
+  // Jika add-on partikel dipilih, validasi jenis yang didukung
+  const VALID_PARTICLES = ["hearts", "roses", "sparkles"];
+  if (
+    sanitizedAddons.includes("touch_particles") &&
+    body.touchParticles &&
+    !VALID_PARTICLES.includes(String(body.touchParticles))
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "INVALID_PARTICLE", message: "Jenis efek partikel tidak dikenal." },
+      { status: 400 }
+    );
+  }
+
   // Harga dasar dari server (promo vs normal)
   const price = await getActivePrice();
 

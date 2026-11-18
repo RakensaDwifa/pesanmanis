@@ -122,6 +122,8 @@ export default function Checkout({ id }: { id: string }) {
   const [selectedAddons, setSelectedAddons] = useState<Set<AddonKey>>(new Set());
   const [slugInput, setSlugInput] = useState("");
   const [slugNormalized, setSlugNormalized] = useState("");
+  const [pinInput, setPinInput] = useState("");
+  const [particleStyle, setParticleStyle] = useState<"hearts" | "roses" | "sparkles">("hearts");
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +151,7 @@ export default function Checkout({ id }: { id: string }) {
       if (next.has(key)) {
         next.delete(key);
         if (key === "custom_slug") { setSlugInput(""); setSlugNormalized(""); }
+        if (key === "intimate_gate") setPinInput("");
       } else {
         next.add(key);
       }
@@ -181,6 +184,10 @@ export default function Checkout({ id }: { id: string }) {
       setError("Masukkan alamat link custom yang valid terlebih dahulu.");
       return;
     }
+    if (selectedAddons.has("intimate_gate") && !/^\d{4,6}$/.test(pinInput)) {
+      setError("PIN harus berupa 4–6 angka.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -197,8 +204,9 @@ export default function Checkout({ id }: { id: string }) {
           customerName: ucapan.fromName || "Pelanggan",
           addons: Array.from(selectedAddons),
           customSlug: slugNormalized || undefined,
-          touchParticles: selectedAddons.has("touch_particles") ? "hearts" : undefined,
+          touchParticles: selectedAddons.has("touch_particles") ? particleStyle : undefined,
           gateType: selectedAddons.has("intimate_gate") ? "pin" : undefined,
+          gateData: selectedAddons.has("intimate_gate") ? { pin: pinInput } : undefined,
         }),
       }).then((r) => r.json());
       if (res.ok && res.paymentUrl) {
@@ -301,6 +309,57 @@ export default function Checkout({ id }: { id: string }) {
                   onChange={setSlugInput}
                   onNormalized={setSlugNormalized}
                 />
+              )}
+
+              {/* Input PIN kondisional */}
+              {selectedAddons.has("intimate_gate") && (
+                <div className="mt-3">
+                  <label className="text-xs font-semibold text-on-surface-variant ml-1">
+                    PIN Rahasia (4–6 angka)
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    placeholder="mis. tanggal jadian 1204"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="mt-1 w-full rounded-2xl border border-outline-variant/50 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/30"
+                    maxLength={6}
+                  />
+                  <p className="text-xs text-gray-400 mt-1 ml-1">
+                    Penerima harus memasukkan PIN ini untuk membuka suratmu
+                  </p>
+                </div>
+              )}
+
+              {/* Selector partikel kondisional */}
+              {selectedAddons.has("touch_particles") && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-on-surface-variant ml-1 mb-1.5">
+                    Pilih Efek Sentuhan
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: "hearts", label: "Hati", emoji: "❤️" },
+                      { key: "roses", label: "Mawar", emoji: "🌹" },
+                      { key: "sparkles", label: "Kilau", emoji: "✨" },
+                    ] as const).map((p) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setParticleStyle(p.key)}
+                        className={`rounded-2xl border px-2 py-2.5 text-xs font-semibold transition-all ${
+                          particleStyle === p.key
+                            ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/20"
+                            : "border-outline-variant/50 bg-surface-container-low text-on-surface-variant"
+                        }`}
+                      >
+                        <span className="block text-lg mb-0.5">{p.emoji}</span>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Badge diskon bundling */}

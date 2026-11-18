@@ -33,6 +33,16 @@ export default function GateOverlay({
     e.preventDefault();
     setErrorMsg("");
 
+    // Fail-closed: jika data gerbang tidak lengkap, jangan pernah buka.
+    if (isPin && !expectedPin) {
+      setErrorMsg("PIN belum diatur oleh pengirim. Hubungi dia ya!");
+      return;
+    }
+    if (!isPin && (!triviaQuestion || !expectedAnswer)) {
+      setErrorMsg("Kuis belum diatur oleh pengirim. Hubungi dia ya!");
+      return;
+    }
+
     const trimmed = inputVal.trim();
     if (!trimmed) {
       setErrorMsg("Harap diisi terlebih dahulu ya!");
