@@ -33,6 +33,9 @@ export const AnalyticsEvents = {
   templateViewed: (templateSlug: string) => 
     trackEvent("template_viewed", { template_slug: templateSlug }),
   
+  templatePreviewed: (templateSlug: string) => 
+    trackEvent("template_previewed", { template_slug: templateSlug }),
+  
   paymentMethodSelected: (method: string, templateSlug: string) => 
     trackEvent("payment_method_selected", { method, template_slug: templateSlug }),
   
