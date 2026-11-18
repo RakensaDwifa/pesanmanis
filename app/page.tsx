@@ -295,13 +295,14 @@ export default function HomePage() {
 
           <div className="flex gap-5 overflow-x-auto snap-x snap-mandatory px-5 md:px-16 pb-4 [scrollbar-width:thin]">
             {templates.map((t) => (
-              <Link
+              <div
                 key={t.slug}
-                href={`/buat/${t.slug}`}
                 className="group snap-start shrink-0 w-[280px] sm:w-[320px] bg-white rounded-3xl overflow-hidden shadow-card hover:-translate-y-1.5 hover:shadow-card-hover transition-all duration-300"
               >
-                <div
-                  className={`relative h-40 bg-gradient-to-br ${t.gradient} flex items-center justify-center`}
+                <Link
+                  href={`/preview/${t.slug}`}
+                  aria-label={`Lihat Template ${t.name}`}
+                  className={`relative h-40 w-full bg-gradient-to-br ${t.gradient} flex items-center justify-center block`}
                 >
                   <span className="text-7xl drop-shadow-lg group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-300">
                     {templateEmoji(t.slug)}
@@ -309,15 +310,26 @@ export default function HomePage() {
                   <span className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-label-md font-semibold text-on-surface-variant">
                     {CATEGORY_META[t.type].emoji} {CATEGORY_META[t.type].label}
                   </span>
-                </div>
+                </Link>
                 <div className="p-6">
                   <h3 className="font-heading text-xl text-on-surface mb-1.5">{t.name}</h3>
                   <p className="text-body-md text-on-surface-variant mb-4 min-h-[48px]">{t.description}</p>
-                  <span className="inline-flex items-center gap-1.5 text-label-lg font-semibold text-primary">
-                    Buat Sekarang <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </span>
+                  <div className="flex flex-col gap-2">
+                    <Link
+                      href={`/preview/${t.slug}`}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full border border-outline-variant bg-white text-primary font-semibold text-label-md hover:bg-primary/10 hover:border-primary transition"
+                    >
+                      👁 Lihat Template
+                    </Link>
+                    <Link
+                      href={`/buat/${t.slug}`}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary text-white font-semibold text-label-md shadow hover:bg-primary/90 transition"
+                    >
+                      Buat Sekarang <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </div>
