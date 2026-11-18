@@ -1,67 +1,101 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 import StoryFlow from "@/components/story/StoryFlow";
 import TemplateRenderer from "@/components/templates/registry";
-import { getTemplate, fillContentDefaults, templateEmoji } from "@/lib/templates";
-import { MOCK_CONTENT } from "@/lib/types";
-import { CATEGORY_META } from "@/lib/types";
+import { fillContentDefaults, getTemplate } from "@/lib/templates";
+import { CATEGORY_META, MOCK_CONTENT } from "@/lib/types";
+import { trackEvent } from "@/lib/analytics";
 
 export default function TemplatePreview({ slug }: { slug: string }) {
   const [storyDone, setStoryDone] = useState(false);
   const router = useRouter();
   const t = getTemplate(slug);
+
+  useEffect(() => {
+    trackEvent("template_previewed", { template_slug: slug });
+  }, [slug]);
+
   if (!t) return null;
 
-  // Demo content, isi nama, pesan, dll default.
+  // Isi demo: nama & pesan contoh supaya user melihat tampilan akhirnya.
   const content = fillContentDefaults({ ...MOCK_CONTENT, templateSlug: slug });
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start bg-surface relative pb-8">
-      {/* Bar atas */}
-      <div className="fixed top-0 inset-x-0 z-30 bg-gradient-to-b from-white/90 to-white/30 backdrop-blur transition-all flex items-center justify-between px-5 py-4 shadow-sm">
-        <button
-          className="text-primary font-semibold text-label-lg flex items-center gap-1.5"
-          onClick={() => router.back()}
-        >
-          ← Kembali
-        </button>
-        <div className="flex-1 text-center">
-          <span className="text-title-md font-bold text-on-surface mr-3">{t.name}</span>
-          <span className="px-2 py-1 bg-primary-fixed/10 rounded-full text-primary text-xs font-semibold">
-            {CATEGORY_META[t.type].label}
-          </span>
-        </div>
-        <button
-          className="px-4 py-2 rounded-full bg-primary text-white font-semibold shadow hover:bg-primary/90 transition"
-          onClick={() => router.push(`/buat/${slug}`)}
-        >
-          Pakai Template Ini
-        </button>
-      </div>
+    <div className="relative min-h-screen bg-surface">
+      {!storyDone ? (
+        <>
+          {/* Selama alur berjalan: hanya tombol kembali */}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Kembali"
+            className="fixed top-4 left-4 z-[80] inline-flex items-center gap-1.5 rounded-full bg-white/80 backdrop-blur-md border border-white/60 px-3 py-2 text-label-md font-semibold text-primary shadow-sm hover:bg-white transition"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Kembali
+          </button>
 
-      <div className="pt-20 w-full max-w-xl mx-auto">
-        {!storyDone ? (
           <StoryFlow
-            id={slug + "-demo"}
+            id={`${slug}-demo`}
             category={t.type}
             toName={content.toName}
             persist={false}
             onDone={() => setStoryDone(true)}
           />
-        ) : (
+        </>
+      ) : (
+        <>
+          {/* Template asli, interaksi aslinya (klik amplop, pecah botol, dst) */}
           <div className="relative">
-            <TemplateRenderer content={content} preview />
-            <button
-              className="absolute top-3 right-3 px-3 py-1.5 bg-white/80 rounded-full border border-outline-variant/30 text-label-md font-semibold hover:bg-primary/10 transition"
-              onClick={() => setStoryDone(false)}
-            >
-              Ulangi alur
-            </button>
+            <TemplateRenderer content={content} />
           </div>
-        )}
-      </div>
+
+          {/* Bar navigasi preview */}
+          <div className="fixed top-0 inset-x-0 z-[80] bg-gradient-to-b from-white/85 to-white/40 backdrop-blur-md">
+            <div className="flex items-center gap-2 px-3 sm:px-5 py-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                aria-label="Kembali"
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-label-md font-semibold text-primary hover:bg-white/70 transition"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Kembali</span>
+              </button>
+
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate font-heading text-label-lg sm:text-title-md font-bold text-on-surface">
+                  {t.name}
+                </p>
+                <p className="text-xs text-on-surface-variant">
+                  {CATEGORY_META[t.type].emoji} {CATEGORY_META[t.type].label}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setStoryDone(false)}
+                aria-label="Putar ulang alur"
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-outline-variant/50 bg-white/80 px-3 py-2 text-label-md font-semibold text-on-surface-variant hover:bg-white transition"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span className="hidden sm:inline">Putar ulang</span>
+              </button>
+
+              <Link
+                href={`/buat/${slug}`}
+                className="shrink-0 inline-flex items-center rounded-full bg-primary px-3.5 py-2 text-label-md font-semibold text-white shadow hover:bg-primary/90 transition"
+              >
+                Pakai<span className="hidden sm:inline">&nbsp;Template Ini</span>
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
