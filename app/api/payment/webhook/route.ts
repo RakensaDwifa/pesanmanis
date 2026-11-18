@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     const { data: payment } = await admin
       .from("payments")
-      .select("ucapan_id,status,amount")
+      .select("ucapan_id,status,amount,addons")
       .eq("merchant_ref", merchantRef)
       .maybeSingle();
 
@@ -108,10 +108,29 @@ export async function POST(request: Request) {
         .eq("merchant_ref", merchantRef);
 
       if (!alreadyPaid) {
-        await admin
-          .from("ucapan")
-          .update({ paid: true, paid_at: now, updated_at: now })
-          .eq("id", ucapanId);
+        // Sumber kebenaran add-on: baris payments, bukan payload client.
+        const { sanitizeAddons } = await import("@/lib/pricing");
+        const paidAddons = sanitizeAddons(payment?.addons);
+
+        const ucapanUpdate: Record<string, unknown> = {
+          paid: true,
+          paid_at: now,
+          updated_at: now,
+          qr_photo_enabled: paidAddons.includes("custom_qr"),
+          receipt_enabled: paidAddons.includes("love_receipt"),
+        };
+
+        // Hanya bersihkan bila add-on tidak dibeli; jangan hapus konfigurasi
+        // yang sudah ditulis saat create untuk add-on yang memang dibayar.
+        if (!paidAddons.includes("touch_particles")) {
+          ucapanUpdate.touch_particles = null;
+        }
+        if (!paidAddons.includes("intimate_gate")) {
+          ucapanUpdate.gate_type = null;
+          ucapanUpdate.gate_data = null;
+        }
+
+        await admin.from("ucapan").update(ucapanUpdate).eq("id", ucapanId);
       }
 
       // Tandai sesi recovery selesai jika ada

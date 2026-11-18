@@ -78,6 +78,7 @@ export default async function CustomSlugRoute({
     .from("ucapan")
     .select("*")
     .eq("custom_slug", customSlug)
+    .eq("paid", true)
     .maybeSingle();
 
   if (!data) notFound();
