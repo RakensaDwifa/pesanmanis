@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getTemplate } from "@/lib/templates";
 import TemplatePreview from "@/components/view/TemplatePreview";
 
@@ -12,12 +13,9 @@ export const metadata: Metadata = {
 export default async function PreviewPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const t = getTemplate(params.slug);
-  if (!t) {
-    const { notFound } = await import("next/navigation");
-    notFound();
-  }
-  return <TemplatePreview slug={params.slug} />;
+  const { slug } = await params;
+  if (!getTemplate(slug)) notFound();
+  return <TemplatePreview slug={slug} />;
 }
