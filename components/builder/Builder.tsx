@@ -121,7 +121,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [uploading, setUploading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [openSection, setOpenSection] = useState<SectionId>("identitas");
+  const [openSection, setOpenSection] = useState<SectionId | null>("identitas");
   const [previewMode, setPreviewMode] = useState<"mobile" | "desktop">("mobile");
 
   // ── Add-on (monetisasi) ──
@@ -422,11 +422,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const openSectionIndex = SECTIONS.findIndex((s) => s.id === openSection);
 
   const switchSection = (id: SectionId) => {
-    if (id === openSection) return;
-    if (openSectionIndex >= 0) {
+    if (id !== openSection && openSectionIndex >= 0) {
       AnalyticsEvents.builderStepCompleted(openSectionIndex, slug);
     }
-    setOpenSection(id);
+    setOpenSection((prev) => (prev === id ? null : id));
   };
 
   const sectionComplete: Record<SectionId, boolean> = {
