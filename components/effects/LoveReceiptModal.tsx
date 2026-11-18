@@ -8,12 +8,15 @@ interface LoveReceiptModalProps {
   fromName: string;
   dateStr?: string;
   templateSlug?: string;
+  /** "embedded" → tombol menempel di dalam frame preview. */
+  variant?: "floating" | "embedded";
 }
 
 export default function LoveReceiptModal({
   toName,
   fromName,
   dateStr,
+  variant = "floating",
 }: LoveReceiptModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -57,7 +60,11 @@ export default function LoveReceiptModal({
       {/* Floating Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-5 z-40 flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-xs font-semibold text-gray-800 shadow-xl border border-rose-200/60 backdrop-blur hover:bg-rose-50 hover:text-rose-600 transition-all hover:scale-105"
+        className={
+          variant === "floating"
+            ? "fixed bottom-24 right-5 z-40 flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-xs font-semibold text-gray-800 shadow-xl border border-rose-200/60 backdrop-blur hover:bg-rose-50 hover:text-rose-600 transition-all hover:scale-105"
+            : "absolute bottom-3 right-3 z-20 flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-2 text-[11px] font-semibold text-gray-800 shadow-lg border border-rose-200/60 backdrop-blur hover:bg-rose-50 hover:text-rose-600 transition-all"
+        }
         title="Simpan Bukti Struk Cinta"
       >
         <Receipt className="h-4 w-4 text-rose-500" />
@@ -66,7 +73,13 @@ export default function LoveReceiptModal({
 
       {/* Modal Backdrop */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div
+          className={
+            variant === "floating"
+              ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+              : "absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          }
+        >
           <div className="relative w-full max-w-sm rounded-3xl bg-neutral-100 p-5 shadow-2xl overflow-hidden flex flex-col items-center">
             {/* Close Button */}
             <button
