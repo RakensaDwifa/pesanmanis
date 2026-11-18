@@ -926,123 +926,148 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   const addon = ADDON_PRICING[key];
                                   const active = selectedAddons.has(key);
                                   return (
-                                    <button
-                                      key={key}
-                                      type="button"
-                                      onClick={() => toggleAddon(key)}
-                                      aria-pressed={active}
-                                      className={cn(
-                                        "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3",
-                                        active
-                                          ? "border-primary bg-primary-fixed/20 ring-1 ring-primary/20"
-                                          : "border-outline-variant/50 bg-white hover:border-primary/40"
-                                      )}
-                                    >
-                                      <span
+                                    <div key={key}>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAddon(key)}
+                                        aria-pressed={active}
+                                        aria-expanded={active}
                                         className={cn(
-                                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                                          "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3",
                                           active
-                                            ? "bg-primary border-primary text-white"
-                                            : "border-outline-variant"
+                                            ? "border-primary bg-primary-fixed/20 ring-1 ring-primary/20"
+                                            : "border-outline-variant/50 bg-white hover:border-primary/40"
                                         )}
                                       >
-                                        {active && <Check className="h-3.5 w-3.5" />}
-                                      </span>
-                                      <span className="flex-1 min-w-0">
-                                        <span className="flex items-baseline justify-between gap-2">
-                                          <span className="text-label-lg font-semibold text-on-surface">
-                                            {addon.label}
+                                        <span
+                                          className={cn(
+                                            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                                            active
+                                              ? "bg-primary border-primary text-white"
+                                              : "border-outline-variant"
+                                          )}
+                                        >
+                                          {active && <Check className="h-3.5 w-3.5" />}
+                                        </span>
+                                        <span className="flex-1 min-w-0">
+                                          <span className="flex items-baseline justify-between gap-2">
+                                            <span className="text-label-lg font-semibold text-on-surface">
+                                              {addon.label}
+                                            </span>
+                                            <span className="text-label-md font-bold text-primary shrink-0">
+                                              +{formatPrice(addon.amount)}
+                                            </span>
                                           </span>
-                                          <span className="text-label-md font-bold text-primary shrink-0">
-                                            +{formatPrice(addon.amount)}
+                                          <span className="block text-label-md text-on-surface-variant mt-0.5">
+                                            {ADDON_NOTES[key]}
                                           </span>
                                         </span>
-                                        <span className="block text-label-md text-on-surface-variant mt-0.5">
-                                          {ADDON_NOTES[key]}
-                                        </span>
-                                      </span>
-                                    </button>
+                                      </button>
+
+                                      {active && (
+                                        <div className="mt-2 rounded-2xl border border-outline-variant/40 bg-surface-container-low/60 p-3">
+                                          {key === "custom_slug" && (
+                                            <div>
+                                              <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                Alamat Link Cantik
+                                              </label>
+                                              <input
+                                                className={inputClass}
+                                                placeholder="cth: ari-nadia"
+                                                value={slugInput}
+                                                onChange={(e) => setSlugInput(e.target.value)}
+                                              />
+                                              <p
+                                                className={`text-label-md mt-1.5 ${
+                                                  !slugInput.trim()
+                                                    ? "text-on-surface-variant"
+                                                    : slugCheck.valid
+                                                      ? "text-green-600"
+                                                      : "text-red-500"
+                                                }`}
+                                              >
+                                                {!slugInput.trim()
+                                                  ? "Link jadi: /u/…"
+                                                  : slugCheck.valid
+                                                    ? `Link jadi: /u/${slugCheck.normalized}`
+                                                    : slugCheck.reason}
+                                              </p>
+                                            </div>
+                                          )}
+
+                                          {key === "intimate_gate" && (
+                                            <div>
+                                              <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                PIN Rahasia (4–6 angka)
+                                              </label>
+                                              <input
+                                                type="password"
+                                                inputMode="numeric"
+                                                maxLength={6}
+                                                className={inputClass}
+                                                placeholder="cth: 1204"
+                                                value={pinInput}
+                                                onChange={(e) =>
+                                                  setPinInput(
+                                                    e.target.value.replace(/\D/g, "").slice(0, 6)
+                                                  )
+                                                }
+                                              />
+                                              <p className="text-label-md text-on-surface-variant mt-1.5">
+                                                Penerima harus mengetik PIN ini. Coba di preview
+                                                sekarang.
+                                              </p>
+                                            </div>
+                                          )}
+
+                                          {key === "touch_particles" && (
+                                            <div>
+                                              <p className="text-label-md font-semibold text-on-surface mb-1.5">
+                                                Pilih Efek Sentuhan
+                                              </p>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                {PARTICLE_OPTIONS.map((p) => (
+                                                  <button
+                                                    key={p.key}
+                                                    type="button"
+                                                    onClick={() => setParticleStyle(p.key)}
+                                                    aria-pressed={particleStyle === p.key}
+                                                    className={cn(
+                                                      "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all",
+                                                      particleStyle === p.key
+                                                        ? "border-primary bg-primary-fixed/20 text-primary ring-1 ring-primary/20"
+                                                        : "border-outline-variant/50 bg-white text-on-surface-variant"
+                                                    )}
+                                                  >
+                                                    <span className="block text-lg mb-0.5">
+                                                      {p.emoji}
+                                                    </span>
+                                                    {p.label}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {key === "custom_qr" && (
+                                            <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                              Foto pertama di galeri otomatis dipakai di tengah QR
+                                              Code. Tambahkan foto di bagian Galeri &amp; Musik.
+                                            </p>
+                                          )}
+
+                                          {key === "love_receipt" && (
+                                            <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                              Struk memakai nama &amp; tanggal dari halaman ini.
+                                              Coba tombol <strong>Struk Cinta</strong> di Live Preview.
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                   );
                                 })}
                               </div>
-
-                              {selectedAddons.has("custom_slug") && (
-                                <div>
-                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                    Alamat Link Cantik
-                                  </label>
-                                  <input
-                                    className={inputClass}
-                                    placeholder="cth: ari-nadia"
-                                    value={slugInput}
-                                    onChange={(e) => setSlugInput(e.target.value)}
-                                  />
-                                  <p
-                                    className={`text-label-md mt-1.5 ${
-                                      !slugInput.trim()
-                                        ? "text-on-surface-variant"
-                                        : slugCheck.valid
-                                          ? "text-green-600"
-                                          : "text-red-500"
-                                    }`}
-                                  >
-                                    {!slugInput.trim()
-                                      ? "Link jadi: /u/…"
-                                      : slugCheck.valid
-                                        ? `Link jadi: /u/${slugCheck.normalized}`
-                                        : slugCheck.reason}
-                                  </p>
-                                </div>
-                              )}
-
-                              {selectedAddons.has("intimate_gate") && (
-                                <div>
-                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                    PIN Rahasia (4–6 angka)
-                                  </label>
-                                  <input
-                                    type="password"
-                                    inputMode="numeric"
-                                    maxLength={6}
-                                    className={inputClass}
-                                    placeholder="cth: 1204"
-                                    value={pinInput}
-                                    onChange={(e) =>
-                                      setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))
-                                    }
-                                  />
-                                  <p className="text-label-md text-on-surface-variant mt-1.5">
-                                    Penerima harus mengetik PIN ini. Coba di preview sekarang.
-                                  </p>
-                                </div>
-                              )}
-
-                              {selectedAddons.has("touch_particles") && (
-                                <div>
-                                  <p className="text-label-lg font-semibold text-on-surface mb-1.5">
-                                    Pilih Efek Sentuhan
-                                  </p>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {PARTICLE_OPTIONS.map((p) => (
-                                      <button
-                                        key={p.key}
-                                        type="button"
-                                        onClick={() => setParticleStyle(p.key)}
-                                        aria-pressed={particleStyle === p.key}
-                                        className={cn(
-                                          "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all",
-                                          particleStyle === p.key
-                                            ? "border-primary bg-primary-fixed/20 text-primary ring-1 ring-primary/20"
-                                            : "border-outline-variant/50 bg-white text-on-surface-variant"
-                                        )}
-                                      >
-                                        <span className="block text-lg mb-0.5">{p.emoji}</span>
-                                        {p.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
 
                               {selectedAddons.size > 0 && (
                                 <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-4 space-y-2">
