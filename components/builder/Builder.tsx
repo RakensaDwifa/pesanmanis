@@ -18,6 +18,7 @@ import {
   PartyPopper,
   Plus,
   Redo2,
+  Sparkles,
   Undo2,
   UserRound,
   X,
@@ -49,13 +50,43 @@ import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 import { BRAND } from "@/lib/brand";
 import { usePricing } from "@/lib/use-pricing";
 import { planForPaid } from "@/lib/plans";
+import {
+  ADDON_PRICING,
+  calculateCheckoutTotal,
+  formatPrice,
+  type AddonKey,
+} from "@/lib/pricing";
+import { validateSlugFormat } from "@/lib/slug";
+import ParticleTouch from "@/components/effects/ParticleTouch";
+import GateOverlay from "@/components/effects/GateOverlay";
+import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
 
 const SECTIONS = [
   { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
   { id: "pesan", label: "Pesan", icon: MessageSquareHeart, hint: "Tulis perasaanmu" },
   { id: "media", label: "Galeri & Musik", icon: ImagePlus, hint: "Foto & lagu kenangan" },
+  { id: "tambahan", label: "Tambahan", icon: Sparkles, hint: "Bikin lebih berkesan" },
   { id: "selesai", label: "Selesaikan", icon: PartyPopper, hint: "Kirim kejutan" },
 ] as const;
+
+const ADDON_NOTES: Record<AddonKey, string> = {
+  custom_slug: "Pilih alamat link (mis. /u/ari-nadia)",
+  custom_qr: "Foto kalian di tengah QR Code",
+  touch_particles: "Efek kelopak/hati saat layar disentuh",
+  intimate_gate: "Harus jawab PIN sebelum surat terbuka",
+  love_receipt: "Struk cinta bisa diunduh ke galeri HP",
+};
+
+const PARTICLE_OPTIONS = [
+  { key: "hearts", label: "Hati", emoji: "❤️" },
+  { key: "roses", label: "Mawar", emoji: "🌹" },
+  { key: "sparkles", label: "Kilau", emoji: "✨" },
+] as const;
+
+/** Kunci sessionStorage untuk membawa pilihan add-on ke halaman checkout. */
+export function addonsStorageKey(ucapanId: string) {
+  return `pm:addons:${ucapanId}`;
+}
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -92,6 +123,32 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openSection, setOpenSection] = useState<SectionId>("identitas");
   const [previewMode, setPreviewMode] = useState<"mobile" | "desktop">("mobile");
+
+  // ── Add-on (monetisasi) ──
+  const [selectedAddons, setSelectedAddons] = useState<Set<AddonKey>>(new Set());
+  const [slugInput, setSlugInput] = useState("");
+  const [pinInput, setPinInput] = useState("");
+  const [particleStyle, setParticleStyle] = useState<"hearts" | "roses" | "sparkles">("hearts");
+  const [previewGateOpen, setPreviewGateOpen] = useState(false);
+  const previewFrameRef = useRef<HTMLDivElement | null>(null);
+
+  const toggleAddon = (key: AddonKey) => {
+    if (!selectedAddons.has(key) && key === "intimate_gate") setPreviewGateOpen(true);
+    setSelectedAddons((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+        if (key === "custom_slug") setSlugInput("");
+        if (key === "intimate_gate") setPinInput("");
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const slugCheck = validateSlugFormat(slugInput);
+  const checkoutCalc = calculateCheckoutTotal(pricing.amount, Array.from(selectedAddons));
 
   useEffect(() => {
     try {
@@ -221,6 +278,33 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
   };
 
+  const addonsInvalidReason = (): string | null => {
+    if (selectedAddons.has("custom_slug")) {
+      if (!slugInput.trim()) return "Isi dulu alamat link cantikmu.";
+      if (!slugCheck.valid) return slugCheck.reason ?? "Alamat link tidak valid.";
+    }
+    if (selectedAddons.has("intimate_gate") && !/^\d{4,6}$/.test(pinInput)) {
+      return "PIN harus 4–6 angka.";
+    }
+    return null;
+  };
+
+  const persistAddons = (ucapanId: string) => {
+    try {
+      sessionStorage.setItem(
+        addonsStorageKey(ucapanId),
+        JSON.stringify({
+          addons: Array.from(selectedAddons),
+          customSlug: selectedAddons.has("custom_slug") ? slugCheck.normalized : undefined,
+          pin: selectedAddons.has("intimate_gate") ? pinInput : undefined,
+          particleStyle: selectedAddons.has("touch_particles") ? particleStyle : undefined,
+        })
+      );
+    } catch {
+      // sessionStorage tidak tersedia — checkout akan tampil tanpa add-on
+    }
+  };
+
   const goToPayment = async () => {
     if (!canPay) {
       setOpenSection(!identitasComplete ? "identitas" : "pesan");
@@ -229,6 +313,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           ? "Lengkapi dulu nama & email di bagian Identitas"
           : "Tulis dulu pesanmu di bagian Pesan"
       );
+      return;
+    }
+    const addonError = addonsInvalidReason();
+    if (addonError) {
+      setOpenSection("tambahan");
+      toast.error(addonError);
       return;
     }
     AnalyticsEvents.paymentStarted(slug, BRAND.price);
@@ -257,9 +347,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           );
           return;
         }
+        const finalId: string = json.id ?? editId ?? "";
+        if (finalId) persistAddons(finalId);
         saveDraft(slug, content);
         void clearDraftRemote(slug);
-        router.push(`/checkout/${json.id ?? editId}`);
+        router.push(`/checkout/${finalId}`);
       } else {
         const id = editId ?? makeUcapanId();
         savePaidUcapan({
@@ -269,6 +361,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           paidAt: editId ? getUcapan(id)?.paidAt : undefined,
           createdAt: editId ? getUcapan(id)?.createdAt ?? Date.now() : Date.now(),
         });
+        persistAddons(id);
         router.push(`/checkout/${id}`);
       }
     } catch {
@@ -340,6 +433,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     identitas: identitasComplete,
     pesan: pesanComplete,
     media: mediaComplete,
+    tambahan: addonsInvalidReason() === null,
     selesai: canPay,
   };
 
@@ -469,7 +563,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               </button>
             </div>
             <span className="text-label-lg font-bold text-primary bg-primary-fixed/40 px-4 py-1.5 rounded-full">
-              {pricing.formattedPrice}
+              {formatPrice(checkoutCalc.totalAmount)}
             </span>
           </div>
         </div>
@@ -827,12 +921,185 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                             </div>
                           )}
 
+                          {section.id === "tambahan" && (
+                            <div className="space-y-5">
+                              <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                Opsional. Semua efek di bawah langsung bisa dicoba di Live Preview.
+                              </p>
+
+                              <div className="space-y-2.5">
+                                {(Object.keys(ADDON_PRICING) as AddonKey[]).map((key) => {
+                                  const addon = ADDON_PRICING[key];
+                                  const active = selectedAddons.has(key);
+                                  return (
+                                    <button
+                                      key={key}
+                                      type="button"
+                                      onClick={() => toggleAddon(key)}
+                                      aria-pressed={active}
+                                      className={cn(
+                                        "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3",
+                                        active
+                                          ? "border-primary bg-primary-fixed/20 ring-1 ring-primary/20"
+                                          : "border-outline-variant/50 bg-white hover:border-primary/40"
+                                      )}
+                                    >
+                                      <span
+                                        className={cn(
+                                          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                                          active
+                                            ? "bg-primary border-primary text-white"
+                                            : "border-outline-variant"
+                                        )}
+                                      >
+                                        {active && <Check className="h-3.5 w-3.5" />}
+                                      </span>
+                                      <span className="flex-1 min-w-0">
+                                        <span className="flex items-baseline justify-between gap-2">
+                                          <span className="text-label-lg font-semibold text-on-surface">
+                                            {addon.label}
+                                          </span>
+                                          <span className="text-label-md font-bold text-primary shrink-0">
+                                            +{formatPrice(addon.amount)}
+                                          </span>
+                                        </span>
+                                        <span className="block text-label-md text-on-surface-variant mt-0.5">
+                                          {ADDON_NOTES[key]}
+                                        </span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {selectedAddons.has("custom_slug") && (
+                                <div>
+                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                    Alamat Link Cantik
+                                  </label>
+                                  <input
+                                    className={inputClass}
+                                    placeholder="cth: ari-nadia"
+                                    value={slugInput}
+                                    onChange={(e) => setSlugInput(e.target.value)}
+                                  />
+                                  <p
+                                    className={`text-label-md mt-1.5 ${
+                                      !slugInput.trim()
+                                        ? "text-on-surface-variant"
+                                        : slugCheck.valid
+                                          ? "text-green-600"
+                                          : "text-red-500"
+                                    }`}
+                                  >
+                                    {!slugInput.trim()
+                                      ? "Link jadi: /u/…"
+                                      : slugCheck.valid
+                                        ? `Link jadi: /u/${slugCheck.normalized}`
+                                        : slugCheck.reason}
+                                  </p>
+                                </div>
+                              )}
+
+                              {selectedAddons.has("intimate_gate") && (
+                                <div>
+                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                    PIN Rahasia (4–6 angka)
+                                  </label>
+                                  <input
+                                    type="password"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    className={inputClass}
+                                    placeholder="cth: 1204"
+                                    value={pinInput}
+                                    onChange={(e) =>
+                                      setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))
+                                    }
+                                  />
+                                  <p className="text-label-md text-on-surface-variant mt-1.5">
+                                    Penerima harus mengetik PIN ini. Coba di preview sekarang.
+                                  </p>
+                                </div>
+                              )}
+
+                              {selectedAddons.has("touch_particles") && (
+                                <div>
+                                  <p className="text-label-lg font-semibold text-on-surface mb-1.5">
+                                    Pilih Efek Sentuhan
+                                  </p>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {PARTICLE_OPTIONS.map((p) => (
+                                      <button
+                                        key={p.key}
+                                        type="button"
+                                        onClick={() => setParticleStyle(p.key)}
+                                        aria-pressed={particleStyle === p.key}
+                                        className={cn(
+                                          "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all",
+                                          particleStyle === p.key
+                                            ? "border-primary bg-primary-fixed/20 text-primary ring-1 ring-primary/20"
+                                            : "border-outline-variant/50 bg-white text-on-surface-variant"
+                                        )}
+                                      >
+                                        <span className="block text-lg mb-0.5">{p.emoji}</span>
+                                        {p.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {selectedAddons.size > 0 && (
+                                <div className="rounded-2xl bg-surface-container-low border border-outline-variant/30 p-4 space-y-2">
+                                  <div className="flex justify-between text-label-md">
+                                    <span className="text-on-surface-variant">Harga dasar</span>
+                                    <span className="font-semibold text-on-surface">
+                                      {formatPrice(checkoutCalc.baseAmount)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-label-md">
+                                    <span className="text-on-surface-variant">
+                                      {selectedAddons.size} add-on
+                                    </span>
+                                    <span className="font-semibold text-on-surface">
+                                      {formatPrice(checkoutCalc.addonSubtotal)}
+                                    </span>
+                                  </div>
+                                  {checkoutCalc.discount > 0 && (
+                                    <div className="flex justify-between text-label-md text-green-700">
+                                      <span>Diskon paket</span>
+                                      <span className="font-bold">
+                                        −{formatPrice(checkoutCalc.discount)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between pt-2 border-t border-outline-variant/40">
+                                    <span className="text-label-lg font-semibold text-on-surface">
+                                      Total
+                                    </span>
+                                    <span className="text-title-md font-bold text-primary">
+                                      {formatPrice(checkoutCalc.totalAmount)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={() => switchSection("selesai")}
+                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                              >
+                                Siap kirim kejutan <ArrowRight className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+
                           {section.id === "selesai" && (
                             <div className="space-y-5">
                               {pricing.isPromo && (
                                 <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-amber-900 text-xs flex items-center justify-between">
                                   <span>🔥 Promo perkenalan (sisa {pricing.remainingQuota} kuota)</span>
-                                  <span className="font-bold">{pricing.formattedPrice}</span>
+                                  <span className="font-bold">{formatPrice(checkoutCalc.baseAmount)}</span>
                                 </div>
                               )}
                               <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
@@ -843,7 +1110,16 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   ["Judul", content.title || "—"],
                                   ["Pesan", `${content.message?.length ?? 0} karakter`],
                                   ["Foto", `${content.photos?.filter(Boolean).length ?? 0} foto`],
-                                  ["Harga", `${pricing.formattedPrice} (sekali bayar)`],
+                                  [
+                                    "Tambahan",
+                                    selectedAddons.size > 0
+                                      ? `${selectedAddons.size} add-on`
+                                      : "Tidak ada",
+                                  ],
+                                  ...(checkoutCalc.discount > 0
+                                    ? [["Diskon paket", `−${formatPrice(checkoutCalc.discount)}`]]
+                                    : []),
+                                  ["Total", `${formatPrice(checkoutCalc.totalAmount)} (sekali bayar)`],
                                 ].map(([label, value]) => (
                                   <div key={label} className="flex justify-between gap-4">
                                     <span className="text-body-md text-on-surface-variant">{label}</span>
@@ -870,7 +1146,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 ) : (
                                   <>
                                     <CreditCard className="h-4.5 w-4.5" />
-                                    Lanjut ke Pembayaran — {pricing.formattedPrice}
+                                    Lanjut ke Pembayaran — {formatPrice(checkoutCalc.totalAmount)}
                                   </>
                                 )}
                               </button>
@@ -924,16 +1200,50 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               </div>
             </div>
             <motion.div
+              ref={previewFrameRef}
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
-              className={`rounded-3xl overflow-hidden border-4 border-white shadow-[0_20px_60px_rgba(222,112,56,0.2)] transition-[max-width] duration-300 ${
+              className={`relative rounded-3xl overflow-hidden border-4 border-white shadow-[0_20px_60px_rgba(222,112,56,0.2)] transition-[max-width] duration-300 ${
                 previewMode === "mobile" ? "max-w-[375px] mx-auto" : "max-w-full"
               }`}
             >
               <div className="h-[560px] overflow-y-auto bg-surface">
                 <TemplateRenderer content={previewContent} preview />
               </div>
+
+              {/* Efek add-on — dirender di dalam frame, tanpa menyentuh template */}
+              {selectedAddons.has("touch_particles") && (
+                <ParticleTouch type={particleStyle} container={previewFrameRef} />
+              )}
+
+              {selectedAddons.has("intimate_gate") && previewGateOpen && (
+                <GateOverlay
+                  toName={content.toName || "Kamu"}
+                  fromName={content.fromName || "Aku"}
+                  gateType="pin"
+                  gateData={{ pin: pinInput }}
+                  variant="embedded"
+                  onUnlock={() => setPreviewGateOpen(false)}
+                />
+              )}
+
+              {selectedAddons.has("intimate_gate") && !previewGateOpen && (
+                <button
+                  onClick={() => setPreviewGateOpen(true)}
+                  className="absolute top-3 left-3 z-20 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-gray-800 shadow-lg border border-rose-200/60 backdrop-blur hover:text-rose-600 transition-all"
+                >
+                  🔒 Tampilkan Gerbang
+                </button>
+              )}
+
+              {selectedAddons.has("love_receipt") && (
+                <LoveReceiptModal
+                  toName={content.toName || "Kamu"}
+                  fromName={content.fromName || "Aku"}
+                  variant="embedded"
+                />
+              )}
             </motion.div>
           </div>
         </div>
@@ -943,7 +1253,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 backdrop-blur border-t border-outline-variant/30 px-5 py-3.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
-          <p className="text-title-md font-bold text-primary">{pricing.formattedPrice}</p>
+          <p className="text-title-md font-bold text-primary">
+            {formatPrice(checkoutCalc.totalAmount)}
+          </p>
         </div>
         <button
           onClick={() => void goToPayment()}

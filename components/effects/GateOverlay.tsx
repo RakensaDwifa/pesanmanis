@@ -9,6 +9,8 @@ interface GateOverlayProps {
   gateType: string;
   gateData?: Record<string, unknown> | null;
   onUnlock: () => void;
+  /** "embedded" → kartu di dalam frame preview, tanpa backdrop penuh. */
+  variant?: "fullscreen" | "embedded";
 }
 
 export default function GateOverlay({
@@ -17,6 +19,7 @@ export default function GateOverlay({
   gateType,
   gateData,
   onUnlock,
+  variant = "fullscreen",
 }: GateOverlayProps) {
   const [inputVal, setInputVal] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -70,7 +73,13 @@ export default function GateOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+    <div
+      className={
+        variant === "fullscreen"
+          ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          : "absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      }
+    >
       <div
         className={`w-full max-w-sm rounded-3xl bg-white p-6 md:p-8 shadow-2xl border border-rose-100 text-center transition-transform ${
           shaking ? "animate-bounce" : ""
@@ -112,7 +121,8 @@ export default function GateOverlay({
             type="submit"
             className="w-full rounded-full bg-gradient-to-r from-rose-500 to-pink-500 py-3.5 text-sm font-semibold text-white shadow-lg shadow-rose-200 hover:from-rose-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"
           >
-            <Lock className="h-4 w-4" /> Buka Pesan Rahasia
+            <Lock className="h-4 w-4" />
+            {variant === "embedded" ? "Coba Buka (Pratinjau)" : "Buka Pesan Rahasia"}
           </button>
         </form>
 
