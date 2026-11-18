@@ -15,23 +15,33 @@ function SuccessInner({ id }: { id: string }) {
     isDemo || hasPendingRef ? "checking" : "waiting"
   );
   const [copied, setCopied] = useState(false);
+  const [ucapan, setUcapan] = useState(() => getUcapan(id));
 
   useEffect(() => {
     const demo = searchParams.get("demo");
     const ref = searchParams.get("ref");
 
     const finalize = async () => {
-      const u = getUcapan(id);
+      let u = getUcapan(id);
       if (u) {
         savePaidUcapan({ ...u, paid: true, paidAt: Date.now() });
       }
       if (isRemote()) {
-        await fetch(`/api/ucapan/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ activate: true }),
-        }).catch(() => undefined);
+        try {
+          const res = await fetch(`/api/ucapan/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activate: true }),
+          });
+          const json = await res.json();
+          if (json?.data) {
+            u = json.data;
+          }
+        } catch {
+          /* ignore */
+        }
       }
+      if (u) setUcapan(u);
       setState("done");
     };
 
@@ -83,7 +93,10 @@ function SuccessInner({ id }: { id: string }) {
     );
   }
 
-  const publicUrl = `${window.location.origin}/t/${id.slice(0, 8)}/${id}`;
+  const publicUrl = ucapan?.customSlug
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/u/${ucapan.customSlug}`
+    : `${typeof window !== "undefined" ? window.location.origin : ""}/t/${id.slice(0, 8)}/${id}`;
+
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(publicUrl);
@@ -121,7 +134,22 @@ function SuccessInner({ id }: { id: string }) {
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 mb-6">
           <p className="text-label-lg font-semibold text-on-surface mb-4">Scan QR Code</p>
           <div className="mx-auto w-fit p-4 bg-white rounded-2xl border border-outline-variant/30">
-            <QRCodeSVG value={publicUrl} size={180} fgColor="#22191a" />
+            <QRCodeSVG
+              value={publicUrl}
+              size={180}
+              level="H"
+              fgColor="#22191a"
+              imageSettings={
+                ucapan?.qrPhotoEnabled && ucapan?.photos?.[0]
+                  ? {
+                      src: ucapan.photos[0],
+                      height: 38,
+                      width: 38,
+                      excavate: true,
+                    }
+                  : undefined
+              }
+            />
           </div>
         </div>
 

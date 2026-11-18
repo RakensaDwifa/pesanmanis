@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isRemote } from "@/lib/supabase/config";
-import { PAID_AMOUNT } from "@/lib/pricing";
+import { amountMatchesPaid } from "@/lib/pricing";
 
 function maskId(id: string): string {
   if (!id || id.length <= 8) return "***";
@@ -67,9 +67,21 @@ export async function POST(request: Request) {
 
     const { data: payment } = await admin
       .from("payments")
-      .select("ucapan_id,status")
+      .select("ucapan_id,status,amount")
       .eq("merchant_ref", merchantRef)
       .maybeSingle();
+
+    // Pastikan nominal yang benar-benar dibayar sama dengan yang tercatat.
+    // Beda nominal = jangan aktifkan produk, tapi tetap balas 200 agar
+    // Midtrans tidak mengirim ulang tanpa henti.
+    if (payment && !amountMatchesPaid(grossAmount, payment.amount)) {
+      console.warn("[payment-webhook] nominal tidak cocok, pembayaran diabaikan", {
+        ref: maskId(merchantRef),
+        expected: maskAmount(Number(payment.amount ?? 0)),
+        received: maskAmount(Number(grossAmount || 0)),
+      });
+      return NextResponse.json({ success: true, mismatch: true });
+    }
 
     let ucapanId: string | null = payment?.ucapan_id ?? null;
 
@@ -152,7 +164,7 @@ export async function POST(request: Request) {
             fromName: ucapan.from_name,
             toName: ucapan.to_name,
             templateSlug: ucapan.template_slug,
-            amount: Number(payload.gross_amount ?? PAID_AMOUNT),
+            amount: Number(payment?.amount ?? payload.gross_amount ?? 0),
           });
           if (!adminRes.ok) {
             console.warn("[payment-webhook] email admin gagal", { to: maskEmail(adminEmail), error: adminRes.error });

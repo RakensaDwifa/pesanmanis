@@ -7,12 +7,14 @@ import { getActiveTemplates, templateEmoji } from "@/lib/templates";
 import { CATEGORY_META } from "@/lib/types";
 import { AnalyticsEvents } from "@/lib/analytics";
 import { BRAND } from "@/lib/brand";
+import { usePricing } from "@/lib/use-pricing";
 
 export default function TemplatesClient({
   templates,
 }: {
   templates: ReturnType<typeof getActiveTemplates>;
 }) {
+  const pricing = usePricing();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -80,7 +82,10 @@ export default function TemplatesClient({
                 Aktif selamanya · edit 7 hari
               </span>
               <span className="text-label-md font-semibold bg-primary-fixed/30 text-primary px-3 py-1 rounded-full">
-                {BRAND.priceLabel}
+                {pricing.formattedPrice}
+                {pricing.isPromo && (
+                  <span className="line-through ml-1 text-xs opacity-60">{pricing.normalPriceLabel}</span>
+                )}
               </span>
             </div>
           </div>

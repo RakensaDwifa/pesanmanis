@@ -1,7 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  REFERRAL_REWARD_AMOUNT,
+  referralRewardFor,
+} from "@/lib/referral-policy";
 
-const REWARD_AMOUNT = 5000;
+const REWARD_AMOUNT = REFERRAL_REWARD_AMOUNT;
 
 function randomCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -29,7 +33,7 @@ export async function getOrCreateReferralCode(
     const code = randomCode();
     const { data, error } = await admin
       .from("referrals")
-      .insert({ referrer_id: userId, code })
+      .insert({ referrer_id: userId, code, reward_amount: REWARD_AMOUNT })
       .select("code")
       .single();
     if (!error && data?.code) return data.code;
@@ -114,15 +118,28 @@ export async function completePendingReferrals(userId: string): Promise<void> {
 
   for (const r of pendings ?? []) {
     const now = new Date().toISOString();
+
+    // Hitung dulu reward yang tersisa agar batas per pengundang dihormati.
+    const { count } = await admin
+      .from("credits")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", r.referrer_id)
+      .eq("type", "referral");
+
+    const reward = referralRewardFor(count ?? 0, r.reward_amount);
+
     await admin
       .from("referrals")
-      .update({ status: "completed", completed_at: now })
+      .update({ status: "completed", completed_at: now, reward_amount: reward })
       .eq("id", r.id);
-    await admin.from("credits").insert({
-      user_id: r.referrer_id,
-      amount: r.reward_amount ?? REWARD_AMOUNT,
-      type: "referral",
-      reference_id: r.id,
-    });
+
+    if (reward > 0) {
+      await admin.from("credits").insert({
+        user_id: r.referrer_id,
+        amount: reward,
+        type: "referral",
+        reference_id: r.id,
+      });
+    }
   }
 }

@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { PAID_AMOUNT } from "./pricing";
 
 const MIDTRANS_MODE = () => process.env.MIDTRANS_MODE ?? "sandbox";
 
@@ -23,10 +22,16 @@ export async function createSnapTransaction(input: {
   templateSlug: string;
   customerName: string;
   customerEmail?: string;
+  /** Nominal final dari server (lihat lib/pricing-server.ts). */
+  amount: number;
 }): Promise<{ ok: boolean; paymentUrl?: string; error?: string }> {
   const serverKey = process.env.MIDTRANS_SERVER_KEY;
   if (!serverKey) {
     return { ok: false, error: "PAYMENT_NOT_CONFIGURED" };
+  }
+
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "INVALID_AMOUNT" };
   }
 
   const authString = Buffer.from(`${serverKey}:`).toString("base64");
@@ -46,12 +51,12 @@ export async function createSnapTransaction(input: {
       body: JSON.stringify({
         transaction_details: {
           order_id: input.merchantRef,
-          gross_amount: PAID_AMOUNT,
+          gross_amount: input.amount,
         },
         item_details: [
           {
             id: `TEMPLATE-${input.templateSlug}`,
-            price: PAID_AMOUNT,
+            price: input.amount,
             quantity: 1,
             name: `Template Ucapan (${input.templateSlug})`,
           },
