@@ -31,11 +31,13 @@ export default function StoryFlow({
   category,
   toName,
   onDone,
+  persist = true,
 }: {
   id: string;
   category: TemplateCategory | undefined;
   toName: string;
   onDone: () => void;
+  persist?: boolean;
 }) {
   const game = storyGameFor(category);
   const total = storyStepCount(game);
@@ -46,10 +48,12 @@ export default function StoryFlow({
   const finish = () => {
     if (finished.current) return;
     finished.current = true;
-    try {
-      sessionStorage.setItem(storyKey(id), "1");
-    } catch {
-      /* ignore */
+    if (persist !== false) {
+      try {
+        sessionStorage.setItem(storyKey(id), "1");
+      } catch {
+        /* ignore */
+      }
     }
     trackEvent("story_finished", { category: category ?? "unknown", steps: total });
     onDone();
