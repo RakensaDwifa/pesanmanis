@@ -15,7 +15,7 @@ export default function SfxToggle() {
       onClick={() => setM(toggleMuted())}
       aria-label={m ? "Nyalakan suara" : "Bisukan suara"}
       title={m ? "Suara nyala" : "Suara bisu"}
-      className="fixed bottom-6 left-[5.25rem] z-50 flex items-center justify-center rounded-full bg-white/85 backdrop-blur-md border border-outline-variant/40 text-primary shadow-lg w-12 h-12 hover:scale-105 active:scale-95 transition-transform"
+      className="flex items-center justify-center rounded-full bg-white/85 backdrop-blur-md border border-outline-variant/40 text-primary shadow-lg w-11 h-11 hover:scale-105 active:scale-95 transition-transform"
     >
       {m ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
     </button>

@@ -161,8 +161,10 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
       <ParallaxBackground mood={mood} />
       <FloatingHearts />
       <CursorTrail />
-      <CassettePlayer content={content} />
-      <SfxToggle />
+      <div className="fixed bottom-6 left-5 z-50 flex items-center gap-2">
+        <CassettePlayer content={content} />
+        <SfxToggle />
+      </div>
       <CloseButton href={closeHref} />
       <ShareCardButton />
       <div className="relative z-10 w-full max-w-xl px-5 py-16">
