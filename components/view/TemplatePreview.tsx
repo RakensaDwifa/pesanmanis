@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import StoryFlow from "@/components/story/StoryFlow";
 import TemplateRenderer from "@/components/templates/registry";
+import FlowerTransition, { type FlowerTransitionRef } from "@/components/effects/FlowerTransition";
 import { fillContentDefaults, getTemplate } from "@/lib/templates";
 import { CATEGORY_META, MOCK_CONTENT } from "@/lib/types";
 import { trackEvent } from "@/lib/analytics";
@@ -14,6 +15,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   const [storyDone, setStoryDone] = useState(false);
   const router = useRouter();
   const t = getTemplate(slug);
+  const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
   useEffect(() => {
     trackEvent("template_previewed", { template_slug: slug });
@@ -26,6 +28,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
 
   return (
     <div className="relative min-h-screen bg-surface">
+      <FlowerTransition ref={flowerRef} />
       {!storyDone ? (
         <>
           {/* Selama alur berjalan: hanya tombol kembali */}
@@ -44,7 +47,10 @@ export default function TemplatePreview({ slug }: { slug: string }) {
             category={t.type}
             toName={content.toName}
             persist={false}
-            onDone={() => setStoryDone(true)}
+            onDone={() => {
+              if (flowerRef.current) flowerRef.current.play(() => setStoryDone(true));
+              else setStoryDone(true);
+            }}
           />
         </>
       ) : (
@@ -78,7 +84,10 @@ export default function TemplatePreview({ slug }: { slug: string }) {
 
               <button
                 type="button"
-                onClick={() => setStoryDone(false)}
+                onClick={() => {
+                  if (flowerRef.current) flowerRef.current.play(() => setStoryDone(false));
+                  else setStoryDone(false);
+                }}
                 aria-label="Putar ulang alur"
                 className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-outline-variant/50 bg-white/80 px-3 py-2 text-label-md font-semibold text-on-surface-variant hover:bg-white transition"
               >
