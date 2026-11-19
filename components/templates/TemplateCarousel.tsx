@@ -79,11 +79,23 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
     if (dragged.current) e.preventDefault();
   };
 
+  // Satu definisi tombol panah, dipakai di samping ring (desktop) dan di
+  // bawah ring (mobile, karena layar sempit tidak punya ruang samping).
+  const arrow = (dir: 1 | -1, className = "") => (
+    <button
+      type="button"
+      onClick={() => setIndex((v) => v + dir)}
+      aria-label={dir < 0 ? "Template sebelumnya" : "Template berikutnya"}
+      className={`flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-[0_11px_20px_-7px_#92631f] transition-all duration-300 hover:scale-90 hover:shadow-[0_2px_20px_-8px_#92631f] active:scale-80 active:opacity-50 ${className}`}
+    >
+      {dir < 0 ? <ChevronLeft className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
+    </button>
+  );
+
   return (
     <div className="relative">
       {/* Scene: perspektif kamera + tinggi tetap (kartu 3D absolut tidak
-          menyumbang tinggi layout). */}
-      <div
+          menyumbang tinggi layout). */}      <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -118,7 +130,7 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
                     href={`/preview/${t.slug}`}
                     onClick={blockClickAfterDrag}
                     aria-label={`Lihat Template ${t.name}`}
-                    className="relative m-3 mb-0 block aspect-[9/16] rounded-xl overflow-hidden bg-surface-container-low"
+                    className="relative m-3 mb-0 block aspect-[4/5] rounded-xl overflow-hidden bg-surface-container-low"
                   >
                     {/* Fallback kalau screenshot belum ada: gradient + emoji */}
                     <div
@@ -163,39 +175,24 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
         </div>
       </div>
 
-      {/* Panah di bawah ring (referensi tidak menaruhnya menumpuk di atas kartu) */}
-      <div className="mt-8 flex justify-center gap-4">
-        <button
-          type="button"
-          onClick={() => setIndex((v) => v - 1)}
-          aria-label="Template sebelumnya"
-          className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-[0_11px_20px_-7px_#92631f] transition-all duration-300 hover:scale-90 hover:shadow-[0_2px_20px_-8px_#92631f] active:scale-80 active:opacity-50"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setIndex((v) => v + 1)}
-          aria-label="Template berikutnya"
-          className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-[0_11px_20px_-7px_#92631f] transition-all duration-300 hover:scale-90 hover:shadow-[0_2px_20px_-8px_#92631f] active:scale-80 active:opacity-50"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      </div>
-
-      <div className="flex justify-center gap-1.5 mt-5">
-        {templates.map((t, i) => (
-          <button
-            key={t.slug}
-            type="button"
-            onClick={() => goTo(i)}
-            aria-label={`Ke template ${t.name}`}
-            aria-current={i === active}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              i === active ? "w-5 bg-primary" : "w-2 bg-primary/25 hover:bg-primary/50"
-            }`}
-          />
-        ))}
+      {/* Panah + dot satu baris: hemat tinggi, panah tidak menimpa kartu miring */}
+      <div className="mt-5 flex items-center justify-center gap-4 sm:gap-6">
+        {arrow(-1)}
+        <div className="flex items-center gap-1.5">
+          {templates.map((t, i) => (
+            <button
+              key={t.slug}
+              type="button"
+              onClick={() => goTo(i)}
+              aria-label={`Ke template ${t.name}`}
+              aria-current={i === active}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === active ? "w-5 bg-primary" : "w-2 bg-primary/25 hover:bg-primary/50"
+              }`}
+            />
+          ))}
+        </div>
+        {arrow(1)}
       </div>
     </div>
   );
