@@ -81,6 +81,16 @@ export const TEMPLATES: TemplateMeta[] = [
     order: 8,
     gradient: "from-[#0F172A] to-[#1E293B]",
   },
+  {
+    slug: "bonceng-malam",
+    name: "Bonceng Malam",
+    type: "ungkapan-sayang",
+    description:
+      "Perjalanan night ride romantis. Kunci helm, tahan gas menembus lampu jalan kota, dan buka jok motor berisi mawar rahasia.",
+    active: true,
+    order: 9,
+    gradient: "from-[#18181B] to-[#27272A]",
+  },
 ];
 
 export const CATEGORY_ORDER: TemplateCategory[] = [
@@ -123,6 +133,7 @@ const TEMPLATE_EMOJI: Record<string, string> = {
   valentine: "❤️",
   "permintaan-maaf": "🕊️",
   "kaca-berembun": "🌧️",
+  "bonceng-malam": "🛵",
 };
 
 export function templateEmoji(slug: string): string {

@@ -52,12 +52,20 @@ export interface ChoiceChapter extends BaseChapter {
   }>;
 }
 
+export interface DragTargetChapter extends BaseChapter {
+  type: "drag_target";
+  sourceLabel?: string;
+  targetLabel?: string;
+  successMessage?: string;
+}
+
 export type NarrativeChapter =
   | CinematicChapter
   | HoldChapter
   | ScratchChapter
   | TapCountChapter
-  | ChoiceChapter;
+  | ChoiceChapter
+  | DragTargetChapter;
 
 export interface NarrativeManifest {
   id: string;
