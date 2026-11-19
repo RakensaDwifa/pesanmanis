@@ -17,10 +17,9 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   const t = getTemplate(slug);
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
-  // Halaman preview: sembunyikan chrome situs + intro bunga setiap refresh.
+  // Halaman preview: sembunyikan chrome situs. Intro bunga ditangani FlowerTransition.
   useEffect(() => {
     document.body.dataset.immersive = "true";
-    flowerRef.current?.play();
     return () => {
       delete document.body.dataset.immersive;
     };
@@ -37,7 +36,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
 
   return (
     <div className="relative min-h-screen bg-surface">
-      <FlowerTransition ref={flowerRef} />
+      <FlowerTransition ref={flowerRef} intro />
       {!storyDone ? (
         <>
           {/* Selama alur berjalan: hanya tombol kembali */}
