@@ -13,6 +13,9 @@ import { trackEvent } from "@/lib/analytics";
 
 export default function TemplatePreview({ slug }: { slug: string }) {
   const [storyDone, setStoryDone] = useState(false);
+  // Konten baru dirender setelah petal menutup layar, jadi tidak ada
+  // halaman yang terlihat mendahului transisi.
+  const [ready, setReady] = useState(false);
   const router = useRouter();
   const t = getTemplate(slug);
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
@@ -20,7 +23,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   // Halaman preview: sembunyikan chrome situs + intro bunga setiap refresh.
   useEffect(() => {
     document.body.dataset.immersive = "true";
-    flowerRef.current?.play();
+    flowerRef.current?.play(() => setReady(true));
     return () => {
       delete document.body.dataset.immersive;
     };
@@ -38,7 +41,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   return (
     <div className="relative min-h-screen bg-surface">
       <FlowerTransition ref={flowerRef} />
-      {!storyDone ? (
+      {ready && !storyDone ? (
         <>
           {/* Selama alur berjalan: hanya tombol kembali */}
           <button
@@ -62,7 +65,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
             }}
           />
         </>
-      ) : (
+      ) : ready ? (
         <>
           {/* Template asli, interaksi aslinya (klik amplop, pecah botol, dst) */}
           <div className="relative">
@@ -113,7 +116,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
             </div>
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

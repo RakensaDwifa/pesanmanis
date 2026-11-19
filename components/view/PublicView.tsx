@@ -45,11 +45,14 @@ export default function PublicView({
   });
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
   const initialTemplate = useRef(showTemplate);
+  // Konten baru dirender setelah petal menutup layar (khusus intro refresh).
+  const [ready, setReady] = useState(false);
 
   // Halaman template: sembunyikan chrome situs + intro bunga saat refresh.
   useEffect(() => {
     document.body.dataset.immersive = "true";
-    if (initialTemplate.current) flowerRef.current?.play();
+    if (initialTemplate.current) flowerRef.current?.play(() => setReady(true));
+    else setReady(true);
     return () => {
       delete document.body.dataset.immersive;
     };
@@ -92,12 +95,14 @@ export default function PublicView({
     return (
       <>
         <FlowerTransition ref={flowerRef} />
-        <StoryFlow
-          id={id}
-          category={getTemplate(ucapan.templateSlug)?.type}
-          toName={ucapan.toName}
-          onDone={revealTemplate}
-        />
+        {ready && (
+          <StoryFlow
+            id={id}
+            category={getTemplate(ucapan.templateSlug)?.type}
+            toName={ucapan.toName}
+            onDone={revealTemplate}
+          />
+        )}
       </>
     );
   }
@@ -107,35 +112,39 @@ export default function PublicView({
   return (
     <>
       <FlowerTransition ref={flowerRef} />
-      {requiresGate && (
-        <GateOverlay
-          toName={ucapan.toName}
-          fromName={ucapan.fromName}
-          gateType={ucapan.gateType!}
-          gateData={ucapan.gateData}
-          onUnlock={() => {
-            try {
-              sessionStorage.setItem(gateKey(id), "1");
-            } catch {
-              /* ignore */
-            }
-            setGateUnlocked(true);
-          }}
-        />
+      {ready && (
+        <>
+          {requiresGate && (
+            <GateOverlay
+              toName={ucapan.toName}
+              fromName={ucapan.fromName}
+              gateType={ucapan.gateType!}
+              gateData={ucapan.gateData}
+              onUnlock={() => {
+                try {
+                  sessionStorage.setItem(gateKey(id), "1");
+                } catch {
+                  /* ignore */
+                }
+                setGateUnlocked(true);
+              }}
+            />
+          )}
+          {ucapan.paid && ucapan.touchParticles && <ParticleTouch type={ucapan.touchParticles} />}
+          <TemplateRenderer content={ucapan} />
+          {!ucapan.paid && <Watermark />}
+          {ucapan.paid && ucapan.receiptEnabled && (
+            <LoveReceiptModal
+              toName={ucapan.toName}
+              fromName={ucapan.fromName}
+              dateStr={ucapan.paidAt ? new Date(ucapan.paidAt).toISOString() : undefined}
+              templateSlug={ucapan.templateSlug}
+            />
+          )}
+          <StoryCardButton ucapan={ucapan} />
+          <ReactionBar ucapanId={id} />
+        </>
       )}
-      {ucapan.paid && ucapan.touchParticles && <ParticleTouch type={ucapan.touchParticles} />}
-      <TemplateRenderer content={ucapan} />
-      {!ucapan.paid && <Watermark />}
-      {ucapan.paid && ucapan.receiptEnabled && (
-        <LoveReceiptModal
-          toName={ucapan.toName}
-          fromName={ucapan.fromName}
-          dateStr={ucapan.paidAt ? new Date(ucapan.paidAt).toISOString() : undefined}
-          templateSlug={ucapan.templateSlug}
-        />
-      )}
-      <StoryCardButton ucapan={ucapan} />
-      <ReactionBar ucapanId={id} />
     </>
   );
 }
