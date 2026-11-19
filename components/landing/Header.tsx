@@ -64,7 +64,7 @@ export default function Header({
   );
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm border-b border-surface-container-low">
+    <header data-site-chrome className="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm border-b border-surface-container-low">
       <div className="flex justify-between items-center h-20 px-5 lg:px-16 max-w-[1200px] mx-auto">
         <Logo />
 

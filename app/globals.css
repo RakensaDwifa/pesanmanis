@@ -141,3 +141,8 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Halaman template publik & preview: sembunyikan chrome situs */
+body[data-immersive="true"] [data-site-chrome] {
+  display: none;
+}

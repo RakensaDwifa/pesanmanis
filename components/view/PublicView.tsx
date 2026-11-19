@@ -44,6 +44,16 @@ export default function PublicView({
     }
   });
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
+  const initialTemplate = useRef(showTemplate);
+
+  // Halaman template: sembunyikan chrome situs + intro bunga saat refresh.
+  useEffect(() => {
+    document.body.dataset.immersive = "true";
+    if (initialTemplate.current) flowerRef.current?.play();
+    return () => {
+      delete document.body.dataset.immersive;
+    };
+  }, []);
 
   useEffect(() => {
     if (!ucapan) return;

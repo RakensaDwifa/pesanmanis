@@ -10,6 +10,7 @@ export default function FloatingChat() {
   return (
     <Link
       href="/templates"
+      data-site-chrome
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="fixed z-50 flex items-center justify-center rounded-full bg-[#010101] text-white shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all duration-300 bottom-6 right-5 h-14 w-14"
