@@ -12,6 +12,7 @@ interface NarrativeEngineProps {
   toName?: string;
   fromName?: string;
   renderUnderlay?: (chapterIndex: number) => ReactNode;
+  onHoldProgress?: (progress: number) => void;
 }
 
 export default function NarrativeEngine({
@@ -20,12 +21,16 @@ export default function NarrativeEngine({
   toName = "Sayang",
   fromName = "Aku",
   renderUnderlay,
+  onHoldProgress,
 }: NarrativeEngineProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [holdProgress, setHoldProgress] = useState(0);
   const [tapCount, setTapCount] = useState(0);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
+  const [dragProgress, setDragProgress] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const dragContainerRef = useRef<HTMLDivElement>(null);
 
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
@@ -53,6 +58,8 @@ export default function NarrativeEngine({
     setHoldProgress(0);
     setTapCount(0);
     setSelectedChoice(null);
+    setDragProgress(0);
+    setIsDragging(false);
   }, [currentIdx]);
 
   // Handler Hold
@@ -67,6 +74,7 @@ export default function NarrativeEngine({
       const elapsed = Date.now() - holdStartRef.current;
       const progress = Math.min(100, (elapsed / duration) * 100);
       setHoldProgress(progress);
+      if (onHoldProgress) onHoldProgress(progress);
       if (elapsed % 150 < 30) sfx.vibrate(8);
 
       if (progress >= 100) {
@@ -81,6 +89,7 @@ export default function NarrativeEngine({
     if (holdTimerRef.current) clearInterval(holdTimerRef.current);
     if (holdProgress < 100) {
       setHoldProgress(0);
+      if (onHoldProgress) onHoldProgress(0);
     }
   };
 
@@ -243,6 +252,69 @@ export default function NarrativeEngine({
                 {opt.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* 5. Drag Target / Geser Kunci (misal: tali helm ke slot kunci) */}
+        {currentChapter.type === "drag_target" && (
+          <div className="mt-8 flex flex-col items-center gap-3 w-full max-w-xs">
+            <div
+              ref={dragContainerRef}
+              className="relative w-full h-16 rounded-full bg-white/15 backdrop-blur-md border border-white/30 p-1.5 flex items-center justify-between overflow-hidden shadow-inner select-none"
+            >
+              {/* Target Slot (Kanan) */}
+              <div className="absolute right-2 top-2 bottom-2 w-12 rounded-full border-2 border-dashed border-amber-300/70 bg-amber-400/20 flex items-center justify-center text-xs font-bold text-amber-200">
+                🔒
+              </div>
+
+              {/* Slider thumb yang bisa di-drag */}
+              <div
+                style={{
+                  transform: `translateX(${dragProgress}px)`,
+                  touchAction: "none",
+                }}
+                onPointerDown={(e) => {
+                  setIsDragging(true);
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!isDragging || !dragContainerRef.current) return;
+                  const rect = dragContainerRef.current.getBoundingClientRect();
+                  const maxDrag = rect.width - 56;
+                  const currentX = Math.max(0, Math.min(maxDrag, e.clientX - rect.left - 24));
+                  setDragProgress(currentX);
+
+                  if (currentX >= maxDrag - 4) {
+                    setIsDragging(false);
+                    sfx.click();
+                    sfx.chime();
+                    sfx.vibrate([30, 40, 50]);
+                    advanceChapter();
+                  }
+                }}
+                onPointerUp={() => {
+                  setIsDragging(false);
+                  if (dragContainerRef.current) {
+                    const maxDrag = dragContainerRef.current.getBoundingClientRect().width - 56;
+                    if (dragProgress < maxDrag - 8) {
+                      setDragProgress(0);
+                    }
+                  }
+                }}
+                className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing transition-transform"
+              >
+                🔑
+              </div>
+
+              {/* Label panduan di tengah */}
+              <div
+                className={`absolute inset-0 flex items-center justify-center pointer-events-none text-xs font-medium text-white/70 transition-opacity ${
+                  dragProgress > 20 ? "opacity-0" : "opacity-100"
+                }`}
+              >
+                {currentChapter.sourceLabel || "Geser kuncinya ke kanan →"}
+              </div>
+            </div>
           </div>
         )}
       </div>
