@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -8,55 +8,104 @@ import { templateEmoji } from "@/lib/templates";
 import { CATEGORY_META, type TemplateMeta } from "@/lib/types";
 
 /**
- * Carousel koleksi template: scroll native + snap, panah ±320px,
- * dot mengikuti kartu yang paling dekat dengan titik tengah viewport.
+ * Carousel koleksi template: scroll native + snap, panah geser satu kartu
+ * (dot ikut maju/mundur satu), kartu menempel di awal viewport.
  */
 export default function TemplateCarousel({ templates }: { templates: TemplateMeta[] }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  // Target index yang sedang dianimasikan (biar klik cepat tetap maju 1 kartu).
+  const pendingRef = useRef<number | null>(null);
   const [active, setActive] = useState(0);
+  // Spacer di akhir supaya kartu terakhir juga bisa menempel di awal viewport
+  // (tanpa ini, kartu terakhir tidak bisa dijadikan posisi aktif).
+  const [spacer, setSpacer] = useState(0);
 
-  const syncActive = useCallback(() => {
+  // Posisi kartu relatif kiri scroller (termasuk padding kiri).
+  const cardLeft = (sc: HTMLElement, el: HTMLElement) => el.offsetLeft - sc.offsetLeft;
+  const padLeft = (sc: HTMLElement) => parseFloat(getComputedStyle(sc).paddingLeft) || 0;
+  const cards = (sc: HTMLElement) =>
+    Array.from(sc.querySelectorAll<HTMLElement>("[data-card]"));
+
+  useEffect(() => {
     const sc = scrollerRef.current;
     if (!sc) return;
-    // Di ujung scroll, kartu pertama/terakhir tidak bisa berada di titik tengah
-    // viewport, jadi index-nya dipaksa supaya dot ikut mentok.
+    const measure = () => {
+      const first = cards(sc)[0];
+      if (!first) return;
+      setSpacer(Math.max(0, sc.clientWidth - first.clientWidth - padLeft(sc)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(sc);
+    return () => ro.disconnect();
+  }, [templates]);
+
+  // Index kartu yang sedang menempel di awal viewport.
+  const activeIndex = useCallback(() => {
+    const sc = scrollerRef.current;
+    if (!sc) return 0;
+    const list = cards(sc);
+    if (!list.length) return 0;
     const maxLeft = sc.scrollWidth - sc.clientWidth;
-    if (sc.scrollLeft <= 4) {
-      setActive(0);
-      return;
-    }
-    if (sc.scrollLeft >= maxLeft - 4) {
-      setActive(sc.children.length - 1);
-      return;
-    }
-    const center = sc.scrollLeft + sc.clientWidth / 2;
+    if (sc.scrollLeft >= maxLeft - 4) return list.length - 1;
+    const at = sc.scrollLeft + padLeft(sc);
     let best = 0;
     let bestDist = Infinity;
-    Array.from(sc.children).forEach((child, i) => {
-      const el = child as HTMLElement;
-      const dist = Math.abs(el.offsetLeft + el.clientWidth / 2 - center);
+    list.forEach((el, i) => {
+      const dist = Math.abs(cardLeft(sc, el) - at);
       if (dist < bestDist) {
         bestDist = dist;
         best = i;
       }
     });
-    setActive(best);
+    return best;
   }, []);
 
-  const scrollBy = (left: number) =>
-    scrollerRef.current?.scrollBy({ left, behavior: "smooth" });
+  const syncActive = useCallback(() => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    setActive(activeIndex());
+    // Lepas target geseran sekali posisinya sudah tercapai, supaya klik
+    // berikutnya mulai dari kartu yang benar.
+    if (pendingRef.current !== null) {
+      const el = cards(sc)[pendingRef.current];
+      if (!el) {
+        pendingRef.current = null;
+        return;
+      }
+      const maxLeft = sc.scrollWidth - sc.clientWidth;
+      const want = Math.min(cardLeft(sc, el) - padLeft(sc), maxLeft);
+      if (Math.abs(sc.scrollLeft - want) < 2) pendingRef.current = null;
+    }
+  }, [activeIndex]);
+
+  // Geser tepat satu kartu (dot ikut maju/mundur satu).
+  const step = (dir: 1 | -1) => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    const list = cards(sc);
+    if (!list.length) return;
+    const base = pendingRef.current ?? activeIndex();
+    const target = Math.min(list.length - 1, Math.max(0, base + dir));
+    const el = list[target];
+    if (!el) return;
+    pendingRef.current = target;
+    setActive(target);
+    sc.scrollTo({ left: cardLeft(sc, el) - padLeft(sc), behavior: "smooth" });
+  };
 
   return (
     <div className="relative">
       <div
         ref={scrollerRef}
         onScroll={syncActive}
-        className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar px-5 md:px-16 pb-6"
+        className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar px-5 md:px-16 scroll-pl-5 md:scroll-pl-16 pb-6"
       >
         {templates.map((t) => (
           <div
             key={t.slug}
-            className="snap-center shrink-0 w-[220px] sm:w-[260px] bg-white rounded-2xl border border-outline-variant/30 shadow-card overflow-hidden hover:-translate-y-2 transition-transform duration-300 flex flex-col"
+            data-card
+            className="snap-start shrink-0 w-[220px] sm:w-[260px] bg-white rounded-2xl border border-outline-variant/30 shadow-card overflow-hidden hover:-translate-y-2 transition-transform duration-300 flex flex-col"
           >
             <Link
               href={`/preview/${t.slug}`}
@@ -99,11 +148,13 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
             </div>
           </div>
         ))}
+        {/* Spacer: beri ruang supaya kartu terakhir bisa menempel di awal */}
+        <div aria-hidden="true" className="shrink-0" style={{ width: spacer }} />
       </div>
 
       <button
         type="button"
-        onClick={() => scrollBy(-320)}
+        onClick={() => step(-1)}
         aria-label="Template sebelumnya"
         className="hidden sm:flex absolute top-1/2 -translate-y-1/2 left-2 md:left-6 z-10 h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm shadow-lg text-primary hover:bg-white hover:scale-105 transition-all"
       >
@@ -111,7 +162,7 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
       </button>
       <button
         type="button"
-        onClick={() => scrollBy(320)}
+        onClick={() => step(1)}
         aria-label="Template berikutnya"
         className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-2 md:right-6 z-10 h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm shadow-lg text-primary hover:bg-white hover:scale-105 transition-all"
       >
