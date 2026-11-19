@@ -75,7 +75,10 @@ export default function TemplatePreview({ slug }: { slug: string }) {
           </div>
 
           {/* Bar navigasi preview */}
-          <div className="fixed top-0 inset-x-0 z-[80] bg-gradient-to-b from-white/85 to-white/40 backdrop-blur-md">
+          <div
+            data-preview-bar
+            className="fixed top-0 inset-x-0 z-[80] bg-gradient-to-b from-white/85 to-white/40 backdrop-blur-md"
+          >
             <div className="flex items-center gap-2 px-3 sm:px-5 py-3">
               <button
                 type="button"
