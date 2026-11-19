@@ -3,9 +3,7 @@
 import {
   forwardRef,
   useCallback,
-  useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useRef,
   useState,
   type ForwardedRef,
@@ -104,14 +102,12 @@ export interface FlowerTransitionRef {
   play: (onCovered?: () => void, holdMs?: number) => Promise<void>;
 }
 
-const FlowerTransition = forwardRef<FlowerTransitionRef, { intro?: boolean }>(
-  function FlowerTransition({ intro = false }, ref: ForwardedRef<FlowerTransitionRef>) {
+const FlowerTransition = forwardRef<FlowerTransitionRef>(
+  function FlowerTransition(_props, ref: ForwardedRef<FlowerTransitionRef>) {
     const overlayRef = useRef<HTMLDivElement>(null);
     const runningRef = useRef(false);
     const [items, setItems] = useState<Flower[]>([]);
     const [on, setOn] = useState(false);
-    // covered = petal sudah di posisi grid penuh (dipakai mode intro).
-    const [covered, setCovered] = useState(false);
 
     const play = useCallback(async (onCovered?: () => void, holdMs = 250) => {
       // Kalau animasi masih jalan, jangan blokir perpindahan konten.
@@ -120,7 +116,6 @@ const FlowerTransition = forwardRef<FlowerTransitionRef, { intro?: boolean }>(
         return;
       }
       runningRef.current = true;
-      setCovered(false);
 
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const enterMs = reduce ? 1 : ENTER_MS;
@@ -196,69 +191,6 @@ const FlowerTransition = forwardRef<FlowerTransitionRef, { intro?: boolean }>(
 
     useImperativeHandle(ref, () => ({ play }), [play]);
 
-    // --- Mode intro: petal sudah menutup layar sejak paint pertama ---
-    const introPending = useRef(false);
-    const itemsRef = useRef<Flower[]>([]);
-
-    useLayoutEffect(() => {
-      if (!intro) return;
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      const flowers = buildFlowers();
-      itemsRef.current = flowers;
-      runningRef.current = true;
-      introPending.current = true;
-      setItems(flowers);
-      setOn(true);
-      setCovered(true);
-    }, [intro]);
-
-    useEffect(() => {
-      if (!introPending.current) return;
-      introPending.current = false;
-
-      const run = async () => {
-        const flowers = itemsRef.current;
-        await nextFrame();
-        await sleep(300); // biar lapisan petal sempat terlihat
-
-        const nodes = overlayRef.current
-          ? Array.from(overlayRef.current.querySelectorAll<HTMLDivElement>(".ft-flower-wrapper"))
-          : [];
-        const half = (f: Flower) => f.size / 2;
-
-        const exit = nodes.map((el) => {
-          const f = flowers[Number(el.dataset.idx)];
-          if (!f) return null;
-          return el.animate(
-            [
-              {
-                transform: `translate3d(${f.tx - half(f)}px, ${f.ty - half(f)}px, 0) scale(1)`,
-                opacity: 1,
-              },
-              {
-                transform: `translate3d(${f.ox - half(f)}px, ${f.oy - half(f)}px, 0) scale(0.5)`,
-                opacity: 0,
-              },
-            ],
-            {
-              duration: EXIT_MS,
-              delay: f.delayOut,
-              easing: "cubic-bezier(0.55, 0, 0.45, 1)",
-              fill: "both",
-            }
-          );
-        });
-        await Promise.all(exit.map((a) => a?.finished.catch(() => {})));
-
-        setOn(false);
-        setCovered(false);
-        setItems([]);
-        itemsRef.current = [];
-        runningRef.current = false;
-      };
-      void run();
-    }, []);
-
     return (
       <div
         ref={overlayRef}
@@ -270,16 +202,7 @@ const FlowerTransition = forwardRef<FlowerTransitionRef, { intro?: boolean }>(
             key={f.id}
             data-idx={i}
             className="ft-flower-wrapper"
-            style={
-              (covered
-                ? {
-                    width: f.size,
-                    height: f.size,
-                    opacity: 1,
-                    transform: `translate3d(${f.tx - f.size / 2}px, ${f.ty - f.size / 2}px, 0)`,
-                  }
-                : { width: f.size, height: f.size }) as React.CSSProperties
-            }
+            style={{ width: f.size, height: f.size } as React.CSSProperties}
           >
             <img
               src={SPRITE}
