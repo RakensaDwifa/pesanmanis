@@ -9,20 +9,21 @@ import { CATEGORY_META, type TemplateMeta } from "@/lib/types";
 
 /**
  * Carousel koleksi template: scroll native + snap, panah geser satu kartu
- * (dot ikut maju/mundur satu), kartu menempel di awal viewport.
+ * (dot ikut maju/mundur satu), kartu berhenti tepat di tengah viewport.
  */
 export default function TemplateCarousel({ templates }: { templates: TemplateMeta[] }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Target index yang sedang dianimasikan (biar klik cepat tetap maju 1 kartu).
   const pendingRef = useRef<number | null>(null);
   const [active, setActive] = useState(0);
-  // Spacer di akhir supaya kartu terakhir juga bisa menempel di awal viewport
-  // (tanpa ini, kartu terakhir tidak bisa dijadikan posisi aktif).
-  const [spacer, setSpacer] = useState(0);
+  // Ruang kosong kiri & kanan sebesar (viewport - kartu) / 2 supaya kartu
+  // pertama dan terakhir juga bisa berhenti tepat di tengah.
+  const [side, setSide] = useState(0);
 
-  // Posisi kartu relatif kiri scroller (termasuk padding kiri).
+  // Posisi kartu relatif kiri scroller.
   const cardLeft = (sc: HTMLElement, el: HTMLElement) => el.offsetLeft - sc.offsetLeft;
-  const padLeft = (sc: HTMLElement) => parseFloat(getComputedStyle(sc).paddingLeft) || 0;
+  const cardCenter = (sc: HTMLElement, el: HTMLElement) =>
+    cardLeft(sc, el) + el.clientWidth / 2;
   const cards = (sc: HTMLElement) =>
     Array.from(sc.querySelectorAll<HTMLElement>("[data-card]"));
 
@@ -32,7 +33,9 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
     const measure = () => {
       const first = cards(sc)[0];
       if (!first) return;
-      setSpacer(Math.max(0, sc.clientWidth - first.clientWidth - padLeft(sc)));
+      // Minus gap: ada jarak antar-flex-item sebelum kartu pertama.
+      const gap = parseFloat(getComputedStyle(sc).columnGap) || 0;
+      setSide(Math.max(0, (sc.clientWidth - first.clientWidth) / 2 - gap));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -40,19 +43,17 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
     return () => ro.disconnect();
   }, [templates]);
 
-  // Index kartu yang sedang menempel di awal viewport.
+  // Index kartu yang paling dekat dengan titik tengah viewport.
   const activeIndex = useCallback(() => {
     const sc = scrollerRef.current;
     if (!sc) return 0;
     const list = cards(sc);
     if (!list.length) return 0;
-    const maxLeft = sc.scrollWidth - sc.clientWidth;
-    if (sc.scrollLeft >= maxLeft - 4) return list.length - 1;
-    const at = sc.scrollLeft + padLeft(sc);
+    const center = sc.scrollLeft + sc.clientWidth / 2;
     let best = 0;
     let bestDist = Infinity;
     list.forEach((el, i) => {
-      const dist = Math.abs(cardLeft(sc, el) - at);
+      const dist = Math.abs(cardCenter(sc, el) - center);
       if (dist < bestDist) {
         bestDist = dist;
         best = i;
@@ -73,13 +74,14 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
         pendingRef.current = null;
         return;
       }
-      const maxLeft = sc.scrollWidth - sc.clientWidth;
-      const want = Math.min(cardLeft(sc, el) - padLeft(sc), maxLeft);
-      if (Math.abs(sc.scrollLeft - want) < 2) pendingRef.current = null;
+      // Lepas target geseran sekali kartunya sudah tepat di tengah, supaya
+      // klik berikutnya mulai dari kartu yang benar.
+      const mid = sc.scrollLeft + sc.clientWidth / 2;
+      if (Math.abs(cardCenter(sc, el) - mid) < 4) pendingRef.current = null;
     }
   }, [activeIndex]);
 
-  // Geser tepat satu kartu (dot ikut maju/mundur satu).
+  // Geser tepat satu kartu, berhenti dengan kartu target di tengah.
   const step = (dir: 1 | -1) => {
     const sc = scrollerRef.current;
     if (!sc) return;
@@ -91,7 +93,10 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
     if (!el) return;
     pendingRef.current = target;
     setActive(target);
-    sc.scrollTo({ left: cardLeft(sc, el) - padLeft(sc), behavior: "smooth" });
+    sc.scrollTo({
+      left: cardCenter(sc, el) - sc.clientWidth / 2,
+      behavior: "smooth",
+    });
   };
 
   return (
@@ -99,13 +104,14 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
       <div
         ref={scrollerRef}
         onScroll={syncActive}
-        className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar px-5 md:px-16 scroll-pl-5 md:scroll-pl-16 pb-6"
+        className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-6"
       >
+        <div aria-hidden="true" className="shrink-0" style={{ width: side }} />
         {templates.map((t) => (
           <div
             key={t.slug}
             data-card
-            className="snap-start shrink-0 w-[220px] sm:w-[260px] bg-white rounded-2xl border border-outline-variant/30 shadow-card overflow-hidden hover:-translate-y-2 transition-transform duration-300 flex flex-col"
+            className="snap-center shrink-0 w-[220px] sm:w-[260px] bg-white rounded-2xl border border-outline-variant/30 shadow-card overflow-hidden hover:-translate-y-2 transition-transform duration-300 flex flex-col"
           >
             <Link
               href={`/preview/${t.slug}`}
@@ -148,8 +154,8 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
             </div>
           </div>
         ))}
-        {/* Spacer: beri ruang supaya kartu terakhir bisa menempel di awal */}
-        <div aria-hidden="true" className="shrink-0" style={{ width: spacer }} />
+        {/* Spacer: beri ruang supaya kartu terakhir bisa berhenti di tengah */}
+        <div aria-hidden="true" className="shrink-0" style={{ width: side }} />
       </div>
 
       <button
