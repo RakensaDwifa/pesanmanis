@@ -46,9 +46,10 @@ export default function PublicView({
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
   const initialTemplate = useRef(showTemplate);
 
-  // Halaman template: sembunyikan chrome situs. Intro bunga ditangani FlowerTransition.
+  // Halaman template: sembunyikan chrome situs + intro bunga saat refresh.
   useEffect(() => {
     document.body.dataset.immersive = "true";
+    if (initialTemplate.current) flowerRef.current?.play();
     return () => {
       delete document.body.dataset.immersive;
     };
@@ -90,7 +91,7 @@ export default function PublicView({
   if (!showTemplate) {
     return (
       <>
-        <FlowerTransition ref={flowerRef} intro={initialTemplate.current} />
+        <FlowerTransition ref={flowerRef} />
         <StoryFlow
           id={id}
           category={getTemplate(ucapan.templateSlug)?.type}
@@ -105,7 +106,7 @@ export default function PublicView({
 
   return (
     <>
-      <FlowerTransition ref={flowerRef} intro={initialTemplate.current} />
+      <FlowerTransition ref={flowerRef} />
       {requiresGate && (
         <GateOverlay
           toName={ucapan.toName}
