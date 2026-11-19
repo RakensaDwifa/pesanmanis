@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/store";
 import TemplateRenderer from "@/components/templates/registry";
@@ -49,12 +49,14 @@ export default function PublicView({
   const [ready, setReady] = useState(false);
 
   // Halaman template: sembunyikan chrome situs + intro bunga saat refresh.
-  useEffect(() => {
-    document.body.dataset.immersive = "true";
+  // Atribut di <html> diset lebih awal oleh script di app/layout.tsx; di sini
+  // dijaga untuk navigasi client-side dan dibersihkan saat keluar halaman.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.immersive = "1";
     if (initialTemplate.current) flowerRef.current?.play(() => setReady(true));
     else setReady(true);
     return () => {
-      delete document.body.dataset.immersive;
+      delete document.documentElement.dataset.immersive;
     };
   }, []);
 

@@ -142,7 +142,8 @@ body {
   scrollbar-width: none;
 }
 
-/* Halaman template publik & preview: sembunyikan chrome situs */
-body[data-immersive="true"] [data-site-chrome] {
+/* Halaman template publik & preview: sembunyikan chrome situs.
+   Atribut diset di <head> sebelum body dilukis (lihat app/layout.tsx). */
+html[data-immersive] [data-site-chrome] {
   display: none;
 }

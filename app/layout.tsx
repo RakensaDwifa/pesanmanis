@@ -60,7 +60,9 @@ export default async function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("up_theme");var d=t==="dark"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`,
+            // Tema + sembunyikan chrome situs di halaman template SEBELUM body dilukis,
+            // supaya navbar/footer tidak sempat tampil sebelum transisi bunga jalan.
+            __html: `(function(){try{var t=localStorage.getItem("up_theme");var d=t==="dark"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}if(/^\\/(t|preview)\\//.test(location.pathname))document.documentElement.dataset.immersive="1";})();`,
           }}
         />
       </head>
