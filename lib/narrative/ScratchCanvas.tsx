@@ -112,7 +112,7 @@ export default function ScratchCanvas({
     if (now - checkThrottle.current > 120) {
       checkThrottle.current = now;
       checkProgress();
-      sfx.vibrate(10);
+      sfx.wipe();
     }
   };
 
