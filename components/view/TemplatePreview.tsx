@@ -17,6 +17,15 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   const t = getTemplate(slug);
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
+  // Halaman preview: sembunyikan chrome situs + intro bunga setiap refresh.
+  useEffect(() => {
+    document.body.dataset.immersive = "true";
+    flowerRef.current?.play();
+    return () => {
+      delete document.body.dataset.immersive;
+    };
+  }, []);
+
   useEffect(() => {
     trackEvent("template_previewed", { template_slug: slug });
   }, [slug]);

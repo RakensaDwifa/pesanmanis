@@ -110,7 +110,11 @@ const FlowerTransition = forwardRef<FlowerTransitionRef>(
     const [on, setOn] = useState(false);
 
     const play = useCallback(async (onCovered?: () => void, holdMs = 250) => {
-      if (runningRef.current) return;
+      // Kalau animasi masih jalan, jangan blokir perpindahan konten.
+      if (runningRef.current) {
+        onCovered?.();
+        return;
+      }
       runningRef.current = true;
 
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

@@ -10,7 +10,7 @@ const LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="w-full py-20 bg-primary">
+    <footer data-site-chrome className="w-full py-20 bg-primary">
       <div className="relative z-[1] flex flex-col items-center text-center px-5 md:px-16 max-w-[1200px] mx-auto space-y-6">
         <div className="flex flex-col items-center gap-4">
           <Logo light className="flex-col gap-2" />
