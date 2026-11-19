@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/store";
 import TemplateRenderer from "@/components/templates/registry";
@@ -11,6 +11,7 @@ import ReactionBar from "@/components/ReactionBar";
 import ParticleTouch from "@/components/effects/ParticleTouch";
 import GateOverlay from "@/components/effects/GateOverlay";
 import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
+import FlowerTransition, { type FlowerTransitionRef } from "@/components/effects/FlowerTransition";
 import { getTemplate } from "@/lib/templates";
 
 const storyKey = (id: string) => `pm:story:${id}`;
@@ -25,7 +26,7 @@ export default function PublicView({
   remote?: StoredUcapan | null;
 }) {
   const [ucapan] = useState<StoredUcapan | null>(() => remote ?? getUcapan(id));
-  const [storyDone, setStoryDone] = useState<boolean>(() => {
+  const [showTemplate, setShowTemplate] = useState<boolean>(() => {
     try {
       return (
         sessionStorage.getItem(storyKey(id)) === "1" ||
@@ -42,6 +43,7 @@ export default function PublicView({
       return false;
     }
   });
+  const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
   useEffect(() => {
     if (!ucapan) return;
@@ -70,21 +72,31 @@ export default function PublicView({
     );
   }
 
-  if (!storyDone) {
+  // Transisi bunga: overlay flower menutup layar, konten diganti saat tertutup.
+  const revealTemplate = () => {
+    if (flowerRef.current) flowerRef.current.play(() => setShowTemplate(true));
+    else setShowTemplate(true);
+  };
+
+  if (!showTemplate) {
     return (
-      <StoryFlow
-        id={id}
-        category={getTemplate(ucapan.templateSlug)?.type}
-        toName={ucapan.toName}
-        onDone={() => setStoryDone(true)}
-      />
+      <>
+        <FlowerTransition ref={flowerRef} />
+        <StoryFlow
+          id={id}
+          category={getTemplate(ucapan.templateSlug)?.type}
+          toName={ucapan.toName}
+          onDone={revealTemplate}
+        />
+      </>
     );
   }
 
-  const requiresGate = Boolean(ucapan.paid && ucapan.gateType && storyDone && !gateUnlocked);
+  const requiresGate = Boolean(ucapan.paid && ucapan.gateType && showTemplate && !gateUnlocked);
 
   return (
     <>
+      <FlowerTransition ref={flowerRef} />
       {requiresGate && (
         <GateOverlay
           toName={ucapan.toName}
@@ -101,9 +113,7 @@ export default function PublicView({
           }}
         />
       )}
-      {ucapan.paid && ucapan.touchParticles && (
-        <ParticleTouch type={ucapan.touchParticles} />
-      )}
+      {ucapan.paid && ucapan.touchParticles && <ParticleTouch type={ucapan.touchParticles} />}
       <TemplateRenderer content={ucapan} />
       {!ucapan.paid && <Watermark />}
       {ucapan.paid && ucapan.receiptEnabled && (
