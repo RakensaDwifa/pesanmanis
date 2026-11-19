@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RotateCcw } from "lucide-react";
@@ -21,11 +21,13 @@ export default function TemplatePreview({ slug }: { slug: string }) {
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
   // Halaman preview: sembunyikan chrome situs + intro bunga setiap refresh.
-  useEffect(() => {
-    document.body.dataset.immersive = "true";
+  // Atribut di <html> diset lebih awal oleh script di app/layout.tsx; di sini
+  // dijaga untuk navigasi client-side dan dibersihkan saat keluar halaman.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.immersive = "1";
     flowerRef.current?.play(() => setReady(true));
     return () => {
-      delete document.body.dataset.immersive;
+      delete document.documentElement.dataset.immersive;
     };
   }, []);
 
