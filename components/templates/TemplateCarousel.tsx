@@ -18,6 +18,17 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
   const syncActive = useCallback(() => {
     const sc = scrollerRef.current;
     if (!sc) return;
+    // Di ujung scroll, kartu pertama/terakhir tidak bisa berada di titik tengah
+    // viewport, jadi index-nya dipaksa supaya dot ikut mentok.
+    const maxLeft = sc.scrollWidth - sc.clientWidth;
+    if (sc.scrollLeft <= 4) {
+      setActive(0);
+      return;
+    }
+    if (sc.scrollLeft >= maxLeft - 4) {
+      setActive(sc.children.length - 1);
+      return;
+    }
     const center = sc.scrollLeft + sc.clientWidth / 2;
     let best = 0;
     let bestDist = Infinity;
