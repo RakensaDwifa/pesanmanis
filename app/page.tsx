@@ -257,7 +257,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* KOLEKSI TEMPLATE — scroll snap horizontal */}
+      {/* KOLEKSI TEMPLATE - ring 3D diputar per kartu */}
       <section className="w-full relative bg-surface-container-low overflow-hidden" id="koleksi">
         <div className="relative z-[1] py-16 md:py-24">
           <div className="px-5 md:px-16 max-w-[1200px] mx-auto">
@@ -267,7 +267,7 @@ export default function HomePage() {
                   Pilih Vibes-nya, Sesuaikan Ceritanya
                 </h2>
                 <p className="text-body-md md:text-body-lg font-medium text-on-surface-variant max-w-xl">
-                  Setiap template punya karakter berbeda — geser untuk melihat semuanya.
+                  Setiap template punya karakter berbeda - putar untuk melihat semuanya.
                 </p>
               </div>
               <Link
