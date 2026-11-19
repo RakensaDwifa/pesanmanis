@@ -1,0 +1,56 @@
+import type { NarrativeManifest } from "@/lib/narrative/types";
+
+export const KACA_BEREMBUN_MANIFEST: NarrativeManifest = {
+  id: "kaca-berembun",
+  name: "Kaca Berembun",
+  theme: "Love Message / Melankolis Romantis",
+  chapters: [
+    {
+      id: "intro",
+      type: "cinematic",
+      title: "Hujan Sore Itu",
+      narration: "Di luar lagi hujan deras, rintik air mengalir di kaca jendela...",
+      instruction: "Ketuk untuk memulai cerita",
+      buttonText: "Buka Jendela",
+      bgOverlay: "bg-slate-950/60",
+    },
+    {
+      id: "embun",
+      type: "scratch",
+      title: "Kaca Berembun",
+      narration: "Kacanya buram tertutup embun dingin. Coba usap kacanya pelan-pelan...",
+      instruction: "Usap jarimu di layar untuk menghapus embun",
+      brushRadius: 36,
+      thresholdPercent: 55,
+      bgOverlay: "bg-slate-900/50",
+    },
+    {
+      id: "nama_terukir",
+      type: "cinematic",
+      title: "Ada Tulisan Rahasia",
+      narration: "Ternyata di balik embun itu, ada ukiran nama kamu yang selalu terlintas tiap kali hujan turun.",
+      instruction: "Ketuk untuk melanjutkan",
+      buttonText: "Lihat Langit",
+      bgOverlay: "bg-amber-950/40",
+    },
+    {
+      id: "tahan_kehangatan",
+      type: "hold",
+      title: "Rasa Dingin Mereda",
+      narration: "Biar hangatnya sampai ke kamu, genggam dan tahan sebentar tombol ini...",
+      instruction: "Tahan tombol sampai penuh",
+      buttonLabel: "Genggam Erat ❤️",
+      holdDurationMs: 2200,
+      bgOverlay: "bg-rose-950/40",
+    },
+    {
+      id: "senja_datang",
+      type: "cinematic",
+      title: "Hujan Mereda",
+      narration: "Hujannya sudah reda, langit berganti senja hangat. Sekarang ada surat kecil yang sengaja kusimpan untukmu.",
+      instruction: "Buka suratmu",
+      buttonText: "Buka Pesan Manis 💌",
+      bgOverlay: "bg-amber-900/40",
+    },
+  ],
+};

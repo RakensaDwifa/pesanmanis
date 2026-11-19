@@ -10,6 +10,7 @@ const SuratCinta = lazy(() => import("./SuratCinta"));
 const KartuUcapan = lazy(() => import("./KartuUcapan"));
 const Valentine = lazy(() => import("./Valentine"));
 const PermintaanMaaf = lazy(() => import("./PermintaanMaaf"));
+const KacaBerembun = lazy(() => import("./KacaBerembunTemplate"));
 
 const REGISTRY: Record<string, React.ComponentType<TemplateRenderProps>> = {
   "amplop-cinta": AmplopCinta,
@@ -19,6 +20,7 @@ const REGISTRY: Record<string, React.ComponentType<TemplateRenderProps>> = {
   "kartu-ucapan": KartuUcapan,
   valentine: Valentine,
   "permintaan-maaf": PermintaanMaaf,
+  "kaca-berembun": KacaBerembun,
 };
 
 function TemplateLoading() {

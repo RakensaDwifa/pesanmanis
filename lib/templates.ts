@@ -71,6 +71,16 @@ export const TEMPLATES: TemplateMeta[] = [
     order: 7,
     gradient: "from-[#E6EFE6] to-[#BFD8BF]",
   },
+  {
+    slug: "kaca-berembun",
+    name: "Kaca Berembun",
+    type: "ungkapan-sayang",
+    description:
+      "Alur cerita naratif bertingkat. Hapus embun di kaca jendela saat hujan untuk mengungkap pesan cinta tersembunyi.",
+    active: true,
+    order: 8,
+    gradient: "from-[#0F172A] to-[#1E293B]",
+  },
 ];
 
 export const CATEGORY_ORDER: TemplateCategory[] = [
@@ -112,6 +122,7 @@ const TEMPLATE_EMOJI: Record<string, string> = {
   "kartu-ucapan": "🎀",
   valentine: "❤️",
   "permintaan-maaf": "🕊️",
+  "kaca-berembun": "🌧️",
 };
 
 export function templateEmoji(slug: string): string {
