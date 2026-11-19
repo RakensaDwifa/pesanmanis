@@ -1,21 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { TemplateRenderProps } from "@/lib/types";
 import NarrativeEngine from "@/lib/narrative/NarrativeEngine";
 import { BONCENG_MALAM_MANIFEST } from "@/lib/narrative/manifests/bonceng-malam";
+import { useNightRideAudio } from "@/lib/narrative/useNightRideAudio";
+import NightParallaxScene from "./NightParallaxScene";
 import {
   RetroHelmetSVG,
-  RetroScooterSVG,
-  StreetLampSVG,
   FlowerBouquetSVG,
 } from "./narrative-assets";
-import { Heart, Sparkles, Navigation } from "lucide-react";
+import {
+  Heart,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  ChevronRight,
+  ChevronLeft,
+  Navigation,
+} from "lucide-react";
 import Image from "next/image";
 
 /**
- * Template Bonceng Malam:
- * Visual SVG custom: Helm retro, skuter vintage, tiang lampu jalan kota, dan buket mawar.
+ * Template Bonceng Malam (Redesign Lo-Fi Neon Noir)
+ * - Viewport: h-dvh w-full max-w-md mx-auto (100% mobile-first)
+ * - Audio: Web Audio API synth murni (snap, clack, engine hum, chime) + musicUrl BGM controller
+ * - Parallax: 5-layer CSS translate3d hardware accelerated
+ * - Micro-interactions: Visor tint turun, ghost affordance slider, polaroid gallery modal, surat glassmorphism
  */
 export default function BoncengMalamTemplate({
   content,
@@ -23,10 +34,24 @@ export default function BoncengMalamTemplate({
 }: TemplateRenderProps) {
   const [storyFinished, setStoryFinished] = useState(false);
   const [rideProgress, setRideProgress] = useState(0);
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+  const [visorDown, setVisorDown] = useState(false);
 
   const toName = content.toName || "Sayang";
   const fromName = content.fromName || "Aku";
   const photos = content.photos || [];
+
+  const {
+    isMuted,
+    unlockAudio,
+    toggleMute,
+    playHelmetSnap,
+    playVisorClack,
+    startEngineHum,
+    updateEngineSpeed,
+    stopEngineHum,
+    playFlowerChime,
+  } = useNightRideAudio(content.musicUrl, preview);
 
   const activeLampIndex = Math.min(4, Math.floor((rideProgress / 100) * 5));
 
@@ -35,171 +60,229 @@ export default function BoncengMalamTemplate({
     "Lampu jalanan kota kuning hangat...",
     "Nyaman banget di boncengan berdua...",
     "Kota ini terasa pelan kalau sama kamu...",
-    "Dan akhirnya kita sampai...",
+    "Dan akhirnya kita sampai di tepi bukit...",
   ];
 
+  // Efek visor kaca helm turun di babak 2
+  useEffect(() => {
+    if (visorDown) {
+      playVisorClack();
+    }
+  }, [visorDown, playVisorClack]);
+
   return (
-    <div className="relative w-full min-h-screen bg-[#090D16] text-white font-sans overflow-x-hidden selection:bg-amber-500/30">
+    <div className="relative w-full h-dvh max-w-md mx-auto overflow-hidden bg-[#070B19] text-slate-100 font-sans select-none">
+      {/* Top Bar Floating: Mute Toggle */}
+      <div className="absolute top-3 right-3 z-50 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={isMuted ? "Bunyikan Audio" : "Bisukan Audio"}
+          className="w-8 h-8 rounded-full bg-slate-900/75 border border-white/20 backdrop-blur-md flex items-center justify-center text-amber-200 hover:text-white transition-colors shadow-lg active:scale-95"
+        >
+          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </button>
+      </div>
+
       {!storyFinished ? (
-        /* MODE CERITA INTERAKTIF */
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090D16]">
-          <div className="w-full h-full max-w-md mx-auto relative flex flex-col justify-between">
-            <NarrativeEngine
-              chapters={BONCENG_MALAM_MANIFEST.chapters}
-              toName={toName}
-              fromName={fromName}
-              onHoldProgress={(p) => setRideProgress(p)}
-              onFinish={() => setStoryFinished(true)}
-              renderUnderlay={(chapterIdx) => (
-                <div className="absolute inset-0 bg-gradient-to-b from-[#090D16] via-[#0E1526] to-[#18120B] overflow-hidden">
-                  {/* Langit malam bertabur bintang & partikel halus */}
-                  <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.22)_1px,transparent_1px)] [background-size:26px_26px]" />
+        /* ============================================================ */
+        /* MODE CERITA INTERAKTIF (5-6 BABAK)                           */
+        /* ============================================================ */
+        <div className="relative w-full h-full flex flex-col justify-between">
+          <NarrativeEngine
+            chapters={BONCENG_MALAM_MANIFEST.chapters}
+            toName={toName}
+            fromName={fromName}
+            onHoldProgress={(progress) => {
+              setRideProgress(progress);
+              if (progress > 0) {
+                startEngineHum();
+                updateEngineSpeed(progress);
+              } else {
+                stopEngineHum();
+              }
+            }}
+            onFinish={() => {
+              stopEngineHum();
+              playFlowerChime();
+              setStoryFinished(true);
+            }}
+            renderUnderlay={(chapterIdx) => {
+              // Babak 0: Intro terparkir (speed 0)
+              // Babak 1: Pasang helm (speed 0)
+              // Babak 2: Visor turun (speed 0)
+              // Babak 3: Night ride melaju (speed sesuai progress hold)
+              // Babak 4: Berhenti di tepi bukit (speed 0)
+              const isRidingChapter = chapterIdx === 3;
+              const currentSpeed = isRidingChapter
+                ? Math.max(0.8, (rideProgress / 100) * 2.2)
+                : 0;
 
-                  {/* Babak 1: Ilustrasi Helm Bogo Menunggu Dikunci */}
-                  {chapterIdx === 0 && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-85 -translate-y-20">
-                      <div className="relative animate-bounce">
-                        <RetroHelmetSVG visorOpen={false} className="w-32 h-32 drop-shadow-[0_12px_24px_rgba(245,158,11,0.25)]" />
-                      </div>
-                    </div>
-                  )}
+              return (
+                <div className="absolute inset-0 w-full h-full pointer-events-none">
+                  {/* Parallax 5 Layer */}
+                  <NightParallaxScene
+                    speedMultiplier={currentSpeed}
+                    activeLampIndex={activeLampIndex}
+                    streetNote={streetNotes[activeLampIndex]}
+                    showRider={chapterIdx >= 1}
+                  />
 
-                  {/* Babak 2: Visor Helm Turun (Interaktif Naik Kaca) */}
-                  {chapterIdx === 1 && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-90 -translate-y-20">
-                      <div className="relative">
-                        <RetroHelmetSVG visorOpen={true} className="w-32 h-32 drop-shadow-[0_12px_24px_rgba(56,189,248,0.25)]" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Babak 3: Night Ride Melaju di Bawah Lampu Jalan */}
+                  {/* Efek Visor Tint Turun (Khusus Babak 2 ke atas) */}
                   {chapterIdx === 2 && (
-                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                      {/* Tiang Lampu Jalan Kota Berjalan */}
-                      <div className="relative w-full h-56 flex justify-center items-start pt-4 overflow-hidden">
-                        <div
-                          className="w-52 h-52 rounded-full bg-amber-400/20 blur-3xl transition-transform duration-300"
-                          style={{
-                            transform: `scale(${1 + (rideProgress % 25) / 40})`,
-                          }}
-                        />
-                        <div className="absolute top-4 flex flex-col items-center">
-                          <StreetLampSVG className="w-20 h-28 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]" />
-                          <span className="text-[11px] font-mono tracking-wider text-amber-300 bg-black/70 px-3 py-1 rounded-full border border-amber-400/40 shadow-lg mt-1">
-                            Lampu {activeLampIndex + 1} dari 5
-                          </span>
-                          <span className="text-xs text-amber-100 font-medium mt-1.5 animate-fade-in drop-shadow italic">
-                            &quot;{streetNotes[activeLampIndex]}&quot;
-                          </span>
-                        </div>
-                      </div>
+                    <div className="absolute inset-0 bg-blue-950/30 backdrop-blur-[0.5px] border-b-8 border-cyan-400/30 transition-all duration-700 pointer-events-none" />
+                  )}
 
-                      {/* Skuter Retro Vintage Melaju di Jalanan */}
-                      <div className="relative w-full pb-10 flex flex-col items-center">
-                        <div className="relative animate-pulse">
-                          <RetroScooterSVG className="w-40 h-24 drop-shadow-[0_10px_20px_rgba(245,158,11,0.3)]" />
-                        </div>
-                        {/* Garis Jalanan Kota Aspal */}
-                        <div className="w-full h-1 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent mt-1" />
-                        <div className="flex gap-4 mt-1 opacity-50">
-                          <span className="w-8 h-0.5 bg-amber-200" />
-                          <span className="w-8 h-0.5 bg-amber-200" />
-                          <span className="w-8 h-0.5 bg-amber-200" />
-                        </div>
+                  {/* Visual SVG Helm saat babak pasang helm */}
+                  {chapterIdx === 1 && (
+                    <div className="absolute inset-0 flex items-center justify-center -translate-y-20 pointer-events-none">
+                      <div className="relative animate-bounce">
+                        <RetroHelmetSVG visorOpen={false} className="w-32 h-32 drop-shadow-[0_12px_24px_rgba(251,191,36,0.25)]" />
                       </div>
                     </div>
                   )}
 
-                  {/* Siluet cahaya ambient kota di kejauhan */}
-                  <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-96 h-48 rounded-full bg-amber-500/15 blur-3xl pointer-events-none" />
+                  {/* Visual SVG Helm saat babak tutup visor */}
+                  {chapterIdx === 2 && (
+                    <div className="absolute inset-0 flex items-center justify-center -translate-y-20 pointer-events-none">
+                      <div className="relative">
+                        <RetroHelmetSVG visorOpen={true} className="w-32 h-32 drop-shadow-[0_12px_24px_rgba(56,189,248,0.3)]" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            />
-          </div>
+              );
+            }}
+          />
+
+          {/* Trigger audio unlock saat user pertama kali menyentuh layar */}
+          <div
+            className="absolute inset-0 z-0 pointer-events-none"
+            onPointerDown={unlockAudio}
+          />
         </div>
       ) : (
-        /* SURAT UTAMA / REVEAL JOK MOTOR */
-        <main className="relative z-10 max-w-md mx-auto px-5 py-12 flex flex-col items-center animate-fade-in">
-          {/* Header Kartu */}
-          <div className="text-center mb-8">
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wide uppercase mb-3 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5" />
-              Dari Dalam Jok Motor
-            </span>
-            <h1 className="font-heading text-3xl sm:text-4xl font-bold text-amber-100 tracking-tight">
-              {content.title || `Untuk ${toName}`}
-            </h1>
-            <p className="text-xs text-slate-400 mt-1.5 flex items-center justify-center gap-1">
-              <Navigation className="w-3 h-3 text-amber-400" />
-              Dari {fromName} teman boncengan selamanya
-            </p>
+        /* ============================================================ */
+        /* BABAK 5: SURAT UTAMA & KLIMAKS (REVEAL JOK MOTOR)            */
+        /* ============================================================ */
+        <main className="relative z-10 w-full h-full overflow-y-auto px-5 py-10 flex flex-col items-center animate-fade-in">
+          {/* Latar Parallax Statis Senyap */}
+          <div className="fixed inset-0 z-0 pointer-events-none">
+            <NightParallaxScene speedMultiplier={0} showRider={false} />
+            <div className="absolute inset-0 bg-[#070B19]/80 backdrop-blur-sm" />
           </div>
 
-          {/* Buket Mawar / Foto Kenangan */}
-          {photos.length > 0 ? (
-            <div className="w-full mb-8">
-              <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-                <Image
-                  src={photos[0]}
-                  alt="Kenangan berdua"
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 420px"
-                  priority
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
-                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end text-xs text-white/80">
-                  <span className="flex items-center gap-1">
-                    <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
-                    Momen Malam Berdua
-                  </span>
-                  <span className="text-[10px] bg-black/50 backdrop-blur-md px-2 py-0.5 rounded-full">
-                    {toName} & {fromName}
-                  </span>
+          <div className="relative z-10 w-full max-w-sm flex flex-col items-center my-auto">
+            {/* Header Surat */}
+            <div className="text-center mb-6">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold tracking-wider uppercase mb-2.5 shadow-sm">
+                <Sparkles className="w-3.5 h-3.5" />
+                Dari Dalam Jok Motor
+              </span>
+              <h1 className="font-heading text-2xl sm:text-3xl font-bold text-amber-100 tracking-tight">
+                {content.title || `Untuk ${toName}`}
+              </h1>
+              <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1">
+                <Navigation className="w-3 h-3 text-amber-400" />
+                Dari {fromName} teman boncenganmu
+              </p>
+            </div>
+
+            {/* Mawar Rahasia / Galeri Foto Kenangan Polaroid */}
+            {photos.length > 0 ? (
+              <div className="w-full mb-6">
+                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/15 bg-slate-900/80">
+                  <Image
+                    src={photos[activePhotoIdx]}
+                    alt={`Momen kenangan ${activePhotoIdx + 1}`}
+                    fill
+                    className="object-cover transition-opacity duration-300"
+                    sizes="(max-width: 768px) 100vw, 380px"
+                    priority
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent" />
+
+                  {/* Navigasi Carousel Foto jika lebih dari 1 */}
+                  {photos.length > 1 && (
+                    <div className="absolute inset-y-0 inset-x-2 flex items-center justify-between pointer-events-auto">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActivePhotoIdx((prev) =>
+                            prev === 0 ? photos.length - 1 : prev - 1
+                          )
+                        }
+                        className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/90 hover:bg-black/80 transition"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActivePhotoIdx((prev) =>
+                            prev === photos.length - 1 ? 0 : prev + 1
+                          )
+                        }
+                        className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/90 hover:bg-black/80 transition"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="absolute bottom-3 left-4 right-4 flex justify-between items-center text-xs text-white/90">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
+                      Momen Berdua
+                    </span>
+                    <span className="text-[10px] bg-black/60 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/10">
+                      {activePhotoIdx + 1} / {photos.length}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="w-full mb-8 p-7 rounded-2xl bg-gradient-to-br from-amber-500/15 via-[#1E1914] to-rose-500/10 border border-amber-500/30 text-center flex flex-col items-center gap-3 shadow-xl backdrop-blur-md">
-              <FlowerBouquetSVG className="w-24 h-24 drop-shadow-[0_8px_16px_rgba(225,29,72,0.3)] animate-pulse" />
-              <div className="flex flex-col gap-1 mt-1">
-                <span className="font-heading font-semibold text-amber-200 text-base">
-                  Buket Mawar Tersembunyi
+            ) : (
+              /* Ilustrasi Mawar Rahasia jika tidak ada foto */
+              <div className="w-full mb-6 p-6 rounded-2xl bg-gradient-to-br from-amber-500/15 via-[#1E1914] to-rose-500/15 border border-amber-500/30 text-center flex flex-col items-center gap-2 shadow-2xl backdrop-blur-md">
+                <FlowerBouquetSVG className="w-24 h-24 drop-shadow-[0_8px_16px_rgba(244,63,94,0.35)]" />
+                <span className="font-heading font-semibold text-amber-200 text-sm mt-1">
+                  Mawar Rahasia di Balik Jok
                 </span>
                 <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
-                  Sengaja disiapin dari rumah sebelum jemput kamu malam ini.
+                  Sengaja disiapin sebelum jemput kamu buat keliling malam ini.
                 </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Isi Surat Cinta Panjang */}
-          <div className="w-full bg-[#0E1526]/85 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl mb-8">
-            <div className="prose prose-invert prose-sm sm:prose-base max-w-none text-slate-200 leading-relaxed whitespace-pre-line font-serif">
-              {content.message ||
-                `Hai ${toName},\n\nTerima kasih sudah mau diajak keliling malam ini, nemenin menembus angin dingin kota sambil peluk erat di belakang jaket.\n\nSetiap jalan yang kita lewati berasa lebih tenang kalau ada kamu. Mau ke mana pun tujuannya, selama boncengannya sama kamu, aku selalu bahagia.\n\nJangan pernah bosan jadi teman perjalananku ya.`}
+            {/* Kotak Surat Glassmorphism Tenang */}
+            <div className="w-full bg-slate-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl mb-6">
+              <div className="max-h-60 overflow-y-auto pr-1 prose prose-invert prose-sm text-slate-200 leading-relaxed whitespace-pre-line font-serif text-sm">
+                {content.message ||
+                  `Hai ${toName},\n\nTerima kasih sudah mau diajak keliling malam ini, nemenin menembus angin dingin kota sambil peluk erat di belakang jaket.\n\nSetiap jalan yang kita lewati berasa lebih tenang kalau ada kamu. Mau ke mana pun tujuannya, selama boncengannya sama kamu, aku selalu bahagia.\n\nJangan pernah bosan jadi teman perjalananku ya.`}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center text-xs text-slate-400">
+                <span>Sampai jumpa di jalan berikutnya,</span>
+                <span className="font-heading font-semibold text-amber-200 text-sm">
+                  {fromName} 🛵❤️
+                </span>
+              </div>
             </div>
 
-            <div className="mt-8 pt-5 border-t border-white/10 flex justify-between items-center text-xs text-slate-400">
-              <span>Sampai ketemu di perjalanan berikutnya,</span>
-              <span className="font-heading font-semibold text-amber-200 text-sm">
-                {fromName} 🛵❤️
-              </span>
-            </div>
+            {/* Tombol Ulangi Perjalanan */}
+            <button
+              type="button"
+              onClick={() => {
+                setStoryFinished(false);
+                setRideProgress(0);
+                setVisorDown(false);
+                stopEngineHum();
+              }}
+              className="text-xs text-slate-400 hover:text-white transition-colors underline underline-offset-4 py-2"
+            >
+              ← Putar ulang perjalanan malam
+            </button>
           </div>
-
-          {/* Tombol Ulangi Cerita */}
-          <button
-            type="button"
-            onClick={() => {
-              setStoryFinished(false);
-              setRideProgress(0);
-            }}
-            className="text-xs text-slate-400 hover:text-white transition-colors underline underline-offset-4 py-2"
-          >
-            ← Putar ulang perjalanan malam
-          </button>
         </main>
       )}
     </div>
