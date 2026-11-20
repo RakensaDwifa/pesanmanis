@@ -80,6 +80,7 @@ export const TEMPLATES: TemplateMeta[] = [
     active: true,
     order: 8,
     gradient: "from-[#0F172A] to-[#1E293B]",
+    hasNarrative: true,
   },
   {
     slug: "bonceng-malam",
@@ -90,6 +91,7 @@ export const TEMPLATES: TemplateMeta[] = [
     active: true,
     order: 9,
     gradient: "from-[#18181B] to-[#27272A]",
+    hasNarrative: true,
   },
 ];
 

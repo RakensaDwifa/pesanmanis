@@ -24,6 +24,8 @@ export interface TemplateMeta {
   active: boolean;
   order: number;
   gradient: string;
+  /** Template punya alur naratif sendiri, jadi StoryFlow (ketuk hati) dilewati. */
+  hasNarrative?: boolean;
 }
 
 export interface TimelineItem {
