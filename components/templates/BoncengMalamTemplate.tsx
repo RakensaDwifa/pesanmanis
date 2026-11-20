@@ -192,7 +192,7 @@ export default function BoncengMalamTemplate({
               visorDown={true}
               receiverLabel={toName}
             />
-            <div className="absolute inset-0 bg-[#070B19]/85 backdrop-blur-[2px]" />
+            <div className="absolute inset-0 bg-[#070B19]/85" />
           </div>
 
           <div className="relative z-10 w-full max-w-sm flex flex-col items-center my-auto">

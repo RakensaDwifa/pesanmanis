@@ -124,7 +124,7 @@ export default function NarrativeEngine({
       {/* Background Underlay (kustom per template, misal: animasi hujan/kaca/senja) */}
       <div className="absolute inset-0 z-0">
         {renderUnderlay ? renderUnderlay(currentIdx) : null}
-        <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-colors duration-700 ${currentChapter.bgOverlay || ""}`} />
+        <div className={`absolute inset-0 bg-black/40 transition-colors duration-700 ${currentChapter.bgOverlay || ""}`} />
       </div>
 
       {/* Progress Bar Babak (Instagram-story style) */}
@@ -145,7 +145,7 @@ export default function NarrativeEngine({
 
       {/* Konten Utama Interaktif */}
       <div
-        className={`relative z-10 flex-1 flex flex-col items-center justify-center text-center my-auto transition-all duration-300 ${
+        className={`relative z-10 flex-1 flex flex-col items-center justify-center text-center my-auto pb-14 transition-all duration-300 ${
           isTransitioning ? "opacity-0 translate-y-3" : "opacity-100 translate-y-0"
         }`}
       >
