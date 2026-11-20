@@ -12,12 +12,16 @@ import { CATEGORY_META, MOCK_CONTENT } from "@/lib/types";
 import { trackEvent } from "@/lib/analytics";
 
 export default function TemplatePreview({ slug }: { slug: string }) {
-  const [storyDone, setStoryDone] = useState(false);
+  const t = getTemplate(slug);
+  // Template naratif punya alurnya sendiri, jadi StoryFlow (ketuk hati) dilewati.
+  const skipStory = Boolean(t?.hasNarrative);
+  const [storyDone, setStoryDone] = useState(skipStory);
+  // Remount template saat "Putar ulang alur" ditekan untuk template naratif.
+  const [replayKey, setReplayKey] = useState(0);
   // Konten baru dirender setelah petal menutup layar, jadi tidak ada
   // halaman yang terlihat mendahului transisi.
   const [ready, setReady] = useState(false);
   const router = useRouter();
-  const t = getTemplate(slug);
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
 
   // Halaman preview: sembunyikan chrome situs + intro bunga setiap refresh.
@@ -71,7 +75,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
         <>
           {/* Template asli, interaksi aslinya (klik amplop, pecah botol, dst) */}
           <div className="relative">
-            <TemplateRenderer content={content} />
+            <TemplateRenderer key={replayKey} content={content} />
           </div>
 
           {/* Bar navigasi preview */}
@@ -102,6 +106,10 @@ export default function TemplatePreview({ slug }: { slug: string }) {
               <button
                 type="button"
                 onClick={() => {
+                  if (skipStory) {
+                    setReplayKey((k) => k + 1);
+                    return;
+                  }
                   if (flowerRef.current) flowerRef.current.play(() => setStoryDone(false));
                   else setStoryDone(false);
                 }}

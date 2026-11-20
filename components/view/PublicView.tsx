@@ -26,7 +26,10 @@ export default function PublicView({
   remote?: StoredUcapan | null;
 }) {
   const [ucapan] = useState<StoredUcapan | null>(() => remote ?? getUcapan(id));
+  // Template naratif punya alurnya sendiri; StoryFlow (ketuk hati) dilewati.
+  const skipStory = Boolean(getTemplate(ucapan?.templateSlug ?? "")?.hasNarrative);
   const [showTemplate, setShowTemplate] = useState<boolean>(() => {
+    if (skipStory) return true;
     try {
       return (
         sessionStorage.getItem(storyKey(id)) === "1" ||
