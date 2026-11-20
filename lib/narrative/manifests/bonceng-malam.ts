@@ -12,7 +12,7 @@ export const BONCENG_MALAM_MANIFEST: NarrativeManifest = {
       narration: "Motornya sudah kupanasi dari tadi. Malam ini sejuk, jalanan kota lagi tenang. Siap jalan bareng?",
       instruction: "Ketuk untuk memulai perjalanan",
       buttonText: "Ayo Berangkat 🛵",
-      bgOverlay: "bg-slate-950/75",
+      bgOverlay: "bg-slate-950/20",
     },
     {
       id: "pasang_helm",

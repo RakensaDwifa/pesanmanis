@@ -11,6 +11,8 @@ export interface BoncengMalamArtworkProps {
   receiverLabel?: string;
   lampIndex?: number;
   lampNote?: string;
+  /** Sudut pandang penumpang (berdiri di depan motor) untuk Babak 0. */
+  pov?: boolean;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export default function BoncengMalamArtwork({
   receiverLabel = "Sayang",
   lampIndex = 0,
   lampNote,
+  pov = false,
   className = "",
 }: BoncengMalamArtworkProps) {
   const isMoving = rideState === "cruising" || rideState === "fast";
@@ -98,6 +101,34 @@ export default function BoncengMalamArtwork({
             <stop stopColor="#F43F5E" />
             <stop offset="1" stopColor="#BE123C" />
           </linearGradient>
+
+          {/* --- Gradien Khusus Adegan POV Babak 0 --- */}
+          {/* Cahaya hangat lampu jalan di belakang rider */}
+          <radialGradient id="povWarmGlow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="#FBBF24" stopOpacity="0.45" />
+            <stop offset="45%" stopColor="#F59E0B" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
+          </radialGradient>
+
+          {/* Sorot lampu depan menerangi aspal ke arah kamera */}
+          <radialGradient id="povBeam" cx="0.5" cy="0.3" r="0.7">
+            <stop offset="0%" stopColor="#FEF08A" stopOpacity="0.75" />
+            <stop offset="55%" stopColor="#FDE047" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#FDE047" stopOpacity="0" />
+          </radialGradient>
+
+          {/* Jaket rider */}
+          <linearGradient id="jacketGrad" x1="200" y1="250" x2="200" y2="560" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#3B4A62" />
+            <stop offset="0.5" stopColor="#1E293B" />
+            <stop offset="1" stopColor="#0F172A" />
+          </linearGradient>
+
+          {/* Vignette hangat tepi frame */}
+          <radialGradient id="povVignette" cx="0.5" cy="0.44" r="0.75">
+            <stop offset="0.42" stopColor="#05070F" stopOpacity="0" />
+            <stop offset="1" stopColor="#05070F" stopOpacity="0.82" />
+          </radialGradient>
         </defs>
 
         {/* Latar Belakang Gradien */}
@@ -223,8 +254,153 @@ export default function BoncengMalamArtwork({
         </g>
 
         {/* ============================================================ */}
-        {/* LAYER 5: SUBJEK UTAMA (SKUTER, PENGENDARA, HELM, JOK MAWAR)  */}
+        {/* LAYER 5: SUBJEK UTAMA                                        */}
+        {/* - pov=true  → adegan POV penumpang (Babak 0)                  */}
+        {/* - pov=false → skuter side-view saat perjalanan                */}
         {/* ============================================================ */}
+        {pov ? (
+          <g id="pov-scene">
+            {/* Cahaya hangat lampu jalan di belakang rider */}
+            <circle cx="200" cy="300" r="250" fill="url(#povWarmGlow)" />
+
+            {/* Kabut tipis melayang */}
+            <ellipse cx="120" cy="440" rx="140" ry="26" fill="#93C5FD" opacity="0.12" className="anim-mist" />
+            <ellipse cx="292" cy="386" rx="110" ry="20" fill="#FDE68A" opacity="0.1" className="anim-mist-slow" />
+
+            <g className="anim-idle-breath">
+              {/* Rim light di belakang bahu rider */}
+              <ellipse cx="200" cy="262" rx="132" ry="120" fill="#F59E0B" opacity="0.16" filter="blur(12px)" />
+
+              {/* Torso jaket rider */}
+              <path
+                d="M158 288 C158 252 178 232 200 232 C222 232 242 252 242 288 L258 500 H142 Z"
+                fill="url(#jacketGrad)"
+                stroke="#475569"
+                strokeWidth="2.5"
+              />
+              {/* Rim light keemasan di bahu kanan */}
+              <path d="M242 288 C242 252 222 232 200 232" stroke="#FCD34D" strokeWidth="3.5" strokeLinecap="round" opacity="0.6" fill="none" />
+              {/* Kerah, resleting & jahitan */}
+              <path d="M170 268 C176 288 224 288 230 268" stroke="#64748B" strokeWidth="2.5" fill="none" />
+              <line x1="200" y1="284" x2="200" y2="500" stroke="#0B1220" strokeWidth="3" opacity="0.55" />
+              <path d="M154 344 C164 356 174 360 184 360" stroke="#334155" strokeWidth="2.5" fill="none" />
+              <path d="M246 344 C236 356 226 360 216 360" stroke="#334155" strokeWidth="2.5" fill="none" />
+
+              {/* Leher */}
+              <rect x="187" y="210" width="26" height="28" rx="11" fill="#E5A886" />
+
+              {/* Kepala: helm biru, visor terbuka, senyum (di atas area teks) */}
+              <g transform="translate(0, -74)">
+                {/* Batok helm */}
+                <circle cx="200" cy="232" r="55" fill="url(#helmetRider)" stroke="#38BDF8" strokeWidth="3" />
+                {/* Striping helm */}
+                <path d="M152 208 C170 182 230 182 248 208" stroke="#E0F2FE" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.75" />
+                {/* Sorot helm */}
+                <ellipse cx="178" cy="200" rx="15" ry="9" fill="#FFFFFF" opacity="0.35" transform="rotate(-22 178 200)" />
+                {/* Bantalan pipi helm */}
+                <path d="M172 250 C172 272 186 282 196 282 L196 240 Z" fill="#0369A1" opacity="0.75" />
+                <path d="M228 250 C228 272 214 282 204 282 L204 240 Z" fill="#0369A1" opacity="0.75" />
+                {/* Wajah terlihat lewat visor terbuka */}
+                <ellipse cx="200" cy="248" rx="23" ry="28" fill="#F5C9A8" />
+                {/* Alis */}
+                <path d="M188 240 Q193 236 198 240" stroke="#3F2A1D" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+                <path d="M202 240 Q207 236 212 240" stroke="#3F2A1D" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+                {/* Mata */}
+                <ellipse cx="192" cy="248" rx="4" ry="4.6" fill="#1F2937" />
+                <ellipse cx="208" cy="248" rx="4" ry="4.6" fill="#1F2937" />
+                <circle cx="193.2" cy="246.6" r="1.4" fill="#FFFFFF" />
+                <circle cx="209.2" cy="246.6" r="1.4" fill="#FFFFFF" />
+                {/* Hidung */}
+                <path d="M200 251 L198 257 Q200 259 202 257" stroke="#D08B5B" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+                {/* Senyum */}
+                <path d="M192 265 Q200 272 208 265" stroke="#B45309" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+                {/* Dagu helm */}
+                <path d="M176 272 Q200 284 224 272 L224 280 Q200 292 176 280 Z" fill="#0369A1" stroke="#38BDF8" strokeWidth="1.5" />
+                {/* Visor terbuka (terangkat ke dahi) */}
+                <path d="M162 218 C178 196 222 196 238 218 L238 206 C222 184 178 184 162 206 Z" fill="#0F172A" stroke="#7DD3FC" strokeWidth="2" />
+                {/* Engsel visor */}
+                <circle cx="160" cy="214" r="4" fill="#0EA5E9" />
+                <circle cx="240" cy="214" r="4" fill="#0EA5E9" />
+              </g>
+
+              {/* Lengan kiri rider memegang stang */}
+              <path d="M240 300 C262 340 292 400 316 462" stroke="#1E293B" strokeWidth="25" strokeLinecap="round" />
+              <path d="M240 300 C262 340 292 400 316 462" stroke="#FBBF24" strokeWidth="3" strokeLinecap="round" opacity="0.3" />
+
+              {/* Lengan kanan rider terulur menawarkan helm */}
+              <path d="M160 300 C146 342 146 396 152 430" stroke="#1E293B" strokeWidth="26" strokeLinecap="round" />
+              <path d="M160 300 C146 342 146 396 152 430" stroke="#FBBF24" strokeWidth="3" strokeLinecap="round" opacity="0.35" />
+
+              {/* Helm penumpang yang ditawarkan (dekat kamera, berlabel toName) */}
+              <g transform="translate(104, 458)">
+                <circle cx="0" cy="0" r="44" fill="url(#helmetPassenger)" stroke="#FDA4AF" strokeWidth="2.5" />
+                {/* Striping putih */}
+                <path d="M-32 -8 C-14 -26 14 -26 32 -8" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.85" />
+                {/* Sorot cahaya */}
+                <ellipse cx="-14" cy="-20" rx="13" ry="8" fill="#FFFFFF" opacity="0.35" transform="rotate(-24 -14 -20)" />
+                {/* Stiker nama penerima */}
+                <rect x="-29" y="-6" width="58" height="17" rx="4.5" fill="#0F172A" opacity="0.92" />
+                <text
+                  x="0"
+                  y="7"
+                  textAnchor="middle"
+                  fill="#FEF08A"
+                  fontSize="10.5"
+                  fontWeight="bold"
+                  fontFamily="sans-serif"
+                  letterSpacing="0.2"
+                >
+                  {safeLabel.slice(0, 8)}
+                </text>
+                {/* Visor helm */}
+                <path d="M-26 16 C-9 9 9 9 26 16 L21 30 C6 23 -6 23 -21 30 Z" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
+                {/* Tali & gesper */}
+                <path d="M-12 40 C-12 52 12 52 12 40" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round" />
+                <circle cx="0" cy="48" r="4.5" fill="#EF4444" stroke="#FFFFFF" strokeWidth="1.2" />
+              </g>
+
+              {/* Tangan rider memegang sisi helm */}
+              <circle cx="150" cy="430" r="14" fill="#F3C6A5" stroke="#D08B5B" strokeWidth="1.5" />
+
+              {/* Stang kemudi, spion & spidometer (di depan badan rider) */}
+              <path d="M52 496 Q200 522 348 496" stroke="#CBD5E1" strokeWidth="10" strokeLinecap="round" fill="none" />
+              <path d="M52 496 Q200 522 348 496" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.35" />
+              <rect x="34" y="478" width="46" height="26" rx="13" fill="#1E293B" stroke="#475569" strokeWidth="2" />
+              <rect x="320" y="478" width="46" height="26" rx="13" fill="#1E293B" stroke="#475569" strokeWidth="2" />
+              {/* Spion kiri & kanan */}
+              <path d="M62 488 L46 448" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round" />
+              <ellipse cx="43" cy="438" rx="15" ry="11" fill="#E2E8F0" stroke="#64748B" strokeWidth="2" transform="rotate(-12 43 438)" />
+              <path d="M338 488 L354 448" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round" />
+              <ellipse cx="357" cy="438" rx="15" ry="11" fill="#E2E8F0" stroke="#64748B" strokeWidth="2" transform="rotate(12 357 438)" />
+              {/* Spidometer */}
+              <rect x="176" y="470" width="48" height="28" rx="11" fill="#0F172A" stroke="#475569" strokeWidth="2" opacity="0.95" />
+              <circle cx="200" cy="484" r="7.5" fill="#1E293B" stroke="#FBBF24" strokeWidth="1.5" />
+            </g>
+
+            {/* Bodi depan skuter & lampu menyala ke kamera */}
+            <path
+              d="M150 526 C158 504 178 496 200 496 C222 496 242 504 250 526 L262 606 H138 Z"
+              fill="url(#scooterPaint)"
+              stroke="#FCD34D"
+              strokeWidth="2.5"
+            />
+            {/* Panel dalam & garis bodi */}
+            <path d="M162 536 C170 520 230 520 238 536 L246 598 H154 Z" fill="#B45309" opacity="0.35" />
+            <path d="M154 590 H246" stroke="#FCD34D" strokeWidth="2" opacity="0.45" />
+            {/* Sorot lampu menerangi aspal */}
+            <ellipse cx="200" cy="612" rx="160" ry="62" fill="url(#povBeam)" opacity="0.45" />
+            {/* Lampu depan bulat */}
+            <circle cx="200" cy="556" r="33" fill="#FEF08A" stroke="#F59E0B" strokeWidth="4.5" className="anim-headlight-pulse" />
+            <circle cx="200" cy="556" r="24" fill="none" stroke="#FBBF24" strokeWidth="2" opacity="0.7" />
+            <circle cx="200" cy="556" r="17" fill="#FFFBEB" opacity="0.95" />
+            {/* Spatbor depan */}
+            <ellipse cx="200" cy="648" rx="98" ry="32" fill="#D97706" stroke="#FCD34D" strokeWidth="3" />
+            <path d="M164 646 H236" stroke="#B45309" strokeWidth="3" opacity="0.5" />
+
+            {/* Vignette hangat tepi frame */}
+            <rect width="400" height="680" fill="url(#povVignette)" />
+          </g>
+        ) : (
         <g id="bike-subject" transform="translate(75, 455)">
           {/* Animasi Getar Suspensi Bodi Skuter */}
           <g className={isMoving ? "anim-suspension" : "anim-idle-breath"}>
@@ -424,6 +600,7 @@ export default function BoncengMalamArtwork({
             </g>
           </g>
         </g>
+        )}
       </svg>
 
       {/* Stylesheet Keyframes Terisolasi (Hardware Accelerated translate3d) */}
@@ -535,6 +712,37 @@ export default function BoncengMalamArtwork({
         }
         .anim-exhaust {
           animation: exhaustPuff 0.6s ease-out infinite;
+        }
+
+        @keyframes mistDrift {
+          0%,
+          100% {
+            transform: translate3d(0, 0, 0);
+            opacity: 0.09;
+          }
+          50% {
+            transform: translate3d(30px, -8px, 0);
+            opacity: 0.18;
+          }
+        }
+        .anim-mist {
+          animation: mistDrift 9s ease-in-out infinite;
+        }
+        .anim-mist-slow {
+          animation: mistDrift 13s ease-in-out infinite reverse;
+        }
+
+        @keyframes headlightPulse {
+          0%,
+          100% {
+            opacity: 0.88;
+          }
+          50% {
+            opacity: 1;
+          }
+        }
+        .anim-headlight-pulse {
+          animation: headlightPulse 2.6s ease-in-out infinite;
         }
       `}</style>
     </div>

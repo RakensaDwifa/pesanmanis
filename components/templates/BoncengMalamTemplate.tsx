@@ -144,6 +144,7 @@ export default function BoncengMalamTemplate({
                 <div className="absolute inset-0 w-full h-full pointer-events-none">
                   {/* Karya Seni Inline SVG Terpadu */}
                   <BoncengMalamArtwork
+                    pov={chapterIdx === 0}
                     rideState={rideState}
                     helmetLocked={helmetLocked}
                     visorDown={visorDown}
