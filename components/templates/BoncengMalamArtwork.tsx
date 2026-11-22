@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import gsap from "gsap";
+import { useGsapScope } from "@/lib/narrative/useRideGsap";
 
 export type RideState = "parked" | "cruising" | "fast" | "seat-open";
 
@@ -17,8 +19,9 @@ export interface BoncengMalamArtworkProps {
 }
 
 /**
- * Komponen Karya Seni Inline SVG + Animasi CSS Murni untuk Template Bonceng Malam.
- * Zero Heavy Library, 100% responsif mobile (viewBox 0 0 400 680), hardware-accelerated 60fps.
+ * Karya seni Inline SVG untuk Template Bonceng Malam.
+ * Seluruh animasi (loop kota, roda, suspensi, kabut, lampu, jok) digerakkan timeline GSAP
+ * agar kecepatan bisa dikontrol lewat timeScale sesuai rideState.
  */
 export default function BoncengMalamArtwork({
   rideState = "parked",
@@ -37,23 +40,154 @@ export default function BoncengMalamArtwork({
   // Label nama yang dipotong aman max 10 karakter agar muat presisi di stiker helm
   const safeLabel = (receiverLabel || "Kamu").slice(0, 10);
 
-  // Parameter durasi animasi sesuai status kecepatan
-  const citySpeed = isFast ? "8s" : isMoving ? "16s" : "0s";
-  const lampSpeed = isFast ? "1.6s" : isMoving ? "3.2s" : "0s";
-  const roadSpeed = isFast ? "0.5s" : isMoving ? "1.1s" : "0s";
-  const wheelSpeed = isFast ? "0.25s" : isMoving ? "0.6s" : "0s";
-  const suspensionSpeed = isFast ? "0.18s" : isMoving ? "0.32s" : "1.8s";
+  const loops = useRef<Record<string, gsap.core.Tween | null>>({});
+
+  const scope = useGsapScope<HTMLDivElement>((root) => {
+    const q = gsap.utils.selector(root);
+    const store = loops.current;
+
+    // Hanya tween target yang ada di scene aktif (Babak 0 POV vs scene motor),
+    // supaya GSAP tidak memunculkan warning "target not found".
+    const loop = (key: keyof typeof store, sel: string, vars: gsap.TweenVars, from?: gsap.TweenVars) => {
+      const els = q(sel);
+      if (!els.length) {
+        store[key] = null;
+        return;
+      }
+      store[key] = from ? gsap.fromTo(els, from, vars) : gsap.to(els, vars);
+    };
+
+    // Bintang berkelip (fase berbeda per bintang)
+    q(".anim-twinkle-1, .anim-twinkle-2, .anim-twinkle-3").forEach((el, i) => {
+      gsap.fromTo(
+        el,
+        { opacity: 0.2, scale: 0.8, transformOrigin: "50% 50%" },
+        {
+          opacity: 0.95,
+          scale: 1.3,
+          duration: 1.1 + (i % 3) * 0.45,
+          delay: i * 0.3,
+          ease: "sine.inOut",
+          repeat: -1,
+          yoyo: true,
+        },
+      );
+    });
+
+    // Parallax kota, tiang lampu, marka jalan (loop tanpa henti)
+    loop("city", ".anim-city-loop", { x: -400, duration: 16, ease: "none", repeat: -1 });
+    loop("lamp", ".anim-lamp-loop", { x: -400, duration: 3.2, ease: "none", repeat: -1 });
+    loop("road", ".anim-road-loop", { x: -400, duration: 1.1, ease: "none", repeat: -1 });
+
+    // Roda berputar & getaran suspensi
+    loop("wheel", ".anim-wheel-spin", {
+      rotation: 360,
+      transformOrigin: "50% 50%",
+      duration: 0.6,
+      ease: "none",
+      repeat: -1,
+    });
+    loop("suspension", ".anim-suspension", {
+      y: -1.8,
+      duration: 0.32,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+
+    // Napas idle (motor terparkir & scene POV)
+    loop("idle", ".anim-idle-breath", {
+      y: -0.8,
+      duration: 1.8,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+    loop("animeIdle", ".anim-anime-idle", {
+      y: -1.8,
+      duration: 0.16,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+
+    // Denyut lampu & kabut malam
+    loop("headlight", ".anim-headlight-pulse", {
+      opacity: 1,
+      duration: 1.3,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+    loop("mist", ".anim-mist", {
+      x: 30,
+      y: -8,
+      opacity: 0.18,
+      duration: 9,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+    loop("mistSlow", ".anim-mist-slow", {
+      x: 30,
+      y: -8,
+      opacity: 0.18,
+      duration: 13,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+    });
+
+    // Asap knalpot (hanya saat melaju)
+    loop(
+      "exhaust",
+      ".anim-exhaust",
+      {
+        opacity: 0,
+        scale: 1.6,
+        x: -18,
+        y: -8,
+        duration: 0.6,
+        ease: "power1.out",
+        repeat: -1,
+      },
+      { opacity: 0.6, scale: 0.6, x: 0, y: 0, transformOrigin: "50% 50%" },
+    );
+
+    // Jok motor & mawar rahasia
+    const seat = q("#seat-lid");
+    if (seat.length) {
+      gsap.set(seat, { svgOrigin: "115 78" });
+      gsap.to(seat, {
+        rotation: isSeatOpen ? -46 : 0,
+        duration: 0.7,
+        ease: "power2.inOut",
+      });
+    }
+    const rose = q("#seat-rose");
+    if (rose.length) {
+      gsap.to(rose, {
+        autoAlpha: isSeatOpen ? 1 : 0,
+        scale: isSeatOpen ? 1 : 0.5,
+        y: isSeatOpen ? -24 : 8,
+        duration: 0.7,
+        ease: "power2.out",
+      });
+    }
+  }, `${pov}|${isMoving}|${isSeatOpen}`);
+
+  // Kecepatan jalan dikendalikan timeScale, bukan class CSS.
+  useEffect(() => {
+    const scale = isFast ? 2.2 : isMoving ? 1 : 0;
+    (["city", "lamp", "road", "wheel", "suspension", "exhaust"] as const).forEach((k) => {
+      loops.current[k]?.timeScale(scale);
+    });
+  }, [isMoving, isFast, pov, isSeatOpen]);
 
   return (
     <div
+      ref={scope}
       className={`relative w-full h-full overflow-hidden select-none bg-gradient-to-b from-[#070B19] via-[#111833] to-[#1E1B3A] ${className}`}
-      style={{
-        ["--city-spd" as string]: citySpeed,
-        ["--lamp-spd" as string]: lampSpeed,
-        ["--road-spd" as string]: roadSpeed,
-        ["--wheel-spd" as string]: wheelSpeed,
-        ["--susp-spd" as string]: suspensionSpeed,
-      }}
     >
       <svg
         viewBox="0 0 400 680"
@@ -255,8 +389,8 @@ export default function BoncengMalamArtwork({
 
         {/* ============================================================ */}
         {/* LAYER 5: SUBJEK UTAMA                                        */}
-        {/* - pov=true  → adegan POV anime sinematik (Babak 0)           */}
-        {/* - pov=false → skuter side-view saat perjalanan                */}
+        {/* - pov=true  â†’ adegan POV anime sinematik (Babak 0)           */}
+        {/* - pov=false â†’ skuter side-view saat perjalanan                */}
         {/* ============================================================ */}
         {pov ? (
           <g id="pov-scene">
@@ -305,7 +439,7 @@ export default function BoncengMalamArtwork({
                   fontFamily="sans-serif"
                   letterSpacing="0.3"
                 >
-                  ★ {safeLabel.slice(0, 8)} ★
+                  â˜… {safeLabel.slice(0, 8)} â˜…
                 </text>
               </g>
 
@@ -441,30 +575,21 @@ export default function BoncengMalamArtwork({
               <rect x="42" y="74" width="70" height="15" rx="3" fill="#1E293B" stroke="#0F172A" strokeWidth="1" />
 
               {/* Mawar Rahasia di Dalam Jok (Muncul saat isSeatOpen) */}
-              <g
-                transform="translate(74, 68)"
-                className={`transition-all duration-700 ease-out ${
-                  isSeatOpen ? "opacity-100 scale-100 -translate-y-6" : "opacity-0 scale-50 translate-y-2 pointer-events-none"
-                }`}
-              >
-                {/* Cahaya Pendar Mawar */}
-                <circle cx="0" cy="0" r="16" fill="#F43F5E" fillOpacity="0.3" filter="blur(4px)" />
-                {/* Kelopak Mawar Merah */}
-                <circle cx="0" cy="0" r="8" fill="#E11D48" />
-                <circle cx="-2" cy="-2" r="5" fill="#BE123C" />
-                <circle cx="1" cy="1" r="2.5" fill="#FDA4AF" />
-                <path d="M-6 4 C-10 8 -4 12 0 8" stroke="#16A34A" strokeWidth="2" fill="none" />
-                <path d="M4 5 C8 9 2 13 0 8" stroke="#15803D" strokeWidth="2" fill="none" />
+              <g transform="translate(74, 68)">
+                <g id="seat-rose" style={{ opacity: 0, visibility: "hidden" }}>
+                  {/* Cahaya Pendar Mawar */}
+                  <circle cx="0" cy="0" r="16" fill="#F43F5E" fillOpacity="0.3" filter="blur(4px)" />
+                  {/* Kelopak Mawar Merah */}
+                  <circle cx="0" cy="0" r="8" fill="#E11D48" />
+                  <circle cx="-2" cy="-2" r="5" fill="#BE123C" />
+                  <circle cx="1" cy="1" r="2.5" fill="#FDA4AF" />
+                  <path d="M-6 4 C-10 8 -4 12 0 8" stroke="#16A34A" strokeWidth="2" fill="none" />
+                  <path d="M4 5 C8 9 2 13 0 8" stroke="#15803D" strokeWidth="2" fill="none" />
+                </g>
               </g>
 
               {/* Bodi Jok Motor (Berotasi Buka ke Atas Depan jika isSeatOpen) */}
-              <g
-                className="transition-transform duration-700 ease-in-out"
-                style={{
-                  transformOrigin: "115px 78px",
-                  transform: isSeatOpen ? "rotate(-46deg)" : "rotate(0deg)",
-                }}
-              >
+              <g id="seat-lid">
                 {/* Jok Kulit Hitam Berjahit */}
                 <path
                   d="M40 76 C40 70 55 67 85 67 C112 67 122 72 122 77 C122 81 40 81 40 76 Z"
@@ -538,161 +663,6 @@ export default function BoncengMalamArtwork({
         )}
       </svg>
 
-      {/* Stylesheet Keyframes Terisolasi (Hardware Accelerated translate3d) */}
-      <style jsx>{`
-        @keyframes twinkle {
-          0%,
-          100% {
-            opacity: 0.2;
-            transform: scale(0.8);
-          }
-          50% {
-            opacity: 0.95;
-            transform: scale(1.3);
-          }
-        }
-        .anim-twinkle-1 {
-          animation: twinkle 2.2s ease-in-out infinite;
-        }
-        .anim-twinkle-2 {
-          animation: twinkle 3.1s ease-in-out infinite 0.7s;
-        }
-        .anim-twinkle-3 {
-          animation: twinkle 2.7s ease-in-out infinite 1.4s;
-        }
-
-        @keyframes cityMove {
-          0% {
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            transform: translate3d(-400px, 0, 0);
-          }
-        }
-        .anim-city-loop {
-          animation: cityMove var(--city-spd) linear infinite;
-        }
-
-        @keyframes lampMove {
-          0% {
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            transform: translate3d(-400px, 0, 0);
-          }
-        }
-        .anim-lamp-loop {
-          animation: lampMove var(--lamp-spd) linear infinite;
-        }
-
-        @keyframes roadMove {
-          0% {
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            transform: translate3d(-400px, 0, 0);
-          }
-        }
-        .anim-road-loop {
-          animation: roadMove var(--road-spd) linear infinite;
-        }
-
-        @keyframes wheelSpin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-        .anim-wheel-spin {
-          animation: wheelSpin var(--wheel-spd) linear infinite;
-        }
-
-        @keyframes suspensionVibe {
-          0%,
-          100% {
-            transform: translate3d(0, 0, 0);
-          }
-          50% {
-            transform: translate3d(0, -1.8px, 0);
-          }
-        }
-        .anim-suspension {
-          animation: suspensionVibe var(--susp-spd) ease-in-out infinite;
-        }
-
-        @keyframes idleBreath {
-          0%,
-          100% {
-            transform: translate3d(0, 0, 0);
-          }
-          50% {
-            transform: translate3d(0, -0.8px, 0);
-          }
-        }
-        .anim-idle-breath {
-          animation: idleBreath var(--susp-spd) ease-in-out infinite;
-        }
-
-        @keyframes exhaustPuff {
-          0% {
-            opacity: 0.6;
-            transform: translate3d(0, 0, 0) scale(0.6);
-          }
-          100% {
-            opacity: 0;
-            transform: translate3d(-18px, -8px, 0) scale(1.6);
-          }
-        }
-        .anim-exhaust {
-          animation: exhaustPuff 0.6s ease-out infinite;
-        }
-
-        @keyframes mistDrift {
-          0%,
-          100% {
-            transform: translate3d(0, 0, 0);
-            opacity: 0.09;
-          }
-          50% {
-            transform: translate3d(30px, -8px, 0);
-            opacity: 0.18;
-          }
-        }
-        .anim-mist {
-          animation: mistDrift 9s ease-in-out infinite;
-        }
-        .anim-mist-slow {
-          animation: mistDrift 13s ease-in-out infinite reverse;
-        }
-
-        @keyframes headlightPulse {
-          0%,
-          100% {
-            opacity: 0.88;
-          }
-          50% {
-            opacity: 1;
-          }
-        }
-        .anim-headlight-pulse {
-          animation: headlightPulse 2.6s ease-in-out infinite;
-        }
-
-        @keyframes animeEngineIdle {
-          0%,
-          100% {
-            transform: translate3d(0, 0, 0);
-          }
-          50% {
-            transform: translate3d(0, -1.8px, 0);
-          }
-        }
-        .anim-anime-idle {
-          animation: animeEngineIdle 0.16s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 }

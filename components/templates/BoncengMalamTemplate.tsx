@@ -33,6 +33,7 @@ export default function BoncengMalamTemplate({
   const [rideProgress, setRideProgress] = useState(0);
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
+  const [advanceSignal, setAdvanceSignal] = useState(0);
 
   const toName = content.toName || "Sayang";
   const fromName = content.fromName || "Aku";
@@ -80,18 +81,18 @@ export default function BoncengMalamTemplate({
     helmetLocked = false;
     visorDown = false;
   } else if (currentChapterIdx === 2) {
-    // Babak 2: Visor kaca ditutup
+    // Babak 2: helm terkunci, visor masih terbuka (ditarik user di babak ini)
     rideState = "parked";
     helmetLocked = true;
-    visorDown = true;
+    visorDown = false;
   } else if (currentChapterIdx === 3) {
     // Babak 3: Night Ride melaju menembus lampu
     rideState = rideProgress > 65 ? "fast" : "cruising";
     helmetLocked = true;
     visorDown = true;
   } else if (currentChapterIdx >= 4) {
-    // Babak 4: Tiba di bukit & buka jok motor
-    rideState = "seat-open";
+    // Babak 4: sampai di bukit, jok masih tertutup (dibuka saat reveal)
+    rideState = "parked";
     helmetLocked = true;
     visorDown = true;
   }
@@ -119,6 +120,8 @@ export default function BoncengMalamTemplate({
             chapters={BONCENG_MALAM_MANIFEST.chapters}
             toName={toName}
             fromName={fromName}
+            hideControls
+            advanceSignal={advanceSignal}
             onHoldProgress={(progress) => {
               setRideProgress(progress);
               if (progress > 0) {
@@ -158,16 +161,26 @@ export default function BoncengMalamTemplate({
                   <div className="absolute inset-0 pointer-events-auto z-10">
                     <BoncengMalamInteractive
                       chapterIdx={chapterIdx}
-                      toName={toName}
                       fromName={fromName}
                       rideProgress={rideProgress}
                       isVisorDown={visorDown}
+                      holdDurationMs={4500}
+                      onAdvance={() => setAdvanceSignal((s) => s + 1)}
+                      onHoldProgress={(progress) => {
+                        setRideProgress(progress);
+                        if (progress > 0) {
+                          startEngineHum();
+                          updateEngineSpeed(progress);
+                        } else {
+                          stopEngineHum();
+                        }
+                      }}
                     />
                   </div>
 
                   {/* Catatan / Teks Narasi Lampu Kota Khusus Babak 3 */}
                   {chapterIdx === 3 && rideProgress > 0 && (
-                    <div className="absolute top-20 inset-x-4 flex flex-col items-center pointer-events-none z-20 animate-fade-in">
+                    <div className="absolute bottom-44 inset-x-4 flex flex-col items-center pointer-events-none z-20 animate-fade-in">
                       <span className="text-[11px] font-mono tracking-wider text-amber-300 bg-black/75 px-3 py-1 rounded-full border border-amber-400/40 shadow-lg backdrop-blur-md">
                         Lampu {activeLampIndex + 1} dari 5
                       </span>
@@ -177,8 +190,8 @@ export default function BoncengMalamTemplate({
                     </div>
                   )}
 
-                  {/* Efek Visor Tint Turun (Khusus Babak 2) */}
-                  {chapterIdx === 2 && (
+                  {/* Efek Visor Tint Turun (mulai Babak 3) */}
+                  {chapterIdx >= 3 && (
                     <div className="absolute inset-0 bg-blue-950/25 backdrop-blur-[0.5px] border-b-4 border-cyan-400/30 transition-all duration-700 pointer-events-none" />
                   )}
                 </div>

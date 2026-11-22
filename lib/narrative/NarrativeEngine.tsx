@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect, ReactNode } from "react";
 import type { NarrativeChapter } from "./types";
@@ -13,6 +13,10 @@ interface NarrativeEngineProps {
   fromName?: string;
   renderUnderlay?: (chapterIndex: number) => ReactNode;
   onHoldProgress?: (progress: number) => void;
+  /** Sembunyikan widget interaksi bawaan (dipakai template yang punya gestur sendiri). */
+  hideControls?: boolean;
+  /** Naikkan angka ini untuk memaksa babak maju dari luar. */
+  advanceSignal?: number;
 }
 
 export default function NarrativeEngine({
@@ -22,6 +26,8 @@ export default function NarrativeEngine({
   fromName = "Aku",
   renderUnderlay,
   onHoldProgress,
+  hideControls = false,
+  advanceSignal = 0,
 }: NarrativeEngineProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [holdProgress, setHoldProgress] = useState(0);
@@ -61,6 +67,14 @@ export default function NarrativeEngine({
     setDragProgress(0);
     setIsDragging(false);
   }, [currentIdx]);
+
+  // Babak maju dari lapisan gestur eksternal (GSAP Draggable di template).
+  const advanceSignalRef = useRef(advanceSignal);
+  useEffect(() => {
+    if (advanceSignal === advanceSignalRef.current) return;
+    advanceSignalRef.current = advanceSignal;
+    advanceChapter();
+  }, [advanceSignal]);
 
   // Handler Hold
   const startHold = () => {
@@ -124,7 +138,7 @@ export default function NarrativeEngine({
       {/* Background Underlay (kustom per template, misal: animasi hujan/kaca/senja) */}
       <div className="absolute inset-0 z-0">
         {renderUnderlay ? renderUnderlay(currentIdx) : null}
-        <div className={`absolute inset-0 bg-black/40 transition-colors duration-700 ${currentChapter.bgOverlay || ""}`} />
+        <div className={`absolute inset-0 pointer-events-none bg-black/40 transition-colors duration-700 ${currentChapter.bgOverlay || ""}`} />
       </div>
 
       {/* Progress Bar Babak (Instagram-story style) */}
@@ -147,7 +161,7 @@ export default function NarrativeEngine({
       <div
         className={`relative z-10 flex-1 flex flex-col items-center justify-center text-center my-auto pb-14 transition-all duration-300 ${
           isTransitioning ? "opacity-0 translate-y-3" : "opacity-100 translate-y-0"
-        }`}
+        } ${hideControls ? "pointer-events-none" : ""}`}
       >
         {currentChapter.title && (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold tracking-wider uppercase mb-4 text-amber-200">
@@ -169,14 +183,14 @@ export default function NarrativeEngine({
         {/* INTERAKSI KHUSUS SESUAI TIPE BABAK */}
 
         {/* 1. Scratch / Embun Kaca */}
-        {currentChapter.type === "scratch" && (
+        {!hideControls && currentChapter.type === "scratch" && (
           <div className="relative w-full max-w-[320px] aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl border border-white/20 mt-6">
             <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-gradient-to-br from-amber-500/20 to-rose-500/30 text-white">
               {currentChapter.underlayContent || (
                 <div className="flex flex-col items-center gap-2">
                   <Heart className="w-10 h-10 text-rose-400 fill-rose-400 animate-pulse" />
                   <span className="font-heading text-lg font-bold text-center">
-                    Untuk {toName} tersayang ✨
+                    Untuk {toName} tersayang âœ¨
                   </span>
                 </div>
               )}
@@ -191,7 +205,7 @@ export default function NarrativeEngine({
         )}
 
         {/* 2. Hold Button */}
-        {currentChapter.type === "hold" && (
+        {!hideControls && currentChapter.type === "hold" && (
           <div className="mt-8 flex flex-col items-center gap-3">
             <button
               type="button"
@@ -213,14 +227,14 @@ export default function NarrativeEngine({
         )}
 
         {/* 3. Tap Count */}
-        {currentChapter.type === "tap_count" && (
+        {!hideControls && currentChapter.type === "tap_count" && (
           <div className="mt-8 flex flex-col items-center gap-3">
             <button
               type="button"
               onClick={handleTap}
               className="w-20 h-20 rounded-full bg-white/25 hover:bg-white/35 active:scale-90 border-2 border-white/60 flex items-center justify-center text-2xl shadow-xl transition-all"
             >
-              👆
+              ðŸ‘†
             </button>
             <div className="flex gap-1.5 mt-2">
               {Array.from({ length: currentChapter.requiredTaps }).map((_, i) => (
@@ -236,7 +250,7 @@ export default function NarrativeEngine({
         )}
 
         {/* 4. Choice / Kuis */}
-        {currentChapter.type === "choice" && (
+        {!hideControls && currentChapter.type === "choice" && (
           <div className="mt-6 flex flex-col gap-2.5 w-full max-w-xs">
             {currentChapter.options.map((opt) => (
               <button
@@ -256,7 +270,7 @@ export default function NarrativeEngine({
         )}
 
         {/* 5. Drag Target / Geser Kunci (misal: tali helm ke slot kunci) */}
-        {currentChapter.type === "drag_target" && (
+        {!hideControls && currentChapter.type === "drag_target" && (
           <div className="mt-8 flex flex-col items-center gap-3 w-full max-w-xs">
             <div
               ref={dragContainerRef}
@@ -264,7 +278,7 @@ export default function NarrativeEngine({
             >
               {/* Target Slot (Kanan) */}
               <div className="absolute right-2 top-2 bottom-2 w-12 rounded-full border-2 border-dashed border-amber-300/70 bg-amber-400/20 flex items-center justify-center text-xs font-bold text-amber-200">
-                🔒
+                ðŸ”’
               </div>
 
               {/* Slider thumb yang bisa di-drag */}
@@ -303,7 +317,7 @@ export default function NarrativeEngine({
                 }}
                 className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing transition-transform"
               >
-                🔑
+                ðŸ”‘
               </div>
 
               {/* Label panduan di tengah */}
@@ -312,7 +326,7 @@ export default function NarrativeEngine({
                   dragProgress > 20 ? "opacity-0" : "opacity-100"
                 }`}
               >
-                {currentChapter.sourceLabel || "Geser kuncinya ke kanan →"}
+                {currentChapter.sourceLabel || "Geser kuncinya ke kanan â†’"}
               </div>
             </div>
           </div>
