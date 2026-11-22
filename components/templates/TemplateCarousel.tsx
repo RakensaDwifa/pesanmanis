@@ -176,7 +176,7 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
       </div>
 
       {/* Panah + dot satu baris: hemat tinggi, panah tidak menimpa kartu miring */}
-      <div className="mt-5 flex items-center justify-center gap-4 sm:gap-6">
+      <div className="mt-12 sm:mt-16 flex items-center justify-center gap-4 sm:gap-6">
         {arrow(-1)}
         <div className="flex items-center gap-1.5">
           {templates.map((t, i) => (
