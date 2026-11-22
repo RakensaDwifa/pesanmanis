@@ -6,6 +6,7 @@ import NarrativeEngine from "@/lib/narrative/NarrativeEngine";
 import { BONCENG_MALAM_MANIFEST } from "@/lib/narrative/manifests/bonceng-malam";
 import { useNightRideAudio } from "@/lib/narrative/useNightRideAudio";
 import BoncengMalamArtwork, { type RideState } from "./BoncengMalamArtwork";
+import BoncengMalamInteractive from "./BoncengMalamInteractive";
 import {
   Heart,
   Sparkles,
@@ -152,6 +153,17 @@ export default function BoncengMalamTemplate({
                     lampIndex={activeLampIndex}
                     lampNote={streetNotes[activeLampIndex]}
                   />
+
+                  {/* Layer Interaktif Fisik per Babak */}
+                  <div className="absolute inset-0 pointer-events-auto z-10">
+                    <BoncengMalamInteractive
+                      chapterIdx={chapterIdx}
+                      toName={toName}
+                      fromName={fromName}
+                      rideProgress={rideProgress}
+                      isVisorDown={visorDown}
+                    />
+                  </div>
 
                   {/* Catatan / Teks Narasi Lampu Kota Khusus Babak 3 */}
                   {chapterIdx === 3 && rideProgress > 0 && (
