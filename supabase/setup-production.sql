@@ -56,17 +56,70 @@ alter table public.ucapan enable row level security;
 create index if not exists ucapan_custom_slug_idx
   on public.ucapan (custom_slug);
 
+create index if not exists ucapan_gate_type_idx on public.ucapan (gate_type) where gate_type is not null;
+
 drop policy if exists "publik bisa baca ucapan" on public.ucapan;
-create policy "publik bisa baca ucapan" on public.ucapan for select using (true);
+create policy "publik bisa baca ucapan" on public.ucapan
+  for select using (auth.uid() = owner_id);
 
 drop policy if exists "pemilik buat ucapan" on public.ucapan;
 create policy "pemilik buat ucapan" on public.ucapan for insert with check (owner_id = auth.uid());
 
 drop policy if exists "pemilik update ucapan" on public.ucapan;
-create policy "pemilik update ucapan" on public.ucapan for update using (owner_id = auth.uid());
+create policy "pemilik update ucapan" on public.ucapan
+  for update using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
 
 drop policy if exists "pemilik hapus ucapan" on public.ucapan;
 create policy "pemilik hapus ucapan" on public.ucapan for delete using (owner_id = auth.uid());
+
+-- Trigger: tolak perubahan kolom berbayar kecuali service_role
+create or replace function public.prevent_paid_columns_update()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  caller_role text := current_setting('request.jwt.claim.role', true);
+begin
+  if caller_role <> 'service_role' then
+    if new.paid is distinct from old.paid then
+      raise exception 'Kolom paid hanya bisa diubah oleh sistem';
+    end if;
+    if new.paid_at is distinct from old.paid_at then
+      raise exception 'Kolom paid_at hanya bisa diubah oleh sistem';
+    end if;
+    if new.owner_id is distinct from old.owner_id then
+      raise exception 'Kolom owner_id tidak boleh diubah';
+    end if;
+    if new.custom_slug is distinct from old.custom_slug then
+      raise exception 'Kolom custom_slug hanya bisa diubah oleh sistem';
+    end if;
+    if new.qr_photo_enabled is distinct from old.qr_photo_enabled then
+      raise exception 'Kolom qr_photo_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.touch_particles is distinct from old.touch_particles then
+      raise exception 'Kolom touch_particles hanya bisa diubah oleh sistem';
+    end if;
+    if new.gate_type is distinct from old.gate_type then
+      raise exception 'Kolom gate_type hanya bisa diubah oleh sistem';
+    end if;
+    if new.gate_data is distinct from old.gate_data then
+      raise exception 'Kolom gate_data hanya bisa diubah oleh sistem';
+    end if;
+    if new.receipt_enabled is distinct from old.receipt_enabled then
+      raise exception 'Kolom receipt_enabled hanya bisa diubah oleh sistem';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prevent_paid_columns_update on public.ucapan;
+create trigger trg_prevent_paid_columns_update
+  before update on public.ucapan
+  for each row
+  execute function public.prevent_paid_columns_update();
 
 -- Trigger updated_at
 create or replace function public.set_updated_at()
@@ -95,6 +148,7 @@ create table if not exists public.payments (
   status text not null default 'UNPAID',
   tripay_ref text,
   addons jsonb not null default '[]'::jsonb,
+  credit_used bigint not null default 0,
   paid_at timestamptz,
   created_at timestamptz default now()
 );
@@ -194,15 +248,20 @@ create table if not exists public.referrals (
   id bigint generated always as identity primary key,
   referrer_id uuid not null references auth.users(id) on delete cascade,
   referee_id uuid references auth.users(id) on delete set null,
-  code text unique not null,
+  code text not null,
   status text not null default 'pending',
   reward_amount bigint not null default 2000,
   completed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
+alter table public.referrals drop constraint if exists referrals_code_key;
 create index if not exists referrals_referrer_idx on public.referrals (referrer_id);
 create index if not exists referrals_code_idx on public.referrals (code);
+create unique index if not exists referrals_code_master_idx
+  on public.referrals (code) where referee_id is null;
+create unique index if not exists referrals_referee_unique_idx
+  on public.referrals (referee_id) where referee_id is not null;
 
 alter table public.referrals enable row level security;
 
@@ -279,9 +338,11 @@ left join public.views v on v.ucapan_id = u.id
 group by u.id;
 
 -- 12. Storage Bucket 'foto'
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('foto', 'foto', true, 10485760)
-on conflict (id) do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('foto', 'foto', true, 5242880, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update set
+  file_size_limit = 5242880,
+  allowed_mime_types = array['image/jpeg','image/png','image/webp','image/gif'];
 
 drop policy if exists "publik baca foto" on storage.objects;
 create policy "publik baca foto" on storage.objects

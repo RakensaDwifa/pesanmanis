@@ -17,9 +17,9 @@ const NAV_LINKS = [
 ];
 
 export default function Header({
-  userEmail,
-  userName,
-  userAvatar,
+  userEmail: initialEmail,
+  userName: initialName,
+  userAvatar: initialAvatar,
 }: {
   userEmail?: string | null;
   userName?: string | null;
@@ -27,8 +27,40 @@ export default function Header({
 }) {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(initialEmail ?? null);
+  const [userName, setUserName] = useState<string | null>(initialName ?? null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(initialAvatar ?? null);
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isRemote() || initialEmail !== undefined) return;
+    const supabase = createClient();
+    const applyUser = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
+      if (!user) {
+        setUserEmail(null);
+        setUserName(null);
+        setUserAvatar(null);
+        return;
+      }
+      setUserEmail(user.email ?? null);
+      setUserName(
+        (user.user_metadata?.full_name as string | undefined) ??
+          (user.user_metadata?.name as string | undefined) ??
+          null
+      );
+      setUserAvatar(
+        (user.user_metadata?.avatar_url as string | undefined) ??
+          (user.user_metadata?.picture as string | undefined) ??
+          null
+      );
+    };
+    supabase.auth.getUser().then(({ data }) => applyUser(data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [initialEmail]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

@@ -31,6 +31,7 @@ Jika database sudah memiliki data dan tabel dari versi sebelumnya, **jangan jala
 | `schema_v6.sql` | Policy publik share link ucapan, tabel `reactions`, tabel `replies`, dan trigger `updated_at`. |
 | `schema_v7.sql` | Hapus default 8.900 pada `payments.amount`, index performa `payments(status, amount)`, tabel `referrals`, tabel `credits`, dan tabel `checkout_sessions`. |
 | `schema_v8.sql` | **Wajib dijalankan saat ini:** Tambah kolom add-on ke tabel `ucapan` (`custom_slug`, `qr_photo_enabled`, `touch_particles`, `gate_type`, `gate_data`, `receipt_enabled`) dan kolom `payments.addons`. |
+| `schema_v9.sql` | **Keamanan, referral & batas:** RLS select ucapan → hanya pemilik; trigger mencegah update kolom berbayar (`paid`, `custom_slug`, `gate_data`, dll) oleh non-service_role; bucket `foto` dibatasi 5 MB & tipe gambar; index `gate_type`; multi-invite `referrals` (`drop referrals_code_key`); kolom `payments.credit_used`. |
 
 ---
 
@@ -42,5 +43,6 @@ Jika database sudah memiliki data dan tabel dari versi sebelumnya, **jangan jala
 2. **Webhook (`app/api/payment/webhook/route.ts`):**
    - Webhook memvalidasi `gross_amount` dari Midtrans terhadap baris `payments.amount` yang tersimpan. Jika nominal tidak cocok, transaksi tidak diaktifkan.
 3. **Storage Bucket `foto`:**
-   - Ukuran maksimum file: 10MB (`file_size_limit: 10485760`).
+   - Ukuran maksimum file: 5MB (`file_size_limit: 5242880`).
+   - Tipe MIME diizinkan: `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
    - Anonim diizinkan upload foto untuk keperluan pembuatan kartu tanpa harus login lebih dulu.

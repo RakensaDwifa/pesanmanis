@@ -3,24 +3,17 @@ import { NextResponse } from "next/server";
 import { createSnapTransaction } from "@/lib/midtrans";
 import { calculateCheckoutTotal, sanitizeAddons } from "@/lib/pricing";
 import { getActivePrice } from "@/lib/pricing-server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { validateSlugFormat } from "@/lib/slug";
 import { getUcapan } from "@/lib/store";
 import { isRemote } from "@/lib/supabase/config";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-function clientIp(request: Request): string {
-  return (
-    request.headers.get("x-vercel-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "127.0.0.1"
-  );
-}
-
 export async function POST(request: Request) {
   // Cegah spam pembuatan transaksi (tiap request membuat baris payments).
-  const { success } = await checkRateLimit(clientIp(request), 5, 60000);
+  const { success } = await checkRateLimit(getClientIp(request), 5, 60000);
   if (!success) {
     return NextResponse.json(
       {
@@ -40,6 +33,7 @@ export async function POST(request: Request) {
     touchParticles?: string;
     gateType?: string;
     gateData?: unknown;
+    useCredits?: boolean;
   };
   try {
     body = await request.json();
@@ -55,21 +49,43 @@ export async function POST(request: Request) {
   const merchantRef = `UP-${ucapanId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
 
   let templateSlug: string | null = null;
+  let ownerId: string | null = null;
+  let ucapanEmail: string | null = null;
+  let paid = false;
+
   if (isRemote()) {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
     const { data } = await admin
       .from("ucapan")
-      .select("template_slug")
+      .select("template_slug, owner_id, email, paid")
       .eq("id", ucapanId)
       .maybeSingle();
     templateSlug = data?.template_slug ?? null;
+    ownerId = data?.owner_id ?? null;
+    ucapanEmail = data?.email ?? null;
+    paid = data?.paid ?? false;
   } else {
-    templateSlug = getUcapan(ucapanId)?.templateSlug ?? null;
+    const local = getUcapan(ucapanId);
+    templateSlug = local?.templateSlug ?? null;
+    paid = local?.paid ?? false;
   }
 
   if (!templateSlug) {
     return NextResponse.json({ ok: false, error: "UCAPAN_NOT_FOUND" }, { status: 404 });
+  }
+
+  // Ownership check & paid check
+  const supabaseServer = await createClient();
+  const { data: { user } } = await supabaseServer.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
+  }
+  if (ownerId && ownerId !== user.id) {
+    return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
+  }
+  if (paid) {
+    return NextResponse.json({ ok: false, error: "ALREADY_PAID" }, { status: 400 });
   }
 
   // Sanitasi daftar add-on
@@ -111,6 +127,7 @@ export async function POST(request: Request) {
   }
 
   // Jika add-on gate dipilih, wajib ada PIN 4-6 digit
+  let validGateData: { pin: string } | null = null;
   if (sanitizedAddons.includes("intimate_gate")) {
     const gateData =
       body.gateData && typeof body.gateData === "object"
@@ -127,6 +144,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    validGateData = { pin };
   }
 
   // Jika add-on partikel dipilih, validasi jenis yang didukung
@@ -148,46 +166,100 @@ export async function POST(request: Request) {
   // Hitung total checkout dengan mempertimbangkan paket bundling add-on
   const calculation = calculateCheckoutTotal(price.amount, sanitizedAddons);
 
-  // Simpan konfigurasi add-on ke ucapan & catat pembayaran
+  // Hitung potongan saldo referral (credits) bila user memilih useCredits (default: true)
+  const MIN_PAYABLE = 1000;
+  let creditUsed = 0;
+  if (isRemote() && body.useCredits !== false) {
+    try {
+      const { getCreditBalance } = await import("@/lib/referral");
+      const balance = await getCreditBalance(user.id);
+      if (balance > 0 && calculation.totalAmount > MIN_PAYABLE) {
+        creditUsed = Math.min(balance, calculation.totalAmount - MIN_PAYABLE);
+      }
+    } catch {
+      creditUsed = 0;
+    }
+  }
+  const payableAmount = Math.max(MIN_PAYABLE, calculation.totalAmount - creditUsed);
+
+  // Simpan konfigurasi add-on ke ucapan, catat pembayaran, & catat sesi abandoned-cart
   if (isRemote()) {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
 
-    // Update ucapan dengan konfigurasi add-on
+    // Update ucapan dengan konfigurasi add-on (+ isi email dari user login bila masih kosong)
     const ucapanUpdate: Record<string, unknown> = {
       qr_photo_enabled: sanitizedAddons.includes("custom_qr"),
       receipt_enabled: sanitizedAddons.includes("love_receipt"),
       touch_particles: sanitizedAddons.includes("touch_particles")
         ? body.touchParticles ?? "hearts"
         : null,
-      gate_type: sanitizedAddons.includes("intimate_gate") ? body.gateType ?? "pin" : null,
-      gate_data: sanitizedAddons.includes("intimate_gate") ? body.gateData ?? null : null,
+      gate_type: sanitizedAddons.includes("intimate_gate") ? "pin" : null,
+      gate_data: sanitizedAddons.includes("intimate_gate") ? validGateData : null,
     };
     if (validCustomSlug) {
       ucapanUpdate.custom_slug = validCustomSlug;
     }
+    if (!ucapanEmail && user.email) {
+      ucapanUpdate.email = user.email;
+    }
 
     await admin.from("ucapan").update(ucapanUpdate).eq("id", ucapanId);
 
-    const { error: insertError } = await admin.from("payments").insert({
+    const paymentRow: Record<string, unknown> = {
       ucapan_id: ucapanId,
       merchant_ref: merchantRef,
       method: "snap",
-      amount: calculation.totalAmount,
+      amount: payableAmount,
       addons: calculation.addons,
       status: "UNPAID",
-    });
+    };
+    if (creditUsed > 0) {
+      paymentRow.credit_used = creditUsed;
+    }
+
+    let { error: insertError } = await admin.from("payments").insert(paymentRow);
+    // Fallback jika kolom credit_used belum dimigrasikan di database lama
+    if (insertError && creditUsed > 0) {
+      delete paymentRow.credit_used;
+      creditUsed = 0;
+      paymentRow.amount = calculation.totalAmount;
+      ({ error: insertError } = await admin.from("payments").insert(paymentRow));
+    }
     if (insertError) {
       return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
     }
+
+    // Catat sesi checkout untuk abandoned-cart recovery sejak user klik Bayar
+    try {
+      const { data: existingSession } = await admin
+        .from("checkout_sessions")
+        .select("id")
+        .eq("ucapan_id", ucapanId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingSession) {
+        const effectiveEmail = ucapanEmail ?? user.email ?? null;
+        await admin.from("checkout_sessions").insert({
+          ucapan_id: ucapanId,
+          email: effectiveEmail,
+          started_at: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // non-blocking
+    }
   }
+
+  const finalPayable = Math.max(MIN_PAYABLE, calculation.totalAmount - creditUsed);
 
   const result = await createSnapTransaction({
     ucapanId,
     merchantRef,
     templateSlug,
     customerName: body.customerName ?? "Pelanggan",
-    amount: calculation.totalAmount,
+    amount: finalPayable,
   });
 
   if (!result.ok) {
@@ -201,10 +273,11 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ...result,
-    amount: calculation.totalAmount,
+    amount: finalPayable,
     baseAmount: price.amount,
     addonTotal: calculation.addonTotal,
     discount: calculation.discount,
+    creditUsed,
     isPromo: price.isPromo,
     addons: calculation.addons,
   });

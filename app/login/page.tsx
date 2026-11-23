@@ -7,6 +7,7 @@ import LoginForm from "@/components/auth/LoginForm";
 export const metadata: Metadata = {
   title: "Masuk",
   description: "Masuk ke dashboard PesanManis.",
+  robots: { index: false, follow: false },
 };
 
 export default async function LoginPage() {

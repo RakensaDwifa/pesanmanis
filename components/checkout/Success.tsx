@@ -29,13 +29,12 @@ function SuccessInner({ id }: { id: string }) {
       if (isRemote()) {
         try {
           const res = await fetch(`/api/ucapan/${id}`, {
-            method: "PUT",
+            method: "GET",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ activate: true }),
           });
           const json = await res.json();
-          if (json?.data) {
-            u = json.data;
+          if (json?.ucapan) {
+            u = json.ucapan;
           }
         } catch {
           /* ignore */
@@ -93,9 +92,10 @@ function SuccessInner({ id }: { id: string }) {
     );
   }
 
+  const slugSegment = ucapan?.templateSlug || id.slice(0, 8);
   const publicUrl = ucapan?.customSlug
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/u/${ucapan.customSlug}`
-    : `${typeof window !== "undefined" ? window.location.origin : ""}/t/${id.slice(0, 8)}/${id}`;
+    : `${typeof window !== "undefined" ? window.location.origin : ""}/t/${slugSegment}/${id}`;
 
   const copyLink = async () => {
     try {

@@ -62,6 +62,8 @@ export default function Checkout({ id }: { id: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<SavedAddons>({ addons: [] });
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [useCredits, setUseCredits] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,12 +71,36 @@ export default function Checkout({ id }: { id: string }) {
       .then(async (r) => {
         const json = await r.json();
         if (cancelled) return;
-        setUcapan(json.ucapan ?? getUcapan(id));
+        const u: StoredUcapan | null = json.ucapan ?? getUcapan(id);
+        setUcapan(u);
+        if (u?.paid) {
+          router.replace(`/checkout/${id}/selesai`);
+          return;
+        }
+        // Fallback: jika sessionStorage kosong (mis. kembali dari email abandoned cart),
+        // baca konfigurasi add-on yang tersimpan di baris ucapan.
+        const fromSession = readSavedAddons(id);
+        if (!fromSession || fromSession.addons.length === 0) {
+          const addons: AddonKey[] = [];
+          if (u?.customSlug) addons.push("custom_slug");
+          if (u?.qrPhotoEnabled) addons.push("custom_qr");
+          if (u?.touchParticles) addons.push("touch_particles");
+          if (u?.gateType) addons.push("intimate_gate");
+          if (u?.receiptEnabled) addons.push("love_receipt");
+          if (addons.length > 0) {
+            setSaved({
+              addons,
+              customSlug: u?.customSlug ?? undefined,
+              pin: u?.gateData?.pin ? String(u.gateData.pin) : undefined,
+              particleStyle: u?.touchParticles ?? undefined,
+            });
+          }
+        }
       })
       .catch(() => { if (!cancelled) setUcapan(getUcapan(id)); })
       .finally(() => { if (!cancelled) setLoadingUcapan(false); });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     setSaved(readSavedAddons(id) ?? { addons: [] });
@@ -85,6 +111,16 @@ export default function Checkout({ id }: { id: string }) {
       .then((r) => r.json())
       .then((json: { demo: boolean }) => setDemoMode(json.demo))
       .catch(() => setDemoMode(true));
+
+    fetch("/api/referral")
+      .then((r) => r.json())
+      .then((json: { ok?: boolean; stats?: { balance?: number; earned?: number } }) => {
+        if (json.ok && json.stats) {
+          const bal = Number(json.stats.balance ?? json.stats.earned ?? 0);
+          if (bal > 0) setCreditBalance(bal);
+        }
+      })
+      .catch(() => undefined);
   }, [id]);
 
   if (loadingUcapan) {
@@ -105,7 +141,14 @@ export default function Checkout({ id }: { id: string }) {
   }
 
   const calculation = calculateCheckoutTotal(pricing.amount, saved.addons);
-  const totalFormatted = formatPrice(calculation.totalAmount);
+  const MIN_PAYABLE = 1000;
+  const maxCreditDiscount =
+    creditBalance > 0 && calculation.totalAmount > MIN_PAYABLE
+      ? Math.min(creditBalance, calculation.totalAmount - MIN_PAYABLE)
+      : 0;
+  const appliedCredit = useCredits ? maxCreditDiscount : 0;
+  const finalPayableAmount = Math.max(MIN_PAYABLE, calculation.totalAmount - appliedCredit);
+  const totalFormatted = formatPrice(finalPayableAmount);
   const selected = calculation.addons;
 
   const pay = async () => {
@@ -130,6 +173,7 @@ export default function Checkout({ id }: { id: string }) {
             : undefined,
           gateType: selected.includes("intimate_gate") ? "pin" : undefined,
           gateData: selected.includes("intimate_gate") ? { pin: saved.pin } : undefined,
+          useCredits,
         }),
       }).then((r) => r.json());
       if (res.ok && res.paymentUrl) {
@@ -258,6 +302,22 @@ export default function Checkout({ id }: { id: string }) {
                 <span>Biaya layanan</span>
                 <span className="font-semibold text-on-surface">Rp 0</span>
               </div>
+              {maxCreditDiscount > 0 && (
+                <label className="flex items-center justify-between gap-3 rounded-xl bg-green-50 border border-green-200 px-3.5 py-2.5 mb-3 cursor-pointer">
+                  <span className="flex items-center gap-2 text-label-md font-semibold text-green-800">
+                    <input
+                      type="checkbox"
+                      checked={useCredits}
+                      onChange={(e) => setUseCredits(e.target.checked)}
+                      className="rounded border-green-400 text-primary focus:ring-primary"
+                    />
+                    Pakai saldo referral ({formatPrice(creditBalance)})
+                  </span>
+                  <span className="text-label-md font-bold text-green-700">
+                    −{formatPrice(maxCreditDiscount)}
+                  </span>
+                </label>
+              )}
               <div className="h-px bg-outline-variant/40 mb-3" />
               <div className="flex items-center justify-between">
                 <span className="text-body-md font-medium text-on-surface">Total</span>

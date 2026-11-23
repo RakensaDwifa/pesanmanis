@@ -7,6 +7,7 @@ import ReferralDashboard from "@/components/dashboard/ReferralDashboard";
 export const metadata: Metadata = {
   title: "Program Referral",
   description: "Ajak teman, dapatkan saldo reward.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ReferralPage() {

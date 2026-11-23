@@ -2,7 +2,18 @@ import "server-only";
 import { Resend } from "resend";
 import { BRAND } from "@/lib/brand";
 
-const FROM = `${BRAND.name} <onboarding@resend.dev>`;
+function fromAddress(): string {
+  return process.env.RESEND_FROM_EMAIL ?? `${BRAND.name} <onboarding@resend.dev>`;
+}
+
+function escapeHtml(raw: string): string {
+  return String(raw ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function resend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -33,7 +44,7 @@ function layout(title: string, bodyHtml: string): string {
             </tr>
             <tr>
               <td style="padding:32px;">
-                <h1 style="margin:0 0 16px;font-size:22px;color:#de7038;">${title}</h1>
+                <h1 style="margin:0 0 16px;font-size:22px;color:#de7038;">${escapeHtml(title)}</h1>
                 ${bodyHtml}
               </td>
             </tr>
@@ -51,7 +62,8 @@ function layout(title: string, bodyHtml: string): string {
 }
 
 function ctaButton(href: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="border-radius:999px;background:linear-gradient(135deg,#de7038,#f5a15a);"><a href="${href}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:999px;">${label}</a></td></tr></table>`;
+  const safeHref = escapeHtml(href);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="border-radius:999px;background:linear-gradient(135deg,#de7038,#f5a15a);"><a href="${safeHref}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:999px;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 export async function sendPaymentSuccessEmail(input: {
@@ -60,21 +72,25 @@ export async function sendPaymentSuccessEmail(input: {
   toName: string;
   templateSlug: string;
   ucapanId: string;
+  customSlug?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const client = resend();
   if (!client) return { ok: false, error: "RESEND_NOT_CONFIGURED" };
 
-  const url = `${appBaseUrl()}/t/${input.templateSlug}/${input.ucapanId}`;
+  const url = input.customSlug
+    ? `${appBaseUrl()}/u/${encodeURIComponent(input.customSlug)}`
+    : `${appBaseUrl()}/t/${encodeURIComponent(input.templateSlug)}/${encodeURIComponent(input.ucapanId)}`;
+  const safeUrl = escapeHtml(url);
   const html = layout(
     "Ucapan kamu sudah aktif! 🎉",
-    `<p style="margin:0 0 12px;line-height:1.7;">Hai <b>${input.fromName}</b>,</p>
-     <p style="margin:0 0 12px;line-height:1.7;">Ucapan untuk <b>${input.toName}</b> sudah aktif dan bisa dibagikan sekarang.</p>
+    `<p style="margin:0 0 12px;line-height:1.7;">Hai <b>${escapeHtml(input.fromName)}</b>,</p>
+     <p style="margin:0 0 12px;line-height:1.7;">Ucapan untuk <b>${escapeHtml(input.toName)}</b> sudah aktif dan bisa dibagikan sekarang.</p>
      ${ctaButton(url, "Lihat Ucapanmu 💕")}
-     <p style="margin:0;line-height:1.7;font-size:13px;color:#b08a75;">Atau buka link ini: <a href="${url}" style="color:#de7038;">${url}</a></p>`
+     <p style="margin:0;line-height:1.7;font-size:13px;color:#b08a75;">Atau buka link ini: <a href="${safeUrl}" style="color:#de7038;">${safeUrl}</a></p>`
   );
 
   const { error } = await client.emails.send({
-    from: FROM,
+    from: fromAddress(),
     to: [input.to],
     subject: "Ucapan kamu sudah aktif 🎉",
     html,
@@ -92,18 +108,19 @@ export async function sendAbandonedCartEmail(input: {
   const client = resend();
   if (!client) return { ok: false, error: "RESEND_NOT_CONFIGURED" };
 
-  const url = `${appBaseUrl()}/checkout/${input.ucapanId}`;
+  const url = `${appBaseUrl()}/checkout/${encodeURIComponent(input.ucapanId)}`;
+  const safeUrl = escapeHtml(url);
   const html = layout(
     "Kejutanmu belum selesai 💝",
-    `<p style="margin:0 0 12px;line-height:1.7;">Hai <b>${input.fromName}</b>,</p>
-     <p style="margin:0 0 12px;line-height:1.7;">Ucapan spesial untuk <b>${input.toName}</b> sudah hampir jadi — tinggal satu langkah pembayaran dan kejutanmu siap dikirim.</p>
+    `<p style="margin:0 0 12px;line-height:1.7;">Hai <b>${escapeHtml(input.fromName)}</b>,</p>
+     <p style="margin:0 0 12px;line-height:1.7;">Ucapan spesial untuk <b>${escapeHtml(input.toName)}</b> sudah hampir jadi — tinggal satu langkah pembayaran dan kejutanmu siap dikirim.</p>
      <p style="margin:0 0 12px;line-height:1.7;">Link-nya masih menunggumu. Jangan sampai dia kehabisan momen spesial ya 😉</p>
      ${ctaButton(url, "Selesaikan Kejutanmu 💝")}
-     <p style="margin:0;line-height:1.7;font-size:13px;color:#b08a75;">Atau buka link ini: <a href="${url}" style="color:#de7038;">${url}</a></p>`
+     <p style="margin:0;line-height:1.7;font-size:13px;color:#b08a75;">Atau buka link ini: <a href="${safeUrl}" style="color:#de7038;">${safeUrl}</a></p>`
   );
 
   const { error } = await client.emails.send({
-    from: FROM,
+    from: fromAddress(),
     to: [input.to],
     subject: `Kejutanmu untuk ${input.toName} belum selesai 💝`,
     html,
@@ -125,15 +142,15 @@ export async function sendAdminTransactionEmail(input: {
     "Transaksi baru 💰",
     `<p style="margin:0 0 12px;line-height:1.7;">Ada transaksi baru di ${BRAND.name}.</p>
      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff3ea;border-radius:12px;padding:16px;font-size:14px;">
-       <tr><td style="padding:4px 0;color:#b08a75;">Dari</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${input.fromName}</td></tr>
-       <tr><td style="padding:4px 0;color:#b08a75;">Untuk</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${input.toName}</td></tr>
-       <tr><td style="padding:4px 0;color:#b08a75;">Template</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${input.templateSlug}</td></tr>
+       <tr><td style="padding:4px 0;color:#b08a75;">Dari</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${escapeHtml(input.fromName)}</td></tr>
+       <tr><td style="padding:4px 0;color:#b08a75;">Untuk</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${escapeHtml(input.toName)}</td></tr>
+       <tr><td style="padding:4px 0;color:#b08a75;">Template</td><td style="padding:4px 0;font-weight:bold;text-align:right;">${escapeHtml(input.templateSlug)}</td></tr>
        <tr><td style="padding:4px 0;color:#b08a75;">Nominal</td><td style="padding:4px 0;font-weight:bold;text-align:right;">Rp ${input.amount.toLocaleString("id-ID")}</td></tr>
      </table>`
   );
 
   const { error } = await client.emails.send({
-    from: FROM,
+    from: fromAddress(),
     to: [input.to],
     subject: `Transaksi baru: ${input.fromName} → ${input.toName} 💰`,
     html,

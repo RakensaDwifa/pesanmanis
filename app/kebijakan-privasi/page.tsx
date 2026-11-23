@@ -1,6 +1,8 @@
+import { BRAND } from "@/lib/brand";
+
 export const metadata = {
   title: "Kebijakan Privasi",
-  description: "Kebijakan privasi PesanManis.",
+  description: `Kebijakan privasi ${BRAND.name}.`,
 };
 
 export default function PrivacyPage() {
@@ -10,23 +12,40 @@ export default function PrivacyPage() {
         <h1 className="font-heading text-headline-lg text-primary mb-6">Kebijakan Privasi</h1>
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-8 space-y-5 text-body-md leading-relaxed text-on-surface">
           <p>
-            <strong>Data yang kami kumpulkan.</strong> Kami hanya menyimpan data yang kamu
-            masukkan saat membuat ucapan: nama, pesan, foto, dan preferensi template.
+            <strong>Data yang kami kumpulkan.</strong> Kami hanya menyimpan informasi yang
+            kamu masukkan saat menggunakan layanan: alamat email akun, nama pengirim &
+            penerima, isi pesan, foto yang diunggah, serta konfigurasi template dan add-on.
           </p>
           <p>
-            <strong>Pembayaran.</strong> Transaksi diproses oleh penyedia pembayaran pihak
-            ketiga. Kami tidak pernah menyimpan data kartu atau kata sandi.
+            <strong>Keamanan Pesan & PIN Rahasia.</strong> Jika kamu mengaktifkan fitur
+            Kunci Rahasia (Intimate Gate), PIN diverifikasi langsung di server dan isi
+            ucapan maupun foto tidak dikirim ke publik sebelum PIN yang benar dimasukkan.
           </p>
           <p>
-            <strong>Jejak kunjungan.</strong> Dengan izin, kami mencatat waktu dan lokasi
-            perkiraan saat link ucapan dibuka, agar kamu tahu kapan kejutanmu dilihat.
+            <strong>Pembayaran.</strong> Seluruh transaksi diproses melalui gerbang
+            pembayaran resmi (Midtrans). Kami tidak pernah menyimpan nomor kartu kredit/debit,
+            PIN perbankan, atau kredensial pembayaranmu.
           </p>
           <p>
-            <strong>Cookie & penyimpanan lokal.</strong> Kami menggunakan penyimpanan lokal
-            browser agar draf ucapanmu tidak hilang saat berpindah halaman.
+            <strong>Statistik Pembukaan & Interaksi.</strong> Kami mencatat jumlah dan waktu
+            saat link ucapan dibuka serta reaksi emoji atau balasan yang dikirim penerima,
+            agar kamu dapat melihatnya di halaman Dashboard.
           </p>
           <p>
-            <strong>Berbagi data.</strong> Kami tidak menjual data pribadimu ke pihak mana pun.
+            <strong>Penghapusan Data.</strong> Kamu dapat menghapus ucapan kapan saja dari
+            halaman Dashboard. Saat ucapan dihapus, foto terkait di penyimpanan kami juga
+            ikut dihapus secara otomatis.
+          </p>
+          <p>
+            <strong>Kontak Privasi.</strong> Kami tidak menjual data pribadimu ke pihak mana
+            pun. Untuk permintaan terkait data pribadi, hubungi{" "}
+            <a
+              href={`mailto:${BRAND.contactEmail}`}
+              className="text-primary font-semibold hover:underline"
+            >
+              {BRAND.contactEmail}
+            </a>
+            .
           </p>
         </div>
       </div>

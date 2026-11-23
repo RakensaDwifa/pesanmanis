@@ -27,6 +27,17 @@ const EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface RemoteUcapan extends StoredUcapan {
   views?: { count: number; firstSeen?: number; lastSeen?: number };
+  reactions?: Record<string, number>;
+  replies?: { fromName: string; message: string; createdAt: string }[];
+}
+
+function publicUrlFor(u: RemoteUcapan): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  if (u.paid && u.customSlug) {
+    return `${origin}/u/${u.customSlug}`;
+  }
+  const slug = u.templateSlug || u.id.slice(0, 8);
+  return `${origin}/t/${slug}/${u.id}`;
 }
 
 export default function Dashboard() {
@@ -65,6 +76,11 @@ export default function Dashboard() {
   }, []);
 
   const remove = async (id: string) => {
+    const target = ucapans.find((u) => u.id === id);
+    const label = target?.toName ? `ucapan untuk ${target.toName}` : "ucapan ini";
+    if (!window.confirm(`Yakin ingin menghapus ${label}? Tindakan ini tidak bisa dibatalkan.`)) {
+      return;
+    }
     if (demo) {
       deleteUcapan(id);
       setUcapans(listUcapan());
@@ -73,10 +89,12 @@ export default function Dashboard() {
         delete next[id];
         return next;
       });
+      toast.success("Ucapan dihapus");
       return;
     }
     await fetch(`/api/ucapan/${id}`, { method: "DELETE" });
     setUcapans((list) => list.filter((u) => u.id !== id));
+    toast.success("Ucapan dihapus");
   };
 
   const duplicate = async (id: string) => {
@@ -108,20 +126,20 @@ export default function Dashboard() {
     }
   };
 
-  const copyLink = async (id: string) => {
-    const url = `${window.location.origin}/t/${id.slice(0, 8)}/${id}`;
+  const copyLink = async (u: RemoteUcapan) => {
+    const url = publicUrlFor(u);
     try {
       await navigator.clipboard.writeText(url);
-      setCopiedId(id);
+      setCopiedId(u.id);
       setTimeout(() => setCopiedId(null), 2000);
-      AnalyticsEvents.shareClicked("unknown", "clipboard");
+      AnalyticsEvents.shareClicked(u.templateSlug, "clipboard");
     } catch {
       // abaikan
     }
   };
 
-  const shareCard = async (u: (typeof ucapans)[number]) => {
-    const url = `${window.location.origin}/t/${u.id.slice(0, 8)}/${u.id}`;
+  const shareCard = async (u: RemoteUcapan) => {
+    const url = publicUrlFor(u);
     const nav = navigator as Navigator & {
       share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
     };
@@ -138,8 +156,7 @@ export default function Dashboard() {
         if ((err as Error)?.name === "AbortError") return;
       }
     }
-    await copyLink(u.id);
-    AnalyticsEvents.shareClicked(u.templateSlug, "clipboard");
+    await copyLink(u);
   };
 
   const viewOf = (u: RemoteUcapan) =>
@@ -246,8 +263,10 @@ export default function Dashboard() {
                   const editOpen =
                     now - (u.paidAt ?? u.createdAt) < EDIT_WINDOW_MS;
                   const qr = openQr === u.id;
-                  const url = `${window.location.origin}/t/${u.id.slice(0, 8)}/${u.id}`;
+                  const url = publicUrlFor(u);
                   const meta = getTemplate(u.templateSlug);
+                  const reactionEntries = Object.entries(u.reactions ?? {});
+                  const replies = u.replies ?? [];
                   return (
                     <div
                       key={u.id}
@@ -298,29 +317,83 @@ export default function Dashboard() {
                             </p>
                           )}
 
+                          {/* Reaksi & Balasan dari penerima */}
+                          {(reactionEntries.length > 0 || replies.length > 0) && (
+                            <div className="mt-3 rounded-2xl bg-surface-container-low p-3.5 space-y-2">
+                              {reactionEntries.length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-label-md font-semibold text-on-surface-variant mr-1">
+                                    Reaksi:
+                                  </span>
+                                  {reactionEntries.map(([emoji, count]) => (
+                                    <span
+                                      key={emoji}
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white border border-outline-variant/30 text-label-md"
+                                    >
+                                      <span>{emoji}</span>
+                                      <span className="font-semibold text-on-surface">{count}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {replies.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <p className="text-label-md font-semibold text-on-surface-variant">
+                                    💌 Balasan ({replies.length}):
+                                  </p>
+                                  {replies.map((rep, idx) => (
+                                    <div
+                                      key={`${rep.createdAt}-${idx}`}
+                                      className="rounded-xl bg-white border border-outline-variant/25 px-3 py-2 text-body-md"
+                                    >
+                                      <span className="font-semibold text-primary">
+                                        {rep.fromName}:
+                                      </span>{" "}
+                                      <span className="text-on-surface">{rep.message}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Aksi */}
                           <div className="flex items-center gap-2 flex-wrap mt-4">
-                            <button
-                              onClick={() => copyLink(u.id)}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                              {copiedId === u.id ? "Tersalin!" : "Salin Link"}
-                            </button>
-                            <button
-                              onClick={() => void shareCard(u)}
-                              aria-label="Bagikan"
-                              title="Bagikan"
-                              className="p-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
-                            >
-                              <Share2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setOpenQr(qr ? null : u.id)}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
-                            >
-                              QR
-                            </button>
+                            {!u.paid ? (
+                              <Link
+                                href={`/checkout/${u.id}`}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all"
+                              >
+                                <Wallet className="h-3.5 w-3.5" />
+                                Bayar Sekarang
+                              </Link>
+                            ) : (
+                              <button
+                                onClick={() => void copyLink(u)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {copiedId === u.id ? "Tersalin!" : "Salin Link"}
+                              </button>
+                            )}
+                            {u.paid && (
+                              <button
+                                onClick={() => void shareCard(u)}
+                                aria-label="Bagikan"
+                                title="Bagikan"
+                                className="p-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
+                              >
+                                <Share2 className="h-4 w-4" />
+                              </button>
+                            )}
+                            {u.paid && (
+                              <button
+                                onClick={() => setOpenQr(qr ? null : u.id)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
+                              >
+                                QR
+                              </button>
+                            )}
                             <button
                               onClick={() => void duplicate(u.id)}
                               disabled={duplicatingId === u.id}

@@ -5,6 +5,7 @@ import NewsletterSignup from "./NewsletterSignup";
 import { BRAND } from "@/lib/brand";
 
 const LINKS = [
+  { label: "Syarat & Ketentuan", href: "/syarat-ketentuan" },
   { label: "Kebijakan Privasi", href: "/kebijakan-privasi" },
 ];
 

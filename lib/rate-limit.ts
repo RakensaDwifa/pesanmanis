@@ -3,6 +3,14 @@ import type { Redis } from "@upstash/redis";
 
 const memoryStore = new Map<string, { count: number; resetTime: number }>();
 
+export function getClientIp(request: Request): string {
+  return (
+    request.headers.get("x-real-ip")?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "127.0.0.1"
+  );
+}
+
 export async function checkRateLimit(
   ip: string,
   limit = 5,

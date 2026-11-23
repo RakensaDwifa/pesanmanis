@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isRemote } from "@/lib/supabase/config";
 import { validateSlugFormat } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  if (!isRemote()) {
+    return NextResponse.json({
+      available: true,
+      normalized: validation.normalized,
+    });
+  }
+
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     let query = supabase
       .from("ucapan")
       .select("id")

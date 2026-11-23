@@ -114,17 +114,23 @@ export default function PublicView({
 
   const requiresGate = Boolean(ucapan.paid && ucapan.gateType && showTemplate && !gateUnlocked);
 
+  // Strip sensitive gate_data (pin/answer) dari ucapan sebelum dikirim ke client
+  // gateType dan question (jika trivia) tetap dikirim untuk UI
+  const safeGateData = ucapan.gateData
+    ? { question: ucapan.gateData.question }
+    : undefined;
+
   return (
     <>
       <FlowerTransition ref={flowerRef} />
       {ready && (
         <>
-          {requiresGate && (
+          {requiresGate ? (
             <GateOverlay
               toName={ucapan.toName}
               fromName={ucapan.fromName}
               gateType={ucapan.gateType!}
-              gateData={ucapan.gateData}
+              gateData={safeGateData}
               onUnlock={() => {
                 try {
                   sessionStorage.setItem(gateKey(id), "1");
@@ -133,21 +139,27 @@ export default function PublicView({
                 }
                 setGateUnlocked(true);
               }}
+              ucapanId={id}
             />
+          ) : (
+            <>
+              {ucapan.paid && ucapan.touchParticles && (
+                <ParticleTouch type={ucapan.touchParticles} />
+              )}
+              <TemplateRenderer content={ucapan} />
+              {!ucapan.paid && <Watermark />}
+              {ucapan.paid && ucapan.receiptEnabled && (
+                <LoveReceiptModal
+                  toName={ucapan.toName}
+                  fromName={ucapan.fromName}
+                  dateStr={ucapan.paidAt ? new Date(ucapan.paidAt).toISOString() : undefined}
+                  templateSlug={ucapan.templateSlug}
+                />
+              )}
+              <StoryCardButton ucapan={ucapan} />
+              <ReactionBar ucapanId={id} />
+            </>
           )}
-          {ucapan.paid && ucapan.touchParticles && <ParticleTouch type={ucapan.touchParticles} />}
-          <TemplateRenderer content={ucapan} />
-          {!ucapan.paid && <Watermark />}
-          {ucapan.paid && ucapan.receiptEnabled && (
-            <LoveReceiptModal
-              toName={ucapan.toName}
-              fromName={ucapan.fromName}
-              dateStr={ucapan.paidAt ? new Date(ucapan.paidAt).toISOString() : undefined}
-              templateSlug={ucapan.templateSlug}
-            />
-          )}
-          <StoryCardButton ucapan={ucapan} />
-          <ReactionBar ucapanId={id} />
         </>
       )}
     </>

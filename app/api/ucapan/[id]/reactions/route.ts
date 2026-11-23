@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const ALLOWED_EMOJIS = new Set(["❤️", "😍", "🥰", "😭", "🤗", "👏"]);
 
 export async function GET(
   _request: Request,
@@ -32,10 +35,7 @@ export async function POST(
   if (!isRemote()) {
     return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
   }
-  const ip =
-    request.headers.get("x-vercel-ip") ||
-    (request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1");
-  const { success } = await checkRateLimit(ip, 20, 60000);
+  const { success } = await checkRateLimit(`reactions:${getClientIp(request)}`, 20, 60000);
   if (!success) {
     return NextResponse.json(
       { ok: false, error: "RATE_LIMIT_EXCEEDED" },
@@ -50,9 +50,22 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
   const emoji = (body.emoji ?? "").trim();
-  if (!emoji || emoji.length > 8) {
+  if (!ALLOWED_EMOJIS.has(emoji)) {
     return NextResponse.json({ ok: false, error: "BAD_EMOJI" }, { status: 400 });
   }
+
+  const admin = createAdminClient();
+  const { data: target } = await admin
+    .from("ucapan")
+    .select("id,paid")
+    .eq("id", id)
+    .eq("paid", true)
+    .maybeSingle();
+
+  if (!target) {
+    return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("reactions")

@@ -7,8 +7,6 @@ import Footer from "@/components/landing/Footer";
 import FloatingChat from "@/components/landing/FloatingChat";
 import CaptureReferral from "@/components/referral/CaptureReferral";
 import { ToasterWrapper } from "@/components/ui/toast";
-import { createClient } from "@/lib/supabase/server";
-import { isRemote } from "@/lib/supabase/config";
 import { BRAND } from "@/lib/brand";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -24,37 +22,36 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(BRAND.baseUrl),
   title: {
     default: `${BRAND.name} — ${BRAND.tagline}`,
     template: `%s — ${BRAND.name}`,
   },
   description: BRAND.description,
+  openGraph: {
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: BRAND.description,
+    url: BRAND.baseUrl,
+    siteName: BRAND.name,
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: BRAND.description,
+  },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  let userEmail: string | null = null;
-  let userName: string | null = null;
-  let userAvatar: string | null = null;
-  if (isRemote()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      userEmail = user.email ?? null;
-      userName = user.user_metadata?.full_name ?? user.user_metadata?.name ?? null;
-      userAvatar = user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null;
-    }
-  }
-
   return (
     <html lang="id" className={`${jakarta.variable} ${fraunces.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#de7038" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content={BRAND.name} />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
@@ -67,13 +64,13 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <Header userEmail={userEmail} userName={userName} userAvatar={userAvatar} />
+        <Header />
         <main className="flex-1">{children}</main>
         <Footer />
         <FloatingChat />
         <CaptureReferral />
         <ToasterWrapper />
-        <Analytics />
+        {process.env.VERCEL === "1" && <Analytics />}
       </body>
     </html>
   );

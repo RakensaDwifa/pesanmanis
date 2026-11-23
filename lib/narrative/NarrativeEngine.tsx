@@ -190,7 +190,7 @@ export default function NarrativeEngine({
                 <div className="flex flex-col items-center gap-2">
                   <Heart className="w-10 h-10 text-rose-400 fill-rose-400 animate-pulse" />
                   <span className="font-heading text-lg font-bold text-center">
-                    Untuk {toName} tersayang âœ¨
+                    Untuk {toName} tersayang ✨
                   </span>
                 </div>
               )}
@@ -234,7 +234,7 @@ export default function NarrativeEngine({
               onClick={handleTap}
               className="w-20 h-20 rounded-full bg-white/25 hover:bg-white/35 active:scale-90 border-2 border-white/60 flex items-center justify-center text-2xl shadow-xl transition-all"
             >
-              ðŸ‘†
+              👆
             </button>
             <div className="flex gap-1.5 mt-2">
               {Array.from({ length: currentChapter.requiredTaps }).map((_, i) => (
@@ -278,7 +278,7 @@ export default function NarrativeEngine({
             >
               {/* Target Slot (Kanan) */}
               <div className="absolute right-2 top-2 bottom-2 w-12 rounded-full border-2 border-dashed border-amber-300/70 bg-amber-400/20 flex items-center justify-center text-xs font-bold text-amber-200">
-                ðŸ”’
+                🔒
               </div>
 
               {/* Slider thumb yang bisa di-drag */}
@@ -317,7 +317,7 @@ export default function NarrativeEngine({
                 }}
                 className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold flex items-center justify-center shadow-lg cursor-grab active:cursor-grabbing transition-transform"
               >
-                ðŸ”‘
+                🔑
               </div>
 
               {/* Label panduan di tengah */}
@@ -326,7 +326,7 @@ export default function NarrativeEngine({
                   dragProgress > 20 ? "opacity-0" : "opacity-100"
                 }`}
               >
-                {currentChapter.sourceLabel || "Geser kuncinya ke kanan â†’"}
+                {currentChapter.sourceLabel || "Geser kuncinya ke kanan →"}
               </div>
             </div>
           </div>

@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, toUcapanRow } from "@/lib/supabase/rows";
+import { mapUcapanRow, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
-import { checkRateLimit } from "@/lib/rate-limit";
+import type { UcapanContent } from "@/lib/types";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -31,17 +32,63 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
   }
 
-  const { data: statsRows } = await supabase
-    .from("ucapan_stats")
-    .select("ucapan_id, total_views, first_view_at, last_view_at");
+  const ids = (rows as UcapanRow[]).map((r) => r.id);
+
+  const [{ data: statsRows }, { data: reactionRows }, { data: replyRows }] =
+    ids.length > 0
+      ? await Promise.all([
+          supabase
+            .from("ucapan_stats")
+            .select("ucapan_id, total_views, first_view_at, last_view_at")
+            .in("ucapan_id", ids),
+          supabase
+            .from("reactions")
+            .select("ucapan_id, emoji, created_at")
+            .in("ucapan_id", ids)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("replies")
+            .select("ucapan_id, from_name, message, created_at")
+            .in("ucapan_id", ids)
+            .order("created_at", { ascending: true }),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }];
 
   const statsByUcapan = new Map<string, UcapanStatsRow>(
     (statsRows as UcapanStatsRow[] | null)?.map((s) => [s.ucapan_id, s]) ?? []
   );
 
-  const ucapans = (rows as UcapanRow[]).map((row) =>
-    mapUcapanRow(row, statsByUcapan.get(row.id))
-  );
+  const reactionsByUcapan = new Map<string, Record<string, number>>();
+  for (const r of (reactionRows ?? []) as { ucapan_id: string; emoji: string }[]) {
+    const bucket = reactionsByUcapan.get(r.ucapan_id) ?? {};
+    bucket[r.emoji] = (bucket[r.emoji] ?? 0) + 1;
+    reactionsByUcapan.set(r.ucapan_id, bucket);
+  }
+
+  const repliesByUcapan = new Map<
+    string,
+    { fromName: string; message: string; createdAt: string }[]
+  >();
+  for (const p of (replyRows ?? []) as {
+    ucapan_id: string;
+    from_name: string;
+    message: string;
+    created_at: string;
+  }[]) {
+    const list = repliesByUcapan.get(p.ucapan_id) ?? [];
+    list.push({
+      fromName: p.from_name,
+      message: p.message,
+      createdAt: p.created_at,
+    });
+    repliesByUcapan.set(p.ucapan_id, list);
+  }
+
+  const ucapans = (rows as UcapanRow[]).map((row) => ({
+    ...mapUcapanRow(row, statsByUcapan.get(row.id)),
+    reactions: reactionsByUcapan.get(row.id) ?? {},
+    replies: repliesByUcapan.get(row.id) ?? [],
+  }));
 
   return NextResponse.json({ ok: true, demo: false, ucapans });
 }
@@ -51,10 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
   }
 
-  const ip =
-    request.headers.get("x-vercel-ip") ||
-    (request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1");
-  const { success } = await checkRateLimit(ip, 5, 60000);
+  const { success } = await checkRateLimit(getClientIp(request), 5, 60000);
   if (!success) {
     return NextResponse.json(
       { ok: false, error: "RATE_LIMIT_EXCEEDED", message: "Terlalu banyak permintaan. Coba lagi dalam 1 menit." },
@@ -74,6 +118,16 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Validasi input
+  const validation = validateUcapanInput(body as Partial<UcapanContent>);
+  if (!validation.valid) {
+    return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
+  }
+
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
+  }
+
   if (!body.templateSlug) {
     return NextResponse.json({ ok: false, error: "MISSING_TEMPLATE" }, { status: 400 });
   }
@@ -81,8 +135,8 @@ export async function POST(request: Request) {
   const { data, error } = await createAdminClient()
     .from("ucapan")
     .insert({
-      owner_id: user?.id ?? null,
-      ...toUcapanRow(body as never),
+      owner_id: user.id,
+      ...toUcapanRow(body as Partial<UcapanContent>),
     })
     .select("id")
     .single();

@@ -94,16 +94,19 @@ export function verifyMidtransSignature(
   receivedSignature: string
 ): boolean {
   const serverKey = process.env.MIDTRANS_SERVER_KEY ?? "";
-  if (!serverKey) return false;
+  if (!serverKey || !receivedSignature) return false;
 
   const raw = orderId + statusCode + grossAmount + serverKey;
   const computed = crypto.createHash("sha512").update(raw).digest("hex");
-  return computed === receivedSignature;
+  const a = Buffer.from(computed, "utf8");
+  const b = Buffer.from(receivedSignature, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 export async function checkMidtransStatus(
   orderId: string
-): Promise<{ ok: boolean; status?: string }> {
+): Promise<{ ok: boolean; status?: string; grossAmount?: string }> {
   const serverKey = process.env.MIDTRANS_SERVER_KEY;
   if (!serverKey) return { ok: false };
 
@@ -122,14 +125,22 @@ export async function checkMidtransStatus(
     if (!res.ok) return { ok: false };
 
     const txStatus = json.transaction_status;
+    const fraudStatus = json.fraud_status;
     let normalized = "PENDING";
-    if (txStatus === "settlement" || txStatus === "capture") {
+    if (
+      (txStatus === "settlement" || txStatus === "capture") &&
+      (!fraudStatus || fraudStatus === "accept")
+    ) {
       normalized = "PAID";
     } else if (["cancel", "deny", "expire"].includes(txStatus)) {
       normalized = "FAILED";
     }
 
-    return { ok: true, status: normalized };
+    return {
+      ok: true,
+      status: normalized,
+      grossAmount: json.gross_amount ? String(json.gross_amount) : undefined,
+    };
   } catch {
     return { ok: false };
   }

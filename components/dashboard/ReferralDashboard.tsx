@@ -4,16 +4,21 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Copy, Gift, Users, Wallet } from "lucide-react";
 import { AnalyticsEvents } from "@/lib/analytics";
+import {
+  REFERRAL_MAX_REWARDED_PER_REFERRER,
+  REFERRAL_REWARD_AMOUNT,
+} from "@/lib/referral-policy";
 
 interface Stats {
   invited: number;
   completed: number;
   earned: number;
+  balance?: number;
 }
 
 export default function ReferralDashboard() {
   const [code, setCode] = useState<string | null>(null);
-  const [stats, setStats] = useState<Stats>({ invited: 0, completed: 0, earned: 0 });
+  const [stats, setStats] = useState<Stats>({ invited: 0, completed: 0, earned: 0, balance: 0 });
   const [copied, setCopied] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -49,7 +54,9 @@ export default function ReferralDashboard() {
         <div className="mb-10">
           <h1 className="font-heading text-headline-lg text-primary mb-1">Program Referral</h1>
           <p className="text-body-md text-on-surface-variant">
-            Ajak temanmu bikin kejutan — kamu dapat saldo Rp 5.000 untuk setiap teman yang menyelesaikan pembayaran.
+            Ajak temanmu bikin kejutan — kamu dapat saldo Rp{" "}
+            {REFERRAL_REWARD_AMOUNT.toLocaleString("id-ID")} untuk setiap teman yang menyelesaikan
+            pembayaran (maks. {REFERRAL_MAX_REWARDED_PER_REFERRER} teman).
           </p>
         </div>
 
@@ -105,7 +112,11 @@ export default function ReferralDashboard() {
               {[
                 { icon: Users, label: "Teman Diundang", value: String(stats.invited) },
                 { icon: Gift, label: "Berhasil Transaksi", value: String(stats.completed) },
-                { icon: Wallet, label: "Total Saldo Didapat", value: `Rp ${stats.earned.toLocaleString("id-ID")}` },
+                {
+                  icon: Wallet,
+                  label: "Saldo Tersedia",
+                  value: `Rp ${(stats.balance ?? stats.earned).toLocaleString("id-ID")}`,
+                },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 text-center">
                   <div className="w-11 h-11 rounded-full bg-primary-fixed/40 flex items-center justify-center mx-auto mb-3">
@@ -124,7 +135,7 @@ export default function ReferralDashboard() {
                 {[
                   "Bagikan link referral kamu ke teman-temanmu.",
                   "Teman mendaftar lewat link dan membuat ucapan pertamanya.",
-                  "Setelah pembayaran temanmu berhasil, saldo Rp 5.000 otomatis masuk ke akunmu.",
+                  `Setelah pembayaran temanmu berhasil, saldo Rp ${REFERRAL_REWARD_AMOUNT.toLocaleString("id-ID")} otomatis masuk ke akunmu (maks. ${REFERRAL_MAX_REWARDED_PER_REFERRER} teman) dan otomatis memotong tagihan checkout berikutnya.`,
                 ].map((step, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className="shrink-0 w-7 h-7 rounded-full bg-primary text-white text-label-lg font-bold flex items-center justify-center">

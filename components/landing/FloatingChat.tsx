@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { MessageCircle } from "lucide-react";
+import { BRAND } from "@/lib/brand";
 
 export default function FloatingChat() {
   const [hover, setHover] = useState(false);
 
   return (
-    <Link
-      href="/templates"
+    <a
+      href={BRAND.supportUrl}
+      target="_blank"
+      rel="noopener noreferrer"
       data-site-chrome
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -22,7 +24,7 @@ export default function FloatingChat() {
           Butuh bantuan? Chat Admin
         </div>
       )}
-      <MessageCircle className="h-6 w-6 md:h-7 md:w-7" />
-    </Link>
+      <MessageCircle className="h-7 w-7 text-primary transition-transform duration-300" />
+    </a>
   );
 }

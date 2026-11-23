@@ -11,6 +11,7 @@ import {
   Clock,
   ArrowLeft,
   ShieldAlert,
+  ExternalLink,
 } from "lucide-react";
 
 interface PaymentRow {
@@ -31,6 +32,7 @@ interface UcapanAdminRow {
   to_name: string;
   from_name: string;
   template_slug: string;
+  custom_slug?: string | null;
   paid: boolean;
   paid_at?: string;
   created_at: string;
@@ -255,43 +257,60 @@ export default function AdminDashboard() {
                     <th className="p-4">Template</th>
                     <th className="p-4">Status Bayar</th>
                     <th className="p-4">Views</th>
+                    <th className="p-4">Link</th>
                     <th className="p-4">Dibuat</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/20 text-body-md text-on-surface">
                   {ucapans.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-on-surface-variant">
+                      <td colSpan={6} className="p-8 text-center text-on-surface-variant">
                         Belum ada data ucapan.
                       </td>
                     </tr>
                   ) : (
-                    ucapans.map((u) => (
-                      <tr key={u.id} className="hover:bg-surface-container-low/50">
-                        <td className="p-4">
-                          <p className="font-semibold">{u.title || "Untuk Kamu"}</p>
-                          <p className="text-sm text-on-surface-variant">
-                            {u.to_name} (dari {u.from_name})
-                          </p>
-                        </td>
-                        <td className="p-4 capitalize">{u.template_slug}</td>
-                        <td className="p-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-label-md font-semibold ${
-                              u.paid
-                                ? "bg-green-100 text-green-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {u.paid ? "Aktif" : "Pending"}
-                          </span>
-                        </td>
-                        <td className="p-4 font-semibold text-primary">{u.totalViews}×</td>
-                        <td className="p-4 text-on-surface-variant text-sm">
-                          {new Date(u.created_at).toLocaleString("id-ID")}
-                        </td>
-                      </tr>
-                    ))
+                    ucapans.map((u) => {
+                      const href =
+                        u.paid && u.custom_slug
+                          ? `/u/${u.custom_slug}`
+                          : `/t/${u.template_slug || u.id.slice(0, 8)}/${u.id}`;
+                      return (
+                        <tr key={u.id} className="hover:bg-surface-container-low/50">
+                          <td className="p-4">
+                            <p className="font-semibold">{u.title || "Untuk Kamu"}</p>
+                            <p className="text-sm text-on-surface-variant">
+                              {u.to_name} (dari {u.from_name})
+                            </p>
+                          </td>
+                          <td className="p-4 capitalize">{u.template_slug}</td>
+                          <td className="p-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-label-md font-semibold ${
+                                u.paid
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-amber-100 text-amber-700"
+                              }`}
+                            >
+                              {u.paid ? "Aktif" : "Pending"}
+                            </span>
+                          </td>
+                          <td className="p-4 font-semibold text-primary">{u.totalViews}×</td>
+                          <td className="p-4">
+                            <Link
+                              href={href}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-label-md font-semibold text-primary hover:underline"
+                            >
+                              {u.custom_slug ? `/u/${u.custom_slug}` : "Buka"}
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Link>
+                          </td>
+                          <td className="p-4 text-on-surface-variant text-sm">
+                            {new Date(u.created_at).toLocaleString("id-ID")}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

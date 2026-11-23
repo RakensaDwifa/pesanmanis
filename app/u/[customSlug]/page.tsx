@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow } from "@/lib/supabase/rows";
+import { mapUcapanRow, stripPublicUcapan } from "@/lib/supabase/rows";
 import type { UcapanRow } from "@/lib/supabase/rows";
 import PublicView from "@/components/view/PublicView";
 
@@ -15,19 +15,22 @@ export async function generateMetadata({
   let toName = "Kamu";
   let fromName = "Seseorang";
   let message = "";
+  let hasGate = false;
 
   if (isRemote()) {
     try {
-      const supabase = await createClient();
+      const supabase = createAdminClient();
       const { data } = await supabase
         .from("ucapan")
-        .select("to_name,from_name,message")
+        .select("to_name,from_name,message,gate_type,paid")
         .eq("custom_slug", customSlug)
+        .eq("paid", true)
         .maybeSingle();
       if (data) {
         toName = data.to_name ?? toName;
         fromName = data.from_name ?? fromName;
         message = data.message ?? "";
+        hasGate = Boolean(data.gate_type);
       }
     } catch {
       /* fallback */
@@ -36,8 +39,9 @@ export async function generateMetadata({
 
   const teaser = message.trim().split(/\s+/).slice(0, 18).join(" ");
   const title = `Untuk ${toName} 💌 — dari ${fromName}`;
-  const description =
-    teaser.length > 0
+  const description = hasGate
+    ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
+    : teaser.length > 0
       ? `Seseorang membuatkan ucapan spesial untukmu: "${teaser}${teaser.endsWith(".") ? "" : "…"}"`
       : "Seseorang membuatkan ucapan spesial untukmu.";
 
@@ -73,7 +77,7 @@ export default async function CustomSlugRoute({
     notFound();
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase
     .from("ucapan")
     .select("*")
@@ -83,7 +87,7 @@ export default async function CustomSlugRoute({
 
   if (!data) notFound();
 
-  const remote = mapUcapanRow(data as UcapanRow);
+  const remote = stripPublicUcapan(mapUcapanRow(data as UcapanRow));
 
   return <PublicView id={remote.id} remote={remote} />;
 }

@@ -20,14 +20,20 @@ function maskAmount(amount: number): string {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const payload = await request.json();
-  const signatureKey: string = payload.signature_key ?? "";
-  const orderId: string = payload.order_id ?? "";
+  let payload: Record<string, unknown>;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
+  }
+  const signatureKey: string = String(payload.signature_key ?? "");
+  const orderId: string = String(payload.order_id ?? "");
   const statusCode: string = String(payload.status_code ?? "");
   const grossAmount: string = String(payload.gross_amount ?? "");
-  const transactionStatus: string = payload.transaction_status ?? "";
-  const fraudStatus: string | undefined = payload.fraud_status;
-  const transactionId: string = payload.transaction_id ?? "";
+  const transactionStatus: string = String(payload.transaction_status ?? "");
+  const fraudStatus: string | undefined =
+    typeof payload.fraud_status === "string" ? payload.fraud_status : undefined;
+  const transactionId: string = String(payload.transaction_id ?? "");
 
   const { verifyMidtransSignature } = await import("@/lib/midtrans");
 
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
 
     const { data: payment } = await admin
       .from("payments")
-      .select("ucapan_id,status,amount,addons")
+      .select("id,ucapan_id,status,amount,addons,credit_used")
       .eq("merchant_ref", merchantRef)
       .maybeSingle();
 
@@ -83,17 +89,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, mismatch: true });
     }
 
-    let ucapanId: string | null = payment?.ucapan_id ?? null;
-
-    if (!ucapanId && merchantRef.startsWith("UP-")) {
-      const id8 = merchantRef.slice(3, 11);
-      const { data: fallback } = await admin
-        .from("ucapan")
-        .select("id")
-        .like("id", `${id8}%`)
-        .maybeSingle();
-      ucapanId = fallback?.id ?? null;
-    }
+    const ucapanId: string | null = payment?.ucapan_id ?? null;
 
     if (ucapanId) {
       const alreadyPaid = payment?.status === "PAID";
@@ -146,17 +142,24 @@ export async function POST(request: Request) {
 
       const { data: ucapan } = await admin
         .from("ucapan")
-        .select("template_slug, from_name, to_name, email, owner_id")
+        .select("template_slug, from_name, to_name, email, owner_id, custom_slug")
         .eq("id", ucapanId)
         .maybeSingle();
 
       console.info("[payment-webhook] PAID + DB aktif", { ref: maskId(merchantRef), ucapanId: maskId(ucapanId ?? "") });
 
-      // Selesaikan referral pending milik pembeli (jika login & pakai kode referral)
+      // Selesaikan referral pending & potong saldo credit yang dipakai pembeli
       if (ucapan?.owner_id) {
         try {
-          const { completePendingReferrals } = await import("@/lib/referral");
+          const { completePendingReferrals, redeemCreditsForPayment } = await import(
+            "@/lib/referral"
+          );
           await completePendingReferrals(ucapan.owner_id);
+          const creditUsed = Number((payment as { credit_used?: number } | null)?.credit_used ?? 0);
+          const paymentId = Number((payment as { id?: number } | null)?.id ?? 0);
+          if (creditUsed > 0 && paymentId > 0) {
+            await redeemCreditsForPayment(ucapan.owner_id, paymentId, creditUsed);
+          }
         } catch {
           // non-blocking
         }
@@ -172,6 +175,7 @@ export async function POST(request: Request) {
           toName: ucapan.to_name,
           templateSlug: ucapan.template_slug,
           ucapanId,
+          customSlug: ucapan.custom_slug,
         });
         if (!successRes.ok) {
           console.warn("[payment-webhook] email pembeli gagal", { to: maskEmail(ucapan.email), error: successRes.error });
@@ -209,25 +213,31 @@ export async function POST(request: Request) {
       try {
         const { createAdminClient } = await import("@/lib/supabase/admin");
         const admin = createAdminClient();
-        const id8 = merchantRef.slice(3, 11);
-        const { data: u } = await admin
-          .from("ucapan")
-          .select("id,email")
-          .like("id", `${id8}%`)
+        const { data: payRow } = await admin
+          .from("payments")
+          .select("ucapan_id")
+          .eq("merchant_ref", merchantRef)
           .maybeSingle();
-        if (u?.id) {
-          const { data: existing } = await admin
-            .from("checkout_sessions")
-            .select("id")
-            .eq("ucapan_id", u.id)
-            .limit(1)
+        if (payRow?.ucapan_id) {
+          const { data: u } = await admin
+            .from("ucapan")
+            .select("id,email")
+            .eq("id", payRow.ucapan_id)
             .maybeSingle();
-          if (!existing) {
-            await admin.from("checkout_sessions").insert({
-              ucapan_id: u.id,
-              email: u.email ? maskEmail(u.email) : null,
-              started_at: now,
-            });
+          if (u?.id) {
+            const { data: existing } = await admin
+              .from("checkout_sessions")
+              .select("id")
+              .eq("ucapan_id", u.id)
+              .limit(1)
+              .maybeSingle();
+            if (!existing) {
+              await admin.from("checkout_sessions").insert({
+                ucapan_id: u.id,
+                email: u.email ? maskEmail(u.email) : null,
+                started_at: now,
+              });
+            }
           }
         }
       } catch {

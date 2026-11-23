@@ -7,8 +7,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        // Konten personal & privat tidak diindex
-        disallow: ["/t/", "/dashboard", "/admin", "/api/", "/checkout", "/buat"],
+        // Konten personal sudah memakai robots noindex per halaman; biarkan /t/ & /u/
+        // dapat diambil crawler medsos (WhatsApp, Twitter, dll) untuk share preview.
+        disallow: ["/dashboard", "/admin", "/api/", "/checkout", "/buat"],
       },
     ],
     sitemap: `${BRAND.baseUrl}/sitemap.xml`,

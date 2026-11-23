@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import type { UcapanRow } from "@/lib/supabase/rows";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isRemote()) {
     return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
+  }
+
+  const { success } = await checkRateLimit(`clone:${getClientIp(request)}`, 10, 60000);
+  if (!success) {
+    return NextResponse.json({ ok: false, error: "RATE_LIMIT_EXCEEDED" }, { status: 429 });
   }
 
   let body: { id?: string };

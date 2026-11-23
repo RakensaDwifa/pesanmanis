@@ -4,6 +4,7 @@ import { getTemplate } from "@/lib/templates";
 export const metadata = {
   title: "Buat Ucapan",
   description: "Buat website ucapan personal untuk pacar kamu dalam 5 menit.",
+  robots: { index: false, follow: false },
 };
 
 export default async function BuilderRoute({

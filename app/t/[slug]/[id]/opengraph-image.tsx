@@ -36,14 +36,15 @@ export default async function Image({
       const supabase = createAdminClient();
       const { data: row } = await supabase
         .from("ucapan")
-        .select("template_slug,to_name,from_name,title")
+        .select("template_slug,to_name,from_name,title,gate_type")
         .eq("id", id)
+        .eq("paid", true)
         .maybeSingle();
       if (row) {
         data = {
           toName: row.to_name ?? FALLBACK.toName,
           fromName: row.from_name ?? FALLBACK.fromName,
-          title: row.title ?? FALLBACK.title,
+          title: row.gate_type ? "🔒 Pesan Rahasia Untukmu" : (row.title ?? FALLBACK.title),
           slug: row.template_slug ?? FALLBACK.slug,
         };
       }

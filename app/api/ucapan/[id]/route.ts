@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, toUcapanRow } from "@/lib/supabase/rows";
+import { mapUcapanRow, stripPublicUcapan, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
+import type { UcapanContent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -66,10 +67,19 @@ export async function GET(
   }
   const { id } = await params;
   const { ucapan } = await fetchUcapan(id);
-  if (!ucapan) {
+  if (ucapan) {
+    return NextResponse.json({ ok: true, demo: false, ucapan });
+  }
+  // Pembaca publik (bukan pemilik): hanya boleh baca ucapan yang sudah paid, tanpa email & PIN
+  const publicUcapan = await fetchUcapanAdmin(id);
+  if (!publicUcapan || !publicUcapan.paid) {
     return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
   }
-  return NextResponse.json({ ok: true, demo: false, ucapan });
+  return NextResponse.json({
+    ok: true,
+    demo: false,
+    ucapan: stripPublicUcapan(publicUcapan),
+  });
 }
 
 export async function PUT(
@@ -98,17 +108,6 @@ export async function PUT(
 
   const supabase = await createClient();
 
-  if (body.activate === true) {
-    const { error } = await supabase
-      .from("ucapan")
-      .update({ paid: true, paid_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) {
-      return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
   const reference = ucapan.paidAt ?? ucapan.createdAt;
   if (ucapan.paid && Date.now() - reference > EDIT_WINDOW_MS) {
     return NextResponse.json(
@@ -117,9 +116,15 @@ export async function PUT(
     );
   }
 
+  // Validasi input
+  const validation = validateUcapanInput(body as Partial<UcapanContent>);
+  if (!validation.valid) {
+    return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
+  }
+
   const { error } = await supabase
     .from("ucapan")
-    .update({ ...toUcapanRow(body as never), updated_at: new Date().toISOString() })
+    .update({ ...toUcapanRow(body as Partial<UcapanContent>), updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
@@ -142,6 +147,27 @@ export async function DELETE(
   if (!ucapan) {
     return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
   }
+
+  // Bersihkan file foto di bucket 'foto' Supabase Storage sebelum baris dihapus
+  const marker = "/storage/v1/object/public/foto/";
+  const storagePaths = (ucapan.photos ?? [])
+    .map((url) => {
+      if (typeof url !== "string") return null;
+      const idx = url.indexOf(marker);
+      if (idx === -1) return null;
+      return decodeURIComponent(url.slice(idx + marker.length).split("?")[0]);
+    })
+    .filter((p): p is string => Boolean(p));
+
+  if (storagePaths.length > 0) {
+    try {
+      const admin = createAdminClient();
+      await admin.storage.from("foto").remove(storagePaths);
+    } catch {
+      // non-blocking: tetap lanjut hapus baris ucapan
+    }
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("ucapan").delete().eq("id", id);
   if (error) {

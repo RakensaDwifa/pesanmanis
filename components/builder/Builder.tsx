@@ -114,7 +114,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     return fillContentDefaults(getDraft(slug) ?? { templateSlug: slug });
   });
   const initialPaid = editId ? Boolean(getUcapan(editId)?.paid) : false;
-  const [isPaid] = useState(initialPaid);
+  const [isPaid, setIsPaid] = useState(initialPaid);
   const plan = planForPaid(isPaid);
 
   const [saving, setSaving] = useState(false);
@@ -217,13 +217,54 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   }, [slug]);
 
   useEffect(() => {
-    if (!editId || !isRemote()) return;
+    if (!editId) return;
+    // Pulihkan pilihan add-on dari sessionStorage jika ada
+    try {
+      const raw = sessionStorage.getItem(addonsStorageKey(editId));
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          addons?: AddonKey[];
+          customSlug?: string;
+          pin?: string;
+          particleStyle?: "hearts" | "roses" | "sparkles";
+        };
+        if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
+        if (parsed.customSlug) setSlugInput(parsed.customSlug);
+        if (parsed.pin) setPinInput(parsed.pin);
+        if (parsed.particleStyle) setParticleStyle(parsed.particleStyle);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!isRemote()) return;
     let cancelled = false;
     fetch(`/api/ucapan/${editId}`)
       .then(async (r) => {
         const json = await r.json();
         if (!cancelled && json.ok && json.ucapan) {
-          setContent(fillContentDefaults(json.ucapan));
+          const u = json.ucapan;
+          setContent(fillContentDefaults(u));
+          setIsPaid(Boolean(u.paid));
+          // Pulihkan konfigurasi add-on dari database bila belum ada di sessionStorage
+          const restored = new Set<AddonKey>();
+          if (u.customSlug) {
+            restored.add("custom_slug");
+            setSlugInput(String(u.customSlug));
+          }
+          if (u.qrPhotoEnabled) restored.add("custom_qr");
+          if (u.touchParticles) {
+            restored.add("touch_particles");
+            if (["hearts", "roses", "sparkles"].includes(u.touchParticles)) {
+              setParticleStyle(u.touchParticles);
+            }
+          }
+          if (u.gateType) {
+            restored.add("intimate_gate");
+            if (u.gateData?.pin) setPinInput(String(u.gateData.pin));
+          }
+          if (u.receiptEnabled) restored.add("love_receipt");
+          if (restored.size > 0) setSelectedAddons(restored);
           markRestored();
         }
       })
@@ -348,19 +389,30 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           return;
         }
         const finalId: string = json.id ?? editId ?? "";
+        if (isPaid && editId) {
+          toast.success("Perubahan ucapan berhasil disimpan!");
+          router.push("/dashboard");
+          return;
+        }
         if (finalId) persistAddons(finalId);
         saveDraft(slug, content);
         void clearDraftRemote(slug);
         router.push(`/checkout/${finalId}`);
       } else {
         const id = editId ?? makeUcapanId();
+        const alreadyPaid = editId ? Boolean(getUcapan(id)?.paid) : false;
         savePaidUcapan({
           ...fillContentDefaults(content),
           id,
-          paid: editId ? Boolean(getUcapan(id)?.paid) : false,
+          paid: alreadyPaid,
           paidAt: editId ? getUcapan(id)?.paidAt : undefined,
           createdAt: editId ? getUcapan(id)?.createdAt ?? Date.now() : Date.now(),
         });
+        if (alreadyPaid && editId) {
+          toast.success("Perubahan ucapan berhasil disimpan!");
+          router.push("/dashboard");
+          return;
+        }
         persistAddons(id);
         router.push(`/checkout/${id}`);
       }
@@ -1161,6 +1213,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 {saving ? (
                                   <>
                                     <Loader2 className="h-5 w-5 animate-spin" /> Menyimpan…
+                                  </>
+                                ) : isPaid ? (
+                                  <>
+                                    <Check className="h-4.5 w-4.5" />
+                                    Simpan Perubahan
                                   </>
                                 ) : (
                                   <>
