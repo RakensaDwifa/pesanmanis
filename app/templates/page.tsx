@@ -1,6 +1,7 @@
-﻿import { Metadata } from "next";
-import { getActiveTemplates } from "@/lib/templates";
-import { CATEGORY_META } from "@/lib/types";
+﻿import Link from "next/link";
+import { Metadata } from "next";
+import { CATEGORY_ORDER, getActiveTemplates, slugify } from "@/lib/templates";
+import { CATEGORY_META, type TemplateCategory } from "@/lib/types";
 import TemplatesClient from "./TemplatesClient";
 
 export const metadata: Metadata = {
@@ -9,6 +10,12 @@ export const metadata: Metadata = {
     "Jelajahi semua template ucapan manis. Pilih template favoritmu dan buat kejutan spesial sekarang.",
 };
 
+function matchesKategori(catKey: TemplateCategory, param: string | null): boolean {
+  if (!param) return false;
+  const normalized = slugify(param);
+  return normalized === catKey || normalized === slugify(CATEGORY_META[catKey].label);
+}
+
 export default async function TemplatesPage({
   searchParams,
 }: {
@@ -16,16 +23,19 @@ export default async function TemplatesPage({
 }) {
   const { kategori } = await searchParams;
   const kategoriParam = kategori || null;
-  const activeCats = Object.values(CATEGORY_META).filter((c) => c.active);
+  const activeCatKeys = CATEGORY_ORDER.filter((k) => CATEGORY_META[k].active);
   const templates = getActiveTemplates();
 
-  const countFor = (label: string) =>
-    templates.filter(
-      (t) => CATEGORY_META[t.type].label.toLowerCase().replace(" ", "-") === label
-    ).length;
+  const activeKey = activeCatKeys.find((k) => matchesKategori(k, kategoriParam)) ?? null;
+  const filteredTemplates = activeKey
+    ? templates.filter((t) => t.type === activeKey)
+    : templates;
 
-  const catLink = (label: string | null) =>
-    label ? `/templates?kategori=${label}` : "/templates";
+  const countFor = (catKey: TemplateCategory) =>
+    templates.filter((t) => t.type === catKey).length;
+
+  const catLink = (catKey: TemplateCategory | null) =>
+    catKey ? `/templates?kategori=${catKey}` : "/templates";
 
   return (
     <section className="w-full relative bg-surface min-h-screen">
@@ -49,21 +59,21 @@ export default async function TemplatesPage({
             <nav className="space-y-1">
               <SidebarLink
                 href={catLink(null)}
-                active={!kategoriParam}
+                active={!activeKey}
                 emoji="✨"
                 label="Semua"
                 count={templates.length}
               />
-              {activeCats.map((cat) => {
-                const slug = cat.label.toLowerCase().replace(" ", "-");
+              {activeCatKeys.map((catKey) => {
+                const cat = CATEGORY_META[catKey];
                 return (
                   <SidebarLink
-                    key={cat.label}
-                    href={catLink(slug)}
-                    active={kategoriParam === slug}
+                    key={catKey}
+                    href={catLink(catKey)}
+                    active={activeKey === catKey}
                     emoji={cat.emoji}
                     label={cat.label}
-                    count={countFor(slug)}
+                    count={countFor(catKey)}
                   />
                 );
               })}
@@ -72,21 +82,21 @@ export default async function TemplatesPage({
 
           {/* Filter chips — mobile */}
           <div className="lg:hidden flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-5 px-5">
-            <MobileChip href={catLink(null)} active={!kategoriParam} label="✨ Semua" />
-            {activeCats.map((cat) => {
-              const slug = cat.label.toLowerCase().replace(" ", "-");
+            <MobileChip href={catLink(null)} active={!activeKey} label="✨ Semua" />
+            {activeCatKeys.map((catKey) => {
+              const cat = CATEGORY_META[catKey];
               return (
                 <MobileChip
-                  key={cat.label}
-                  href={catLink(slug)}
-                  active={kategoriParam === slug}
+                  key={catKey}
+                  href={catLink(catKey)}
+                  active={activeKey === catKey}
                   label={`${cat.emoji} ${cat.label}`}
                 />
               );
             })}
           </div>
 
-          <TemplatesClient templates={templates} />
+          <TemplatesClient templates={filteredTemplates} />
         </div>
       </div>
     </section>
@@ -107,7 +117,7 @@ function SidebarLink({
   count: number;
 }) {
   return (
-    <a
+    <Link
       href={href}
       className={`flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-body-md font-semibold transition-colors ${
         active
@@ -124,7 +134,7 @@ function SidebarLink({
       >
         {count}
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -138,7 +148,7 @@ function MobileChip({
   label: string;
 }) {
   return (
-    <a
+    <Link
       href={href}
       className={`shrink-0 inline-flex items-center px-4.5 py-2 rounded-full text-label-md font-semibold transition-all ${
         active
@@ -147,6 +157,6 @@ function MobileChip({
       }`}
     >
       {label}
-    </a>
+    </Link>
   );
 }

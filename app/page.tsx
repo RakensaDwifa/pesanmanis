@@ -279,12 +279,12 @@ export default function HomePage() {
             </div>
 
             <div className="flex gap-2.5 mb-7 flex-wrap">
-              {Object.values(CATEGORY_META)
-                .filter((c) => c.active)
-                .map((cat) => (
+              {(Object.entries(CATEGORY_META) as [keyof typeof CATEGORY_META, (typeof CATEGORY_META)[keyof typeof CATEGORY_META]][])
+                .filter(([, c]) => c.active)
+                .map(([catKey, cat]) => (
                   <Link
-                    key={cat.label}
-                    href={`/templates?kategori=${cat.label.toLowerCase().replace(" ", "-")}`}
+                    key={catKey}
+                    href={`/templates?kategori=${catKey}`}
                     className="inline-flex items-center gap-2 px-4.5 py-2 rounded-full text-label-md font-semibold transition-all bg-white text-on-surface border border-outline-variant/30 hover:border-primary/50 hover:text-primary"
                   >
                     <span>{cat.emoji}</span>

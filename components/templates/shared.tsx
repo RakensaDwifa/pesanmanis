@@ -162,7 +162,7 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
       <ParallaxBackground mood={mood} />
       <FloatingHearts />
       <CursorTrail />
-      <div className="fixed bottom-6 left-5 z-50 flex items-center gap-2">
+      <div className="fixed bottom-20 left-5 z-50 flex items-center gap-2">
         <CassettePlayer content={content} />
         <SfxToggle />
       </div>

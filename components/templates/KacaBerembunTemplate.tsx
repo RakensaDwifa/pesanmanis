@@ -7,6 +7,8 @@ import { KACA_BEREMBUN_MANIFEST } from "@/lib/narrative/manifests/kaca-berembun"
 import { RainyWindowSVG } from "./narrative-assets";
 import { Heart, Sparkles } from "lucide-react";
 import Image from "next/image";
+import CassettePlayer from "@/components/CassettePlayer";
+import SfxToggle from "@/components/SfxToggle";
 
 /**
  * Template Kaca Berembun:
@@ -19,13 +21,14 @@ import Image from "next/image";
  */
 export default function KacaBerembunTemplate({
   content,
-  preview = false,
 }: TemplateRenderProps) {
   const [storyFinished, setStoryFinished] = useState(false);
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
   const toName = content.toName || "Sayang";
   const fromName = content.fromName || "Aku";
   const photos = content.photos || [];
+  const mainPhoto = photos[activePhotoIdx] || photos[0];
 
   return (
     <div className="relative w-full min-h-screen bg-[#070D18] text-white font-sans overflow-x-hidden selection:bg-amber-500/30">
@@ -80,11 +83,11 @@ export default function KacaBerembunTemplate({
 
           {/* Galeri Foto Momen (jika ada) */}
           {photos.length > 0 ? (
-            <div className="w-full mb-8">
+            <div className="w-full mb-8 space-y-3">
               <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10">
                 <Image
-                  src={photos[0]}
-                  alt="Kenangan bersama"
+                  src={mainPhoto}
+                  alt={`Kenangan bersama ${activePhotoIdx + 1}`}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 420px"
@@ -94,13 +97,38 @@ export default function KacaBerembunTemplate({
                 <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end text-xs text-white/80">
                   <span className="flex items-center gap-1">
                     <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
-                    Momen Bersama
+                    Momen Bersama {photos.length > 1 ? `(${activePhotoIdx + 1}/${photos.length})` : ""}
                   </span>
                   <span className="text-[10px] bg-black/50 backdrop-blur-md px-2 py-0.5 rounded-full">
                     {toName} & {fromName}
                   </span>
                 </div>
               </div>
+              {photos.length > 1 && (
+                <div className="grid grid-cols-5 gap-2">
+                  {photos.map((src, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActivePhotoIdx(idx)}
+                      aria-label={`Lihat foto ${idx + 1}`}
+                      className={`relative aspect-square rounded-xl overflow-hidden border transition-all ${
+                        idx === activePhotoIdx
+                          ? "border-amber-400 ring-2 ring-amber-400/40 scale-105"
+                          : "border-white/15 opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <Image
+                        src={src}
+                        alt={`Thumbnail ${idx + 1}`}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="w-full mb-8 p-7 rounded-2xl bg-gradient-to-br from-blue-500/15 via-[#0F192D] to-amber-500/10 border border-blue-400/25 text-center flex flex-col items-center gap-3 shadow-xl backdrop-blur-md">
@@ -139,6 +167,12 @@ export default function KacaBerembunTemplate({
           >
             ← Putar ulang alur cerita
           </button>
+
+          {/* Pemutar Musik Latar & Kontrol SFX */}
+          <div className="fixed bottom-20 left-5 z-50 flex items-center gap-2">
+            <CassettePlayer content={content} />
+            <SfxToggle />
+          </div>
         </main>
       )}
     </div>
