@@ -51,6 +51,7 @@ function getTemplate(slug: string) {
     "kartu-ucapan": true,
     valentine: true,
     "permintaan-maaf": true,
+    "kaca-berembun": true,
     "bonceng-malam": true,
   };
   return templates[slug] ?? false;

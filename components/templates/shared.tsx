@@ -84,7 +84,8 @@ function ShareCardButton() {
   const [status, setStatus] = useState<"hidden" | "ready" | "copied">("hidden");
 
   useEffect(() => {
-    if (window.location.pathname.startsWith("/t/")) {
+    const p = window.location.pathname;
+    if (p.startsWith("/t/") || p.startsWith("/u/")) {
       setStatus("ready");
     }
   }, []);

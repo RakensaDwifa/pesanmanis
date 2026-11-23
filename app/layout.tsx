@@ -59,7 +59,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             // Tema + sembunyikan chrome situs di halaman template SEBELUM body dilukis,
             // supaya navbar/footer tidak sempat tampil sebelum transisi bunga jalan.
-            __html: `(function(){try{var t=localStorage.getItem("up_theme");var d=t==="dark"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}if(/^\\/(t|preview)\\//.test(location.pathname))document.documentElement.dataset.immersive="1";})();`,
+            __html: `(function(){try{var t=localStorage.getItem("up_theme");var d=t==="dark"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}if(/^\\/(t|u|preview)\\//.test(location.pathname))document.documentElement.dataset.immersive="1";})();`,
           }}
         />
       </head>

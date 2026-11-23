@@ -14,6 +14,7 @@ const TEMPLATE_COLORS: Record<string, [string, string]> = {
   "kartu-ucapan": ["#FFE9CE", "#FFC98F"],
   valentine: ["#FFDDE3", "#FF9DB0"],
   "permintaan-maaf": ["#E6EFE6", "#BFD8BF"],
+  "kaca-berembun": ["#0F172A", "#1E293B"],
   "bonceng-malam": ["#1E293B", "#0F172A"],
 };
 
@@ -68,7 +69,10 @@ export default async function Image({
           justifyContent: "center",
           background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
           fontFamily: "sans-serif",
-          color: data.slug === "bonceng-malam" ? "#F8FAFC" : "#4A2B33",
+          color:
+            data.slug === "bonceng-malam" || data.slug === "kaca-berembun"
+              ? "#F8FAFC"
+              : "#4A2B33",
           padding: 80,
           position: "relative",
         }}

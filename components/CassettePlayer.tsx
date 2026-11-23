@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Play, Pause } from "lucide-react";
 import type { UcapanContent } from "@/lib/types";
@@ -9,6 +9,15 @@ import { playSfx } from "@/lib/sfx";
 export default function CassettePlayer({ content }: { content: UcapanContent }) {
   const [playing, setPlaying] = useState(false);
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+    };
+  }, [audio]);
 
   if (!content.musicUrl) return null;
 

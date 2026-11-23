@@ -114,7 +114,7 @@ export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Buat Story Card"
-        className="fixed bottom-6 right-5 z-50 flex items-center justify-center gap-2 rounded-full bg-primary text-white shadow-lg px-4 h-12 hover:scale-105 transition-transform text-label-md font-semibold"
+        className="fixed bottom-6 left-5 z-50 flex items-center justify-center gap-2 rounded-full bg-primary text-white shadow-lg px-4 h-12 hover:scale-105 transition-transform text-label-md font-semibold"
       >
         <Sparkles className="h-5 w-5" />
         Story
