@@ -134,9 +134,10 @@ interface ShellProps {
   children: React.ReactNode;
   className?: string;
   closeHref?: string;
+  preview?: boolean;
 }
 
-export function TemplateShell({ content, children, className, closeHref }: ShellProps) {
+export function TemplateShell({ content, children, className, closeHref, preview }: ShellProps) {
   const mood = getMood(content.mood);
   const moodStyle = {
     background: mood.gradient,
@@ -161,13 +162,19 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
     >
       <ParallaxBackground mood={mood} />
       <FloatingHearts />
-      <CursorTrail />
-      <div className="fixed bottom-20 left-5 z-50 flex items-center gap-2">
+      {!preview && <CursorTrail />}
+      <div
+        className={
+          preview
+            ? "absolute bottom-4 left-4 z-30 flex items-center gap-2"
+            : "fixed bottom-20 left-5 z-50 flex items-center gap-2"
+        }
+      >
         <CassettePlayer content={content} />
         <SfxToggle />
       </div>
       <CloseButton href={closeHref} />
-      <ShareCardButton />
+      {!preview && <ShareCardButton />}
       <div className="relative z-10 w-full max-w-xl px-5 py-16">
         {content.videoUrl ? <VideoBlock url={content.videoUrl} /> : null}
         {children}
@@ -176,7 +183,31 @@ export function TemplateShell({ content, children, className, closeHref }: Shell
   );
 }
 
-function VideoBlock({ url }: { url: string }) {
+function parseYouTubeEmbedUrl(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    let videoId: string | null = null;
+    if (host === "youtu.be") {
+      videoId = u.pathname.slice(1).split("/")[0] || null;
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      if (u.pathname === "/watch") {
+        videoId = u.searchParams.get("v");
+      } else if (u.pathname.startsWith("/shorts/") || u.pathname.startsWith("/embed/")) {
+        videoId = u.pathname.split("/")[2] || null;
+      }
+    }
+    if (videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`;
+    }
+  } catch {
+    // bukan URL valid
+  }
+  return null;
+}
+
+export function VideoBlock({ url }: { url: string }) {
+  const ytEmbed = parseYouTubeEmbedUrl(url);
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -184,12 +215,24 @@ function VideoBlock({ url }: { url: string }) {
       transition={{ duration: 0.6 }}
       className="mb-6 overflow-hidden rounded-2xl border border-outline-variant/30 shadow-card bg-black/5"
     >
-      <video
-        src={url}
-        controls
-        playsInline
-        className="w-full max-h-[60vh] bg-black"
-      />
+      {ytEmbed ? (
+        <div className="relative w-full aspect-video bg-black">
+          <iframe
+            src={ytEmbed}
+            title="Video ucapan"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full border-0"
+          />
+        </div>
+      ) : (
+        <video
+          src={url}
+          controls
+          playsInline
+          className="w-full max-h-[60vh] bg-black"
+        />
+      )}
     </motion.div>
   );
 }

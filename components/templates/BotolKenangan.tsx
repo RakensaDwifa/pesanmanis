@@ -36,6 +36,7 @@ export default function BotolKenangan({ content, preview }: TemplateRenderProps)
   return (
     <TemplateShell
       content={content}
+      preview={preview}
       className="bg-gradient-to-b from-[#BFE3F5] via-[#D8EFF9] to-[#F7E3C0]"
     >
       <AnimatePresence mode="wait">

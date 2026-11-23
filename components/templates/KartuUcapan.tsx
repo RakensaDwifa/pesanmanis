@@ -9,7 +9,7 @@ export default function KartuUcapan({ content, preview }: TemplateRenderProps) {
   const [opened, setOpened] = useState(Boolean(preview));
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#FFF4E6] via-[#FFE9CE] to-[#FFD9A8]">
+    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FFF4E6] via-[#FFE9CE] to-[#FFD9A8]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div

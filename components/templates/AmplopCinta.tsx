@@ -9,7 +9,7 @@ export default function AmplopCinta({ content, preview }: TemplateRenderProps) {
   const [opened, setOpened] = useState(Boolean(preview));
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#FFF9F5] to-[#FFE3D2]">
+    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FFF9F5] to-[#FFE3D2]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div

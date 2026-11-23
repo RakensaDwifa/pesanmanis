@@ -46,6 +46,7 @@ export default function BuketBunga({ content, preview }: TemplateRenderProps) {
   return (
     <TemplateShell
       content={content}
+      preview={preview}
       className="bg-gradient-to-b from-[#FFF3E8] via-[#FBE3D0] to-[#F5C6A8]"
     >
       <AnimatePresence mode="wait">

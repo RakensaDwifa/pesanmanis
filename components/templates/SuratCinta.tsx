@@ -9,7 +9,7 @@ export default function SuratCinta({ content, preview }: TemplateRenderProps) {
   const [opened, setOpened] = useState(Boolean(preview));
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#FDF6EC] via-[#F9EEDC] to-[#F3E3C8]">
+    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FDF6EC] via-[#F9EEDC] to-[#F3E3C8]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div

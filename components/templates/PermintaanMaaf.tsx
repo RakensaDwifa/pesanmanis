@@ -41,7 +41,7 @@ export default function PermintaanMaaf({ content, preview }: TemplateRenderProps
   };
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#F2F7F2] via-[#E6EFE6] to-[#D4E5D4]">
+    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#F2F7F2] via-[#E6EFE6] to-[#D4E5D4]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div

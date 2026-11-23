@@ -9,6 +9,7 @@ import { Heart, Sparkles } from "lucide-react";
 import Image from "next/image";
 import CassettePlayer from "@/components/CassettePlayer";
 import SfxToggle from "@/components/SfxToggle";
+import { VideoBlock } from "./shared";
 
 /**
  * Template Kaca Berembun:
@@ -21,20 +22,30 @@ import SfxToggle from "@/components/SfxToggle";
  */
 export default function KacaBerembunTemplate({
   content,
+  preview,
 }: TemplateRenderProps) {
-  const [storyFinished, setStoryFinished] = useState(false);
+  const [storyFinished, setStoryFinished] = useState(Boolean(preview));
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
   const toName = content.toName || "Sayang";
   const fromName = content.fromName || "Aku";
-  const photos = content.photos || [];
+  const photos = (content.photos || []).filter((p) => typeof p === "string" && p.trim() !== "");
   const mainPhoto = photos[activePhotoIdx] || photos[0];
+  const timeline = (content.timeline || []).filter(
+    (item) => item && Boolean(item.date?.trim() || item.title?.trim() || item.description?.trim())
+  );
 
   return (
     <div className="relative w-full min-h-screen bg-[#070D18] text-white font-sans overflow-x-hidden selection:bg-amber-500/30">
       {!storyFinished ? (
         /* MODE CERITA INTERAKTIF */
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#070D18]">
+        <div
+          className={
+            preview
+              ? "relative min-h-[560px] z-30 flex items-center justify-center bg-[#070D18]"
+              : "fixed inset-0 z-50 flex items-center justify-center bg-[#070D18]"
+          }
+        >
           <div className="w-full h-full max-w-md mx-auto relative flex flex-col justify-between">
             <NarrativeEngine
               chapters={KACA_BEREMBUN_MANIFEST.chapters}
@@ -144,6 +155,13 @@ export default function KacaBerembunTemplate({
             </div>
           )}
 
+          {/* Video Ucapan (jika ada) */}
+          {content.videoUrl && (
+            <div className="w-full mb-8">
+              <VideoBlock url={content.videoUrl} />
+            </div>
+          )}
+
           {/* Isi Pesan Panjang */}
           <div className="w-full bg-[#0C1424]/85 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl mb-8">
             <div className="prose prose-invert prose-sm sm:prose-base max-w-none text-slate-200 leading-relaxed whitespace-pre-line font-serif">
@@ -159,6 +177,37 @@ export default function KacaBerembunTemplate({
             </div>
           </div>
 
+          {/* Timeline Momen (jika ada) */}
+          {timeline.length > 0 && (
+            <div className="w-full bg-[#0C1424]/85 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl mb-8">
+              <h3 className="font-heading text-lg font-bold text-amber-200 text-center mb-5">
+                ✨ Perjalanan Cinta Kita ✨
+              </h3>
+              <div className="relative border-l-2 border-amber-500/30 ml-3 pl-5 space-y-5">
+                {timeline.map((item, idx) => (
+                  <div key={idx} className="relative">
+                    <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[#0C1424]" />
+                    {item.date && (
+                      <span className="inline-block px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full text-xs font-semibold mb-1">
+                        {item.date}
+                      </span>
+                    )}
+                    {item.title && (
+                      <h4 className="font-heading text-base font-semibold text-amber-100">
+                        {item.title}
+                      </h4>
+                    )}
+                    {item.description && (
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                        {item.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Tombol Ulangi Cerita */}
           <button
             type="button"
@@ -169,7 +218,13 @@ export default function KacaBerembunTemplate({
           </button>
 
           {/* Pemutar Musik Latar & Kontrol SFX */}
-          <div className="fixed bottom-20 left-5 z-50 flex items-center gap-2">
+          <div
+            className={
+              preview
+                ? "mt-4 flex items-center gap-2 self-start"
+                : "fixed bottom-20 left-5 z-50 flex items-center gap-2"
+            }
+          >
             <CassettePlayer content={content} />
             <SfxToggle />
           </div>

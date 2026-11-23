@@ -48,8 +48,10 @@ export default function PublicView({
   });
   const flowerRef = useRef<FlowerTransitionRef | null>(null);
   const initialTemplate = useRef(showTemplate);
+  const viewTrackedRef = useRef(false);
   // Konten baru dirender setelah petal menutup layar (khusus intro refresh).
   const [ready, setReady] = useState(false);
+  const hasActiveGate = Boolean(ucapan?.paid && ucapan?.gateType && !gateUnlocked);
 
   // Halaman template: sembunyikan chrome situs + intro bunga saat refresh.
   // Atribut di <html> diset lebih awal oleh script di app/layout.tsx; di sini
@@ -64,14 +66,15 @@ export default function PublicView({
   }, []);
 
   useEffect(() => {
-    if (!ucapan) return;
+    if (!ucapan || hasActiveGate || viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
     trackView(id);
     fetch("/api/views", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ucapanId: id }),
     }).catch(() => undefined);
-  }, [id, ucapan]);
+  }, [id, ucapan, hasActiveGate]);
 
   if (!ucapan) {
     return (

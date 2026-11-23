@@ -17,7 +17,7 @@ export default function Valentine({ content, preview }: TemplateRenderProps) {
   const [opened, setOpened] = useState(Boolean(preview));
 
   return (
-    <TemplateShell content={content} className="bg-gradient-to-b from-[#FFF3EA] via-[#FFDCC8] to-[#FFB98F]">
+    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FFF3EA] via-[#FFDCC8] to-[#FFB98F]">
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div
