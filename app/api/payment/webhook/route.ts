@@ -234,7 +234,7 @@ export async function POST(request: Request) {
             if (!existing) {
               await admin.from("checkout_sessions").insert({
                 ucapan_id: u.id,
-                email: u.email ? maskEmail(u.email) : null,
+                email: u.email ?? null,
                 started_at: now,
               });
             }

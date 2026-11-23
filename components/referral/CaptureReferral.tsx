@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isRemote } from "@/lib/supabase/config";
 
 const REF_KEY = "up_ref_code";
-const APPLIED_KEY = "up_ref_applied";
+const APPLIED_KEY_PREFIX = "up_ref_applied:";
 
 /**
  * Pasang sekali di layout: menangkap ?ref=CODE dari URL,
@@ -34,41 +34,52 @@ export default function CaptureReferral() {
       );
     }
 
-    // 2) Jika ada kode tersimpan dan user sudah login → apply
-    void (async () => {
+    // 2) Jika ada kode tersimpan dan user sudah/baru login → apply
+    let applying = false;
+    const tryApplyForUser = async (userId: string) => {
+      if (applying) return;
       let stored: string | null = null;
       let alreadyApplied = false;
+      const userAppliedKey = `${APPLIED_KEY_PREFIX}${userId}`;
       try {
         stored = window.localStorage.getItem(REF_KEY);
-        alreadyApplied = window.localStorage.getItem(APPLIED_KEY) === "1";
+        alreadyApplied = window.localStorage.getItem(userAppliedKey) === "1";
       } catch {
         return;
       }
       if (!stored || alreadyApplied) return;
 
+      applying = true;
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return; // akan diapply setelah login berikutnya
-
         const res = await fetch("/api/referral", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: stored }),
         });
         if (res.ok) {
-          window.localStorage.setItem(APPLIED_KEY, "1");
+          window.localStorage.setItem(userAppliedKey, "1");
           window.localStorage.removeItem(REF_KEY);
         } else if (res.status === 409 || res.status === 404) {
-          // kode invalid/terpakai/self → buang agar tidak retry
+          // kode invalid/sudah pernah direferral/self → tandai untuk user ini & buang kode
+          window.localStorage.setItem(userAppliedKey, "1");
           window.localStorage.removeItem(REF_KEY);
         }
       } catch {
         // ignore
+      } finally {
+        applying = false;
       }
-    })();
+    };
+
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id) void tryApplyForUser(data.user.id);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.id) void tryApplyForUser(session.user.id);
+    });
+
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   return null;

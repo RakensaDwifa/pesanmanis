@@ -30,9 +30,10 @@ export async function GET(request: Request) {
   const { data: sessions, error } = await admin
     .from("checkout_sessions")
     .select(
-      "id, ucapan_id, started_at, ucapan:ucapan_id(email, to_name, from_name, template_slug, paid)"
+      "id, ucapan_id, email, started_at, ucapan:ucapan_id(email, to_name, from_name, template_slug, paid)"
     )
     .eq("recovery_email_sent", false)
+    .is("recovered_at", null)
     .lt("started_at", cutoff)
     .gt("started_at", maxAge)
     .limit(50);
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
     type SessionRow = {
       id: string;
       ucapan_id: string;
+      email: string | null;
       ucapan:
         | {
             email: string | null;
@@ -64,9 +66,20 @@ export async function GET(request: Request) {
 
     if (!u || u.paid) {
       skippedPaid += 1;
+      // Tandai selesai agar sesi yang sudah paid/terhapus tidak menyumbat antrean limit(50)
+      await admin
+        .from("checkout_sessions")
+        .update({
+          recovery_email_sent: true,
+          recovered_at: u?.paid ? new Date().toISOString() : null,
+        })
+        .eq("id", s.id);
       continue;
     }
-    if (!u.email) {
+    const fallbackSessionEmail =
+      s.email && !s.email.includes("*") ? s.email : null;
+    const recipientEmail = u.email || fallbackSessionEmail;
+    if (!recipientEmail) {
       skippedNoEmail += 1;
       // Tandai supaya tidak diproses terus-menerus
       await admin
@@ -79,7 +92,7 @@ export async function GET(request: Request) {
     try {
       const { sendAbandonedCartEmail } = await import("@/lib/email");
       const res = await sendAbandonedCartEmail({
-        to: u.email,
+        to: recipientEmail,
         fromName: u.from_name,
         toName: u.to_name,
         templateSlug: u.template_slug,

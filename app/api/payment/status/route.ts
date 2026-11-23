@@ -79,6 +79,16 @@ export async function GET(request: Request) {
       }
       await admin.from("ucapan").update(ucapanUpdate).eq("id", payment.ucapan_id);
 
+      try {
+        await admin
+          .from("checkout_sessions")
+          .update({ recovered_at: now })
+          .eq("ucapan_id", payment.ucapan_id)
+          .is("recovered_at", null);
+      } catch {
+        // non-blocking
+      }
+
       if (ucapan.owner_id) {
         try {
           const { completePendingReferrals, redeemCreditsForPayment } = await import(

@@ -88,6 +88,11 @@ export function addonsStorageKey(ucapanId: string) {
   return `pm:addons:${ucapanId}`;
 }
 
+/** Kunci localStorage untuk menjaga draft pilihan add-on sebelum login / sebelum ucapan dibuat. */
+function draftAddonsStorageKey(templateSlug: string) {
+  return `pm:draft-addons:${templateSlug}`;
+}
+
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -173,9 +178,54 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   }, []);
 
   const remoteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftAddonsLoadedRef = useRef(false);
+
+  // Pulihkan draft add-on untuk pembuatan baru (!editId)
+  useEffect(() => {
+    if (editId) return;
+    try {
+      const raw = window.localStorage.getItem(draftAddonsStorageKey(slug));
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          addons?: AddonKey[];
+          customSlug?: string;
+          pin?: string;
+          particleStyle?: "hearts" | "roses" | "sparkles";
+        };
+        if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
+        if (parsed.customSlug) setSlugInput(parsed.customSlug);
+        if (parsed.pin) setPinInput(parsed.pin);
+        if (parsed.particleStyle && ["hearts", "roses", "sparkles"].includes(parsed.particleStyle)) {
+          setParticleStyle(parsed.particleStyle);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      draftAddonsLoadedRef.current = true;
+    }
+  }, [slug, editId]);
+
+  // Simpan draft add-on ke localStorage selama pembuatan baru (!editId)
+  useEffect(() => {
+    if (editId || !draftAddonsLoadedRef.current) return;
+    try {
+      window.localStorage.setItem(
+        draftAddonsStorageKey(slug),
+        JSON.stringify({
+          addons: Array.from(selectedAddons),
+          customSlug: slugInput,
+          pin: pinInput,
+          particleStyle,
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [slug, editId, selectedAddons, slugInput, pinInput, particleStyle]);
 
   useEffect(() => {
-    if (!template) return;
+    if (!template || editId) return;
     saveDraft(slug, content);
     markLocalSaved(slug);
 
@@ -191,7 +241,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     return () => {
       if (remoteSaveTimer.current) clearTimeout(remoteSaveTimer.current);
     };
-  }, [content, slug, template]);
+  }, [content, slug, template, editId]);
 
   // Restore draft remote saat pertama kali buka builder (bukan mode edit)
   useEffect(() => {
@@ -314,6 +364,16 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     setUploading(true);
     try {
       const supabase = createClient();
+      if (isRemote()) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          toast.info("Masuk dulu ya untuk mengunggah foto. Draft ucapanmu tetap tersimpan!");
+          router.push(`/login?next=${encodeURIComponent(`/buat/${slug}${editId ? `?edit=${editId}` : ""}`)}`);
+          return;
+        }
+      }
       const uploadedUrls: string[] = [];
       for (const file of selectedFiles) {
         const blob = await compressImage(file);
@@ -405,6 +465,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           }
         );
         if (res.status === 401) {
+          toast.info("Masuk dulu ya untuk melanjutkan. Draft ucapanmu tetap tersimpan!");
           router.push(`/login?next=${encodeURIComponent(`/buat/${slug}${editId ? `?edit=${editId}` : ""}`)}`);
           return;
         }
@@ -424,8 +485,15 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           return;
         }
         if (finalId) persistAddons(finalId);
-        saveDraft(slug, content);
-        void clearDraftRemote(slug);
+        if (!editId) {
+          try {
+            window.localStorage.removeItem(draftAddonsStorageKey(slug));
+          } catch {
+            // ignore
+          }
+          saveDraft(slug, content);
+          void clearDraftRemote(slug);
+        }
         router.push(`/checkout/${finalId}`);
       } else {
         const id = editId ?? makeUcapanId();
