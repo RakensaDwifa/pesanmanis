@@ -437,7 +437,29 @@ export default function Dashboard() {
 
                           {qr && (
                             <div className="mt-4 pt-4 border-t border-outline-variant/30 flex items-center gap-6">
-                              <QRCodeSVG value={url} size={130} fgColor="#241914" />
+                              <div
+                                data-light-card
+                                style={{ backgroundColor: "#ffffff" }}
+                                className="shrink-0 p-2.5 rounded-2xl border border-outline-variant/30 shadow-sm"
+                              >
+                                <QRCodeSVG
+                                  value={url}
+                                  size={130}
+                                  level="H"
+                                  fgColor="#241914"
+                                  bgColor="#ffffff"
+                                  imageSettings={
+                                    u.qrPhotoEnabled && u.photos?.[0]
+                                      ? {
+                                          src: u.photos[0],
+                                          height: 30,
+                                          width: 30,
+                                          excavate: true,
+                                        }
+                                      : undefined
+                                  }
+                                />
+                              </div>
                               <div className="min-w-0">
                                 <p className="text-label-lg font-semibold text-on-surface mb-1">
                                   Scan QR untuk membuka

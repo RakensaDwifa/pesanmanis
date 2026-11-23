@@ -90,6 +90,24 @@ create unique index if not exists referrals_referee_unique_idx
 alter table public.payments
   add column if not exists credit_used bigint not null default 0;
 
--- 7. Catatan: Halaman publik (/t/..., /u/...) sekarang harus menggunakan
+-- 7. Drafts: tabel penyimpanan draft ucapan antar-perangkat untuk user login
+create table if not exists public.drafts (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  slug text not null,
+  content jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (user_id, slug)
+);
+
+alter table public.drafts enable row level security;
+
+drop policy if exists "pemilik kelola drafts" on public.drafts;
+create policy "pemilik kelola drafts" on public.drafts
+  for all
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+-- 8. Catatan: Halaman publik (/t/..., /u/...) sekarang harus menggunakan
 --    createAdminClient() di Server Component dan melakukan strip email/gate_data
 --    sebelum mengirim ke client.

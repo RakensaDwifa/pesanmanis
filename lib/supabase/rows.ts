@@ -1,5 +1,7 @@
-import type { UcapanContent } from "@/lib/types";
-import type { MoodKey } from "@/lib/mood";
+import type { UcapanContent } from "../types.ts";
+import type { MoodKey } from "../mood.ts";
+import { sanitizeAddons } from "../pricing.ts";
+import { validateSlugFormat } from "../slug.ts";
 
 const VALID_MOODS: Record<MoodKey, true> = {
   romantic: true,
@@ -8,7 +10,45 @@ const VALID_MOODS: Record<MoodKey, true> = {
   sunset: true,
   lavender: true,
 };
+const VALID_PARTICLES = ["hearts", "roses", "sparkles"];
 const META_TIMELINE_TAG = "__pm_meta__";
+
+export interface DraftAddonInput {
+  addons?: unknown;
+  customSlug?: string | null;
+  pin?: string | null;
+  particleStyle?: string | null;
+}
+
+/** Konversi pilihan add-on dari Builder menjadi kolom ucapan (hanya untuk ucapan unpaid). */
+export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, unknown> {
+  if (!input || input.addons === undefined) return {};
+  const selected = sanitizeAddons(input.addons);
+  let customSlug: string | null = null;
+  if (selected.includes("custom_slug") && input.customSlug) {
+    const check = validateSlugFormat(input.customSlug);
+    if (check.valid) customSlug = check.normalized;
+  }
+  const pin = String(input.pin ?? "").trim();
+  const validPin = selected.includes("intimate_gate") && /^\d{4,6}$/.test(pin) ? pin : null;
+  const particle =
+    selected.includes("touch_particles") &&
+    input.particleStyle &&
+    VALID_PARTICLES.includes(String(input.particleStyle))
+      ? String(input.particleStyle)
+      : selected.includes("touch_particles")
+        ? "hearts"
+        : null;
+
+  return {
+    custom_slug: customSlug,
+    qr_photo_enabled: selected.includes("custom_qr"),
+    touch_particles: particle,
+    gate_type: validPin ? "pin" : null,
+    gate_data: validPin ? { pin: validPin } : null,
+    receipt_enabled: selected.includes("love_receipt"),
+  };
+}
 
 /** Validasi input ucapan sebelum insert/update. Melempar error jika tidak valid. */
 export function validateUcapanInput(content: Partial<UcapanContent>): { valid: true } | { valid: false; reason: string } {

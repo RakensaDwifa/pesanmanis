@@ -15,6 +15,7 @@ import {
 } from "../lib/pricing.ts";
 
 import { validateSlugFormat, RESERVED_SLUGS } from "../lib/slug.ts";
+import { buildDraftAddonColumns } from "../lib/supabase/rows.ts";
 
 import { verifyMidtransSignature } from "../lib/midtrans.ts";
 
@@ -172,5 +173,32 @@ test("slug: validasi aturan penamaan slug dan reserved words", () => {
   assert.equal(validateSlugFormat("api").valid, false);
   assert.equal(validateSlugFormat("checkout").valid, false);
 });
+
+test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
+  assert.deepEqual(buildDraftAddonColumns(undefined), {});
+
+  const full = buildDraftAddonColumns({
+    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt"],
+    customSlug: "Raka Nadia",
+    pin: "1402",
+    particleStyle: "roses",
+  });
+  assert.equal(full.custom_slug, "raka-nadia");
+  assert.equal(full.qr_photo_enabled, true);
+  assert.equal(full.touch_particles, "roses");
+  assert.equal(full.gate_type, "pin");
+  assert.deepEqual(full.gate_data, { pin: "1402" });
+  assert.equal(full.receipt_enabled, true);
+
+  // Saat semua add-on dilepas, kolom di-reset ke null/false
+  const cleared = buildDraftAddonColumns({ addons: [] });
+  assert.equal(cleared.custom_slug, null);
+  assert.equal(cleared.qr_photo_enabled, false);
+  assert.equal(cleared.touch_particles, null);
+  assert.equal(cleared.gate_type, null);
+  assert.equal(cleared.gate_data, null);
+  assert.equal(cleared.receipt_enabled, false);
+});
+
 
 

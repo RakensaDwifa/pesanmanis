@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
+import { buildDraftAddonColumns, mapUcapanRow, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
 import type { UcapanContent } from "@/lib/types";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -132,11 +132,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "MISSING_TEMPLATE" }, { status: 400 });
   }
 
-  const { data, error } = await createAdminClient()
+  const addonCols = buildDraftAddonColumns({
+    addons: body.addons,
+    customSlug: typeof body.customSlug === "string" ? body.customSlug : null,
+    pin: typeof body.pin === "string" ? body.pin : null,
+    particleStyle: typeof body.particleStyle === "string" ? body.particleStyle : null,
+  });
+
+  const admin = createAdminClient();
+  if (addonCols.custom_slug) {
+    const { data: taken } = await admin
+      .from("ucapan")
+      .select("id")
+      .eq("custom_slug", addonCols.custom_slug)
+      .maybeSingle();
+    if (taken) addonCols.custom_slug = null;
+  }
+
+  const { data, error } = await admin
     .from("ucapan")
     .insert({
       owner_id: user.id,
       ...toUcapanRow(body as Partial<UcapanContent>),
+      ...addonCols,
     })
     .select("id")
     .single();

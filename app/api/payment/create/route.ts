@@ -189,6 +189,7 @@ export async function POST(request: Request) {
 
     // Update ucapan dengan konfigurasi add-on (+ isi email dari user login bila masih kosong)
     const ucapanUpdate: Record<string, unknown> = {
+      custom_slug: validCustomSlug,
       qr_photo_enabled: sanitizedAddons.includes("custom_qr"),
       receipt_enabled: sanitizedAddons.includes("love_receipt"),
       touch_particles: sanitizedAddons.includes("touch_particles")
@@ -197,9 +198,6 @@ export async function POST(request: Request) {
       gate_type: sanitizedAddons.includes("intimate_gate") ? "pin" : null,
       gate_data: sanitizedAddons.includes("intimate_gate") ? validGateData : null,
     };
-    if (validCustomSlug) {
-      ucapanUpdate.custom_slug = validCustomSlug;
-    }
     if (!ucapanEmail && user.email) {
       ucapanUpdate.email = user.email;
     }

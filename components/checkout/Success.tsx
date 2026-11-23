@@ -237,12 +237,17 @@ function SuccessInner({ id }: { id: string }) {
 
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 mb-6">
           <p className="text-label-lg font-semibold text-on-surface mb-4">Scan QR Code</p>
-          <div className="mx-auto w-fit p-4 bg-white rounded-2xl border border-outline-variant/30">
+          <div
+            data-light-card
+            style={{ backgroundColor: "#ffffff" }}
+            className="mx-auto w-fit p-4 rounded-2xl border border-outline-variant/30"
+          >
             <QRCodeSVG
               value={publicUrl}
               size={180}
               level="H"
               fgColor="#22191a"
+              bgColor="#ffffff"
               imageSettings={
                 ucapan?.qrPhotoEnabled && ucapan?.photos?.[0]
                   ? {

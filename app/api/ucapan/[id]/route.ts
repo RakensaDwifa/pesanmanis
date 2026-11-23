@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, stripPublicUcapan, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
+import { buildDraftAddonColumns, mapUcapanRow, stripPublicUcapan, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
 import type { UcapanContent } from "@/lib/types";
 
@@ -122,10 +122,37 @@ export async function PUT(
     return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
   }
 
-  const { error } = await supabase
+  // Jika belum dibayar, izinkan pemilik memperbarui pilihan add-on dari Builder
+  const addonCols = !ucapan.paid
+    ? buildDraftAddonColumns({
+        addons: body.addons,
+        customSlug: typeof body.customSlug === "string" ? body.customSlug : null,
+        pin: typeof body.pin === "string" ? body.pin : null,
+        particleStyle: typeof body.particleStyle === "string" ? body.particleStyle : null,
+      })
+    : {};
+
+  const admin = createAdminClient();
+  if (addonCols.custom_slug) {
+    const { data: taken } = await admin
+      .from("ucapan")
+      .select("id")
+      .eq("custom_slug", addonCols.custom_slug)
+      .neq("id", id)
+      .maybeSingle();
+    if (taken) addonCols.custom_slug = null;
+  }
+
+  const client = Object.keys(addonCols).length > 0 ? admin : supabase;
+  const { error } = await client
     .from("ucapan")
-    .update({ ...toUcapanRow(body as Partial<UcapanContent>), updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .update({
+      ...toUcapanRow(body as Partial<UcapanContent>),
+      ...addonCols,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("owner_id", user.id);
   if (error) {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
   }
@@ -148,21 +175,41 @@ export async function DELETE(
     return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
   }
 
-  // Bersihkan file foto di bucket 'foto' Supabase Storage sebelum baris dihapus
+  // Bersihkan file foto di bucket 'foto' Supabase Storage sebelum baris dihapus,
+  // namun jangan hapus foto yang masih direferensikan oleh ucapan lain (misal hasil duplikat).
   const marker = "/storage/v1/object/public/foto/";
-  const storagePaths = (ucapan.photos ?? [])
-    .map((url) => {
-      if (typeof url !== "string") return null;
-      const idx = url.indexOf(marker);
-      if (idx === -1) return null;
-      return decodeURIComponent(url.slice(idx + marker.length).split("?")[0]);
-    })
+  const extractPath = (url: unknown) => {
+    if (typeof url !== "string") return null;
+    const idx = url.indexOf(marker);
+    if (idx === -1) return null;
+    return decodeURIComponent(url.slice(idx + marker.length).split("?")[0]);
+  };
+  const candidatePaths = (ucapan.photos ?? [])
+    .map(extractPath)
     .filter((p): p is string => Boolean(p));
 
-  if (storagePaths.length > 0) {
+  if (candidatePaths.length > 0) {
     try {
       const admin = createAdminClient();
-      await admin.storage.from("foto").remove(storagePaths);
+      const { data: siblingRows } = await admin
+        .from("ucapan")
+        .select("photos")
+        .eq("owner_id", user.id)
+        .neq("id", id);
+
+      const usedBySiblings = new Set<string>();
+      for (const row of siblingRows ?? []) {
+        const photos = (row as { photos?: string[] | null }).photos ?? [];
+        for (const p of photos) {
+          const sp = extractPath(p);
+          if (sp) usedBySiblings.add(sp);
+        }
+      }
+
+      const safeToRemove = candidatePaths.filter((p) => !usedBySiblings.has(p));
+      if (safeToRemove.length > 0) {
+        await admin.storage.from("foto").remove(safeToRemove);
+      }
     } catch {
       // non-blocking: tetap lanjut hapus baris ucapan
     }

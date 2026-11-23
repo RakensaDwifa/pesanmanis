@@ -388,12 +388,20 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     try {
       if (isRemote()) {
         const full = fillContentDefaults(content);
+        const addonPayload = !isPaid
+          ? {
+              addons: Array.from(selectedAddons),
+              customSlug: selectedAddons.has("custom_slug") ? slugCheck.normalized : undefined,
+              pin: selectedAddons.has("intimate_gate") ? pinInput : undefined,
+              particleStyle: selectedAddons.has("touch_particles") ? particleStyle : undefined,
+            }
+          : {};
         const res = await fetch(
           editId ? `/api/ucapan/${editId}` : "/api/ucapan",
           {
             method: editId ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(full),
+            body: JSON.stringify({ ...full, ...addonPayload }),
           }
         );
         if (res.status === 401) {

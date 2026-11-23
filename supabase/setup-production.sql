@@ -306,6 +306,24 @@ create index if not exists checkout_sessions_ucapan_idx
 
 alter table public.checkout_sessions enable row level security;
 
+-- 9b. Drafts (sinkronisasi draft Builder antar-perangkat)
+create table if not exists public.drafts (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  slug text not null,
+  content jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (user_id, slug)
+);
+
+alter table public.drafts enable row level security;
+
+drop policy if exists "pemilik kelola drafts" on public.drafts;
+create policy "pemilik kelola drafts" on public.drafts
+  for all
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
 -- 10. Realtime Publications
 do $$
 begin
