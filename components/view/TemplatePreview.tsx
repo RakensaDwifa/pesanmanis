@@ -41,6 +41,19 @@ export default function TemplatePreview({ slug }: { slug: string }) {
 
   if (!t) return null;
 
+  const handleBack = () => {
+    if (
+      typeof window !== "undefined" &&
+      window.history.length > 1 &&
+      document.referrer &&
+      document.referrer.includes(window.location.host)
+    ) {
+      router.back();
+    } else {
+      router.push("/templates");
+    }
+  };
+
   // Isi demo: nama & pesan contoh supaya user melihat tampilan akhirnya.
   const content = fillContentDefaults({ ...MOCK_CONTENT, templateSlug: slug });
 
@@ -52,7 +65,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
           {/* Selama alur berjalan: hanya tombol kembali */}
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={handleBack}
             aria-label="Kembali"
             className="fixed top-4 left-4 z-[80] inline-flex items-center gap-1.5 rounded-full bg-white/80 backdrop-blur-md border border-white/60 px-3 py-2 text-label-md font-semibold text-primary shadow-sm hover:bg-white transition"
           >
@@ -86,7 +99,7 @@ export default function TemplatePreview({ slug }: { slug: string }) {
             <div className="flex items-center gap-2 px-3 sm:px-5 py-3">
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={handleBack}
                 aria-label="Kembali"
                 className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-label-md font-semibold text-primary hover:bg-white/70 transition"
               >

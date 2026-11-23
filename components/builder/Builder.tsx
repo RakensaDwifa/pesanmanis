@@ -108,6 +108,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           message: existing.message,
           photos: existing.photos,
           musicUrl: existing.musicUrl,
+          videoUrl: existing.videoUrl,
+          mood: existing.mood,
+          email: existing.email,
+          timeline: existing.timeline,
         });
       }
     }
@@ -297,10 +301,21 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
   const uploadPhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const currentCount = (content.photos ?? []).filter(Boolean).length;
+    const remainingSlots = Math.max(0, 10 - currentCount);
+    if (remainingSlots === 0) {
+      toast.error("Maksimal 10 foto per ucapan.");
+      return;
+    }
+    const selectedFiles = Array.from(files).slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      toast.info(`Hanya ${remainingSlots} foto pertama yang diunggah (batas 10 foto).`);
+    }
     setUploading(true);
     try {
       const supabase = createClient();
-      for (const file of Array.from(files)) {
+      const uploadedUrls: string[] = [];
+      for (const file of selectedFiles) {
         const blob = await compressImage(file);
         const ext = blob.type === "image/webp" ? "webp" : "jpg";
         const path = `${crypto.randomUUID()}.${ext}`;
@@ -309,7 +324,13 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           .upload(path, blob, { contentType: blob.type });
         if (error) throw error;
         const url = `${supabaseUrl()}/storage/v1/object/public/foto/${path}`;
-        set("photos", [...(content.photos ?? []), url]);
+        uploadedUrls.push(url);
+      }
+      if (uploadedUrls.length > 0) {
+        setContent((c) => ({
+          ...c,
+          photos: [...(c.photos ?? []).filter(Boolean), ...uploadedUrls].slice(0, 10),
+        }));
       }
       toast.success("Foto berhasil diunggah");
     } catch {
@@ -1277,6 +1298,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             </div>
             <motion.div
               ref={previewFrameRef}
+              data-light-card
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}

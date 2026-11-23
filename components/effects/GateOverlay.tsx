@@ -117,7 +117,9 @@ export default function GateOverlay({
       }
     >
       <div
-        className={`w-full max-w-sm rounded-3xl bg-white p-6 md:p-8 shadow-2xl border border-rose-100 text-center transition-transform ${
+        data-light-card
+        style={{ backgroundColor: "#ffffff", color: "#1f2937" }}
+        className={`w-full max-w-sm rounded-3xl p-6 md:p-8 shadow-2xl border border-rose-100 text-center transition-transform ${
           shaking ? "animate-bounce" : ""
         }`}
       >

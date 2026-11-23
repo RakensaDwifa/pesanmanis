@@ -42,6 +42,7 @@ export default function LoveReceiptModal({
       const dataUrl = await toPng(receiptRef.current, {
         quality: 0.95,
         pixelRatio: 2,
+        backgroundColor: "#ffffff",
       });
 
       const link = document.createElement("a");
@@ -96,7 +97,9 @@ export default function LoveReceiptModal({
             {/* Receipt Container to Capture */}
             <div
               ref={receiptRef}
-              className="w-full bg-white p-5 rounded-2xl border border-gray-200 shadow-sm font-mono text-xs text-gray-800 space-y-3"
+              data-light-card
+              style={{ backgroundColor: "#ffffff", color: "#1f2937" }}
+              className="w-full p-5 rounded-2xl border border-gray-200 shadow-sm font-mono text-xs text-gray-800 space-y-3"
             >
               <div className="text-center border-b border-dashed border-gray-300 pb-3">
                 <p className="font-bold text-sm tracking-wider uppercase">PESANMANIS STORE</p>

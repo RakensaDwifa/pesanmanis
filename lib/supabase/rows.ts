@@ -1,4 +1,14 @@
 import type { UcapanContent } from "@/lib/types";
+import type { MoodKey } from "@/lib/mood";
+
+const VALID_MOODS: Record<MoodKey, true> = {
+  romantic: true,
+  playful: true,
+  calm: true,
+  sunset: true,
+  lavender: true,
+};
+const META_TIMELINE_TAG = "__pm_meta__";
 
 /** Validasi input ucapan sebelum insert/update. Melempar error jika tidak valid. */
 export function validateUcapanInput(content: Partial<UcapanContent>): { valid: true } | { valid: false; reason: string } {
@@ -22,6 +32,13 @@ export function validateUcapanInput(content: Partial<UcapanContent>): { valid: t
   const music = content.musicUrl ?? "";
   if (music && (music.length > 500 || (!music.startsWith("/") && !music.startsWith("https://")))) {
     return { valid: false, reason: "MUSIC_URL_INVALID" };
+  }
+  const video = content.videoUrl ?? "";
+  if (video && (video.length > 500 || (!video.startsWith("/") && !video.startsWith("https://")))) {
+    return { valid: false, reason: "VIDEO_URL_INVALID" };
+  }
+  if (content.mood && !VALID_MOODS[content.mood]) {
+    return { valid: false, reason: "MOOD_INVALID" };
   }
   const email = content.email ?? "";
   if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
@@ -112,6 +129,24 @@ export function mapUcapanRow(
   row: UcapanRow,
   stats?: UcapanStatsRow | null
 ): StoredUcapan {
+  const rawTimeline = Array.isArray(row.timeline) ? row.timeline : [];
+  const cleanTimeline: NonNullable<UcapanContent["timeline"]> = [];
+  let mood: MoodKey | undefined;
+  let videoUrl: string | undefined;
+
+  for (const item of rawTimeline) {
+    if (item && typeof item === "object" && item.date === META_TIMELINE_TAG) {
+      if (typeof item.mood === "string" && VALID_MOODS[item.mood as MoodKey]) {
+        mood = item.mood as MoodKey;
+      }
+      if (typeof item.videoUrl === "string" && item.videoUrl) {
+        videoUrl = item.videoUrl;
+      }
+    } else if (item && typeof item === "object") {
+      cleanTimeline.push(item);
+    }
+  }
+
   return {
     id: row.id,
     templateSlug: row.template_slug,
@@ -121,8 +156,10 @@ export function mapUcapanRow(
     message: row.message,
     photos: row.photos ?? [],
     musicUrl: row.music_url ?? undefined,
+    videoUrl,
+    mood,
     email: row.email ?? undefined,
-    timeline: row.timeline ?? undefined,
+    timeline: cleanTimeline.length > 0 ? cleanTimeline : undefined,
     paid: row.paid,
     paidAt: row.paid_at ? Date.parse(row.paid_at) : undefined,
     createdAt: Date.parse(row.created_at),
@@ -147,16 +184,36 @@ export function mapUcapanRow(
 }
 
 export function toUcapanRow(content: Partial<UcapanContent>) {
+  const cleanPhotos = (content.photos ?? []).filter((p) => typeof p === "string" && p.trim() !== "");
+  const cleanTimeline = (content.timeline ?? []).filter(
+    (item) =>
+      item &&
+      item.date !== META_TIMELINE_TAG &&
+      Boolean(item.date?.trim() || item.title?.trim() || item.description?.trim())
+  );
+  const metaEntry =
+    content.mood || content.videoUrl?.trim()
+      ? [
+          {
+            date: META_TIMELINE_TAG,
+            title: "",
+            mood: content.mood ?? null,
+            videoUrl: content.videoUrl?.trim() || null,
+          },
+        ]
+      : [];
+  const finalTimeline = [...cleanTimeline, ...metaEntry];
+
   return {
     template_slug: content.templateSlug ?? "",
     to_name: content.toName ?? "",
     from_name: content.fromName ?? "",
     title: content.title ?? "",
     message: content.message ?? "",
-    photos: content.photos ?? [],
-    music_url: content.musicUrl ?? null,
+    photos: cleanPhotos,
+    music_url: content.musicUrl?.trim() || null,
     email: content.email?.trim() || null,
-    timeline: content.timeline ?? null,
+    timeline: finalTimeline.length > 0 ? finalTimeline : null,
   };
 }
 

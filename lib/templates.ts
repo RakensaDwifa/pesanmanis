@@ -155,6 +155,8 @@ export function fillContentDefaults(
     musicUrl: content.musicUrl,
     videoUrl: content.videoUrl,
     mood: content.mood,
+    email: content.email,
+    timeline: content.timeline,
     createdAt: content.createdAt ?? Date.now(),
   };
 }

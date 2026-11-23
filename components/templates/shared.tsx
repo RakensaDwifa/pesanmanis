@@ -208,36 +208,25 @@ export function Signature({ fromName }: { fromName: string }) {
 }
 
 export function PhotoGrid({ photos }: { photos: string[] }) {
-  const items =
-    photos.length > 0
-      ? photos.map((src, i) => ({ src, key: i }))
-      : [
-          { src: null, key: 0 },
-          { src: null, key: 1 },
-        ];
+  const validPhotos = (photos ?? []).filter((p) => typeof p === "string" && p.trim() !== "");
+  if (validPhotos.length === 0) return null;
 
   return (
     <div className="grid grid-cols-2 gap-4 mt-8">
-      {items.map((p, i) => (
+      {validPhotos.map((src, i) => (
         <motion.div
-          key={p.key}
+          key={`${src}-${i}`}
           initial={{ opacity: 0, scale: 0.8, rotate: i % 2 === 0 ? -3 : 3 }}
           animate={{ opacity: 1, scale: 1, rotate: i % 2 === 0 ? -2 : 2 }}
           transition={{ delay: 0.3 + i * 0.15, duration: 0.5 }}
           className="bg-white p-2.5 pb-4 rounded-lg shadow-card border border-outline-variant/30"
         >
-          {p.src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={p.src}
-              alt={`Kenangan ${i + 1}`}
-              className="w-full h-36 object-cover rounded-md"
-            />
-          ) : (
-            <div className="w-full h-36 rounded-md bg-gradient-to-br from-[#FFE3D2] to-[#F5A15A] flex items-center justify-center text-4xl">
-              💞
-            </div>
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`Kenangan ${i + 1}`}
+            className="w-full h-36 object-cover rounded-md"
+          />
         </motion.div>
       ))}
     </div>
