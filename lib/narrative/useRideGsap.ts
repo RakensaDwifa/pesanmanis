@@ -13,7 +13,10 @@ export function useGsapScope<T extends HTMLElement = HTMLDivElement>(
 ) {
   const scope = useRef<T>(null);
   const buildRef = useRef(build);
-  buildRef.current = build;
+
+  useEffect(() => {
+    buildRef.current = build;
+  }, [build]);
 
   useEffect(() => {
     const el = scope.current;

@@ -3,8 +3,8 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { QRCodeSVG } from "qrcode.react";
 import {
+  AlertCircle,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -15,61 +15,78 @@ import {
 } from "lucide-react";
 import { getUcapan, savePaidUcapan } from "@/lib/store";
 import { isRemote } from "@/lib/supabase/config";
+import type { StoredUcapan } from "@/lib/types";
+import QrCodeCard from "@/components/ui/QrCodeCard";
 
 function SuccessInner({ id }: { id: string }) {
   const searchParams = useSearchParams();
-  const [state, setState] = useState<"checking" | "waiting" | "done">("checking");
+  const [state, setState] = useState<"checking" | "waiting" | "failed" | "done">("checking");
   const [copied, setCopied] = useState(false);
-  const [ucapan, setUcapan] = useState(() => getUcapan(id));
+  const [ucapan, setUcapan] = useState<StoredUcapan | null>(() =>
+    isRemote() ? null : getUcapan(id)
+  );
   const [rechecking, setRechecking] = useState(false);
 
   const finalize = useCallback(async () => {
-    let u = getUcapan(id);
-    if (u) {
-      savePaidUcapan({ ...u, paid: true, paidAt: Date.now() });
-    }
+    let u: StoredUcapan | null = null;
     if (isRemote()) {
       try {
-        const res = await fetch(`/api/ucapan/${id}`, {
+        const res = await fetch(`/api/ucapan/${encodeURIComponent(id)}`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         });
         const json = await res.json();
         if (json?.ucapan) {
-          u = json.ucapan;
+          u = json.ucapan as StoredUcapan;
         }
       } catch {
         /* ignore */
       }
+      if (!u?.paid) {
+        setState("waiting");
+        return;
+      }
+      setUcapan(u);
+      setState("done");
+      return;
     }
-    if (u) setUcapan(u);
+
+    // Demo mode lokal
+    u = getUcapan(id);
+    if (u) {
+      const activated = { ...u, paid: true, paidAt: u.paidAt ?? Date.now() };
+      savePaidUcapan(activated);
+      setUcapan(activated);
+    }
     setState("done");
   }, [id]);
 
   const checkDirectUcapanStatus = useCallback(async (): Promise<boolean> => {
+    if (isRemote()) {
+      try {
+        const res = await fetch(`/api/ucapan/${encodeURIComponent(id)}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        const json = await res.json();
+        if (json?.ucapan) {
+          setUcapan(json.ucapan as StoredUcapan);
+          if (json.ucapan.paid) {
+            setState("done");
+            return true;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      return false;
+    }
+
     const local = getUcapan(id);
     if (local?.paid) {
       setUcapan(local);
       setState("done");
       return true;
-    }
-    if (!isRemote()) return false;
-    try {
-      const res = await fetch(`/api/ucapan/${id}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-      const json = await res.json();
-      if (json?.ucapan) {
-        setUcapan(json.ucapan);
-        if (json.ucapan.paid) {
-          savePaidUcapan(json.ucapan);
-          setState("done");
-          return true;
-        }
-      }
-    } catch {
-      /* ignore */
     }
     return false;
   }, [id]);
@@ -78,12 +95,16 @@ function SuccessInner({ id }: { id: string }) {
     setRechecking(true);
     const ref = searchParams.get("ref");
     try {
-      if (ref) {
+      if (ref && isRemote()) {
         const res = await fetch(`/api/payment/status?ref=${encodeURIComponent(ref)}`).then((r) =>
           r.json()
         );
         if (res.ok && res.status === "PAID") {
           await finalize();
+          return;
+        }
+        if (res.ok && (res.status === "FAILED" || res.status === "EXPIRED")) {
+          setState("failed");
           return;
         }
       }
@@ -97,15 +118,17 @@ function SuccessInner({ id }: { id: string }) {
     const demo = searchParams.get("demo");
     const ref = searchParams.get("ref");
 
-    if (demo === "1") {
-      setTimeout(finalize, 0);
-      return;
+    // ?demo=1 hanya diizinkan pada Mode Demo lokal (tidak pernah bypass di produksi/remote).
+    if (demo === "1" && !isRemote()) {
+      const timer = setTimeout(() => void finalize(), 0);
+      return () => clearTimeout(timer);
     }
 
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
 
-    if (ref) {
+    if (ref && isRemote()) {
       const poll = async () => {
         try {
           const res = await fetch(`/api/payment/status?ref=${encodeURIComponent(ref)}`).then(
@@ -116,6 +139,10 @@ function SuccessInner({ id }: { id: string }) {
             await finalize();
             return;
           }
+          if (res.ok && (res.status === "FAILED" || res.status === "EXPIRED")) {
+            setState("failed");
+            return;
+          }
         } catch {
           /* ignore network blip */
         }
@@ -124,7 +151,7 @@ function SuccessInner({ id }: { id: string }) {
         if (paidDirectly || cancelled) return;
         attempts += 1;
         if (attempts < 20) {
-          setTimeout(poll, 3000);
+          pollTimer = setTimeout(() => void poll(), 3000);
         } else {
           setState("waiting");
         }
@@ -132,6 +159,7 @@ function SuccessInner({ id }: { id: string }) {
       void poll();
       return () => {
         cancelled = true;
+        if (pollTimer) clearTimeout(pollTimer);
       };
     }
 
@@ -145,8 +173,40 @@ function SuccessInner({ id }: { id: string }) {
 
     return () => {
       cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [id, searchParams, finalize, checkDirectUcapanStatus]);
+
+  if (state === "failed") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+          <AlertCircle className="h-8 w-8 text-red-600" />
+        </div>
+        <p className="text-headline-md text-on-surface mb-2">
+          Pembayaran Belum Selesai / Kedaluwarsa
+        </p>
+        <p className="text-body-md text-on-surface-variant max-w-sm mb-6">
+          Transaksi dibatalkan atau melewati batas waktu. Draft ucapanmu masih aman dan bisa
+          dibayar ulang kapan saja.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link
+            href={`/checkout/${id}`}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary text-white text-label-md font-semibold shadow hover:bg-primary/90 transition"
+          >
+            Coba Bayar Ulang
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-surface-container-low text-on-surface text-label-md font-semibold hover:bg-surface-container transition"
+          >
+            Kembali ke Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (state === "checking" || state === "waiting") {
     return (
@@ -236,30 +296,13 @@ function SuccessInner({ id }: { id: string }) {
         </div>
 
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 mb-6">
-          <p className="text-label-lg font-semibold text-on-surface mb-4">Scan QR Code</p>
-          <div
-            data-light-card
-            style={{ backgroundColor: "#ffffff" }}
-            className="mx-auto w-fit p-4 rounded-2xl border border-outline-variant/30"
-          >
-            <QRCodeSVG
-              value={publicUrl}
-              size={180}
-              level="H"
-              fgColor="#22191a"
-              bgColor="#ffffff"
-              imageSettings={
-                ucapan?.qrPhotoEnabled && ucapan?.photos?.[0]
-                  ? {
-                      src: ucapan.photos[0],
-                      height: 38,
-                      width: 38,
-                      excavate: true,
-                    }
-                  : undefined
-              }
-            />
-          </div>
+          <p className="text-label-lg font-semibold text-on-surface mb-4">Scan &amp; Unduh QR Code</p>
+          <QrCodeCard
+            url={publicUrl}
+            toName={ucapan?.toName || "Kamu"}
+            photoUrl={ucapan?.photos?.[0]}
+            qrPhotoEnabled={ucapan?.qrPhotoEnabled}
+          />
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">

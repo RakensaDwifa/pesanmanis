@@ -4,12 +4,15 @@ import {
   PROMO_AMOUNT_LABEL,
   PROMO_QUOTA,
 } from "./pricing";
+import { normalizeBaseUrl } from "./validation";
 
 export const BRAND = {
   name: "PesanManis",
   domain: "pesanmanis.com",
-  baseUrl:
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://pesanmanis.vercel.app",
+  baseUrl: normalizeBaseUrl(
+    process.env.NEXT_PUBLIC_APP_URL,
+    "https://pesanmanis.vercel.app"
+  ),
   tagline: "Kirim rasa, bukan sekadar kata.",
   description: `Buat website ucapan personal untuk orang spesial kamu. Birthday, anniversary, love letter — kirim kejutan manis yang bikin dia tersenyum. Promo perkenalan ${PROMO_AMOUNT_LABEL} (harga normal ${NORMAL_AMOUNT_LABEL}).`,
   contactEmail: "hello@pesanmanis.com",
@@ -22,7 +25,7 @@ export const BRAND = {
   promoQuota: PROMO_QUOTA,
   socials: {
     instagram:
-      process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "https://www.instagram.com",
-    tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL ?? "https://www.tiktok.com",
+      process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com",
+    tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL || "https://www.tiktok.com",
   },
 } as const;

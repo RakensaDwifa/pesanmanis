@@ -1,4 +1,5 @@
-import type { MoodKey } from "./mood";
+import type { MoodKey } from "./mood.ts";
+import type { AddonKey } from "./pricing.ts";
 
 export type TemplateCategory =
   | "ungkapan-sayang"
@@ -34,6 +35,32 @@ export interface TimelineItem {
   description?: string;
 }
 
+export type GateType = "pin" | "trivia";
+
+export interface GateData {
+  pin?: string;
+  question?: string;
+  answer?: string;
+}
+
+export type ParticleStyle = "hearts" | "roses" | "sparkles";
+
+export interface DraftAddonConfig {
+  addons: AddonKey[];
+  customSlug?: string | null;
+  gateType?: GateType | null;
+  pin?: string | null;
+  question?: string | null;
+  answer?: string | null;
+  particleStyle?: ParticleStyle | null;
+}
+
+export interface ViewSummary {
+  count: number;
+  firstSeen?: number;
+  lastSeen?: number;
+}
+
 export interface UcapanContent {
   templateSlug: string;
   toName: string;
@@ -47,6 +74,23 @@ export interface UcapanContent {
   email?: string;
   timeline?: TimelineItem[];
   createdAt?: number;
+}
+
+export interface StoredUcapan extends UcapanContent {
+  id: string;
+  paid: boolean;
+  paidAt?: number;
+  createdAt: number;
+  views?: ViewSummary;
+  customSlug?: string | null;
+  qrPhotoEnabled?: boolean;
+  touchParticles?: string | null;
+  gateType?: string | null;
+  gateData?: GateData | null;
+  receiptEnabled?: boolean;
+  draftAddons?: DraftAddonConfig | null;
+  /** True when content is redacted server-side pending Intimate Gate verification. */
+  locked?: boolean;
 }
 
 export interface TemplateRenderProps {

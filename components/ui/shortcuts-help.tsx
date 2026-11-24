@@ -22,6 +22,7 @@ export default function ShortcutsHelpModal({
     <AnimatePresence>
       {open && (
         <motion.div
+          data-lenis-prevent
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

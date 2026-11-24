@@ -1,3 +1,14 @@
+let cachedWebpSupport: boolean | null = null;
+
+function supportsWebpEncoding(): boolean {
+  if (cachedWebpSupport !== null) return cachedWebpSupport;
+  const probe = document.createElement("canvas");
+  probe.width = 1;
+  probe.height = 1;
+  cachedWebpSupport = probe.toDataURL("image/webp").startsWith("data:image/webp");
+  return cachedWebpSupport;
+}
+
 export async function compressImage(
   file: File,
   maxDim = 1280,
@@ -18,9 +29,7 @@ export async function compressImage(
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
-  const type = canvas.toDataURL("image/webp").startsWith("data:image/webp")
-    ? "image/webp"
-    : "image/jpeg";
+  const type = supportsWebpEncoding() ? "image/webp" : "image/jpeg";
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

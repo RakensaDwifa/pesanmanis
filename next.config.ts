@@ -6,7 +6,7 @@ const cspHeader = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self' https://*.supabase.co https://api.midtrans.com https://app.midtrans.com https://api.sandbox.midtrans.com https://app.sandbox.midtrans.com https://*.resend.dev https://accounts.google.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.midtrans.com https://app.midtrans.com https://api.sandbox.midtrans.com https://app.sandbox.midtrans.com https://accounts.google.com",
   "frame-src https://app.midtrans.com https://app.sandbox.midtrans.com https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com",
   "font-src 'self' data:",
   "object-src 'none'",
@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
           {
             key: "X-DNS-Prefetch-Control",
             value: "on",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
           },
           {
             key: "X-Content-Type-Options",

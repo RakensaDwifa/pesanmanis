@@ -1,18 +1,6 @@
-import type { UcapanContent } from "./types";
+import type { StoredUcapan, UcapanContent } from "./types";
 
-export interface StoredUcapan extends UcapanContent {
-  id: string;
-  paid: boolean;
-  paidAt?: number;
-  createdAt: number;
-  // Add-on fields (diisi setelah pembayaran lunas)
-  customSlug?: string | null;
-  qrPhotoEnabled?: boolean;
-  touchParticles?: string | null;
-  gateType?: string | null;
-  gateData?: Record<string, unknown> | null;
-  receiptEnabled?: boolean;
-}
+export type { StoredUcapan };
 
 const DRAFT_KEY = "up_draft_";
 const UCAPAN_KEY = "up_ucapan_";

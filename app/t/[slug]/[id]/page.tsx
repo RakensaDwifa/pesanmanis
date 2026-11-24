@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, stripPublicUcapan } from "@/lib/supabase/rows";
+import { hasValidGateCookie } from "@/lib/gate-cookie";
+import {
+  mapUcapanRow,
+  stripLockedUcapan,
+  stripPublicUcapan,
+} from "@/lib/supabase/rows";
 import type { UcapanRow } from "@/lib/supabase/rows";
+import { isValidUuid } from "@/lib/validation";
 import PublicView from "@/components/view/PublicView";
 
 export async function generateMetadata({
@@ -15,9 +22,9 @@ export async function generateMetadata({
   let toName = "Kamu";
   let fromName = "Seseorang";
   let message = "";
-  let hasGate = false;
+  let gateType: string | null = null;
 
-  if (isRemote()) {
+  if (isRemote() && isValidUuid(id)) {
     try {
       const supabase = createAdminClient();
       const { data } = await supabase
@@ -30,7 +37,7 @@ export async function generateMetadata({
         toName = data.to_name ?? toName;
         fromName = data.from_name ?? fromName;
         message = data.message ?? "";
-        hasGate = Boolean(data.gate_type);
+        gateType = data.gate_type ?? null;
       }
     } catch {
       // fallback ke nilai default
@@ -39,11 +46,14 @@ export async function generateMetadata({
 
   const teaser = message.trim().split(/\s+/).slice(0, 18).join(" ");
   const title = `Untuk ${toName} 💌 — dari ${fromName}`;
-  const description = hasGate
-    ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
-    : teaser.length > 0
-      ? `Seseorang membuatkan ucapan spesial untukmu: "${teaser}${teaser.endsWith(".") ? "" : "…"}"`
-      : "Seseorang membuatkan ucapan spesial untukmu.";
+  const description =
+    gateType === "trivia"
+      ? "🔒 Pesan rahasia terkunci. Jawab kuis kenangan untuk membuka kejutan spesial ini."
+      : gateType
+        ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
+        : teaser.length > 0
+          ? `Seseorang membuatkan ucapan spesial untukmu: "${teaser}${teaser.endsWith(".") ? "" : "…"}"`
+          : "Seseorang membuatkan ucapan spesial untukmu.";
 
   return {
     title,
@@ -72,10 +82,10 @@ export default async function ViewRoute({
 }: {
   params: Promise<{ slug: string; id: string }>;
 }) {
-  const { id } = await params;
+  const { slug, id } = await params;
 
   let remote = null;
-  if (isRemote()) {
+  if (isRemote() && isValidUuid(id)) {
     const admin = createAdminClient();
     const { data } = await admin
       .from("ucapan")
@@ -85,8 +95,17 @@ export default async function ViewRoute({
 
     if (data) {
       const row = data as UcapanRow;
+      if (row.template_slug && row.template_slug !== slug) {
+        redirect(`/t/${row.template_slug}/${id}`);
+      }
+
+      const mapped = mapUcapanRow(row);
       if (row.paid) {
-        remote = stripPublicUcapan(mapUcapanRow(row));
+        const unlocked =
+          !row.gate_type || (await hasValidGateCookie(row.id));
+        remote = unlocked
+          ? stripPublicUcapan(mapped)
+          : stripLockedUcapan(mapped);
       } else {
         // Jika belum dibayar, hanya pemilik yang sedang login yang boleh melihat
         const supabase = await createClient();
@@ -94,7 +113,7 @@ export default async function ViewRoute({
           data: { user },
         } = await supabase.auth.getUser();
         if (user && row.owner_id === user.id) {
-          remote = stripPublicUcapan(mapUcapanRow(row));
+          remote = stripPublicUcapan(mapped);
         }
       }
     }

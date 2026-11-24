@@ -1,4 +1,8 @@
-import crypto from "node:crypto";
+import "server-only";
+import { verifyMidtransSignature } from "./midtrans-signature";
+import { normalizeBaseUrl } from "./validation";
+
+export { verifyMidtransSignature };
 
 const MIDTRANS_MODE = () => process.env.MIDTRANS_MODE ?? "sandbox";
 
@@ -35,9 +39,16 @@ export async function createSnapTransaction(input: {
   }
 
   const authString = Buffer.from(`${serverKey}:`).toString("base64");
-  const baseUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const callbackUrl = process.env.MIDTRANS_CALLBACK_URL ?? `${baseUrl}/api/payment/webhook`;
-  const returnUrl = `${baseUrl}/checkout/${input.ucapanId}/selesai?ref=${input.merchantRef}`;
+  const baseUrl = normalizeBaseUrl(
+    process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL,
+    "http://localhost:3000"
+  );
+  const callbackUrl =
+    process.env.MIDTRANS_CALLBACK_URL?.trim() ||
+    `${baseUrl}/api/payment/webhook`;
+  const returnUrl = `${baseUrl}/checkout/${encodeURIComponent(input.ucapanId)}/selesai?ref=${encodeURIComponent(input.merchantRef)}`;
+  const safeName = String(input.customerName ?? "Pelanggan").trim().slice(0, 50) || "Pelanggan";
+  const safeEmail = input.customerEmail?.trim() || "pelanggan@pesanmanis.com";
 
   try {
     const res = await fetch(SNAP_URL(), {
@@ -62,8 +73,8 @@ export async function createSnapTransaction(input: {
           },
         ],
         customer_details: {
-          first_name: input.customerName.slice(0, 50),
-          email: input.customerEmail ?? "pelanggan@pesanmanis.com",
+          first_name: safeName,
+          email: safeEmail,
         },
         enabled_payments: ["qris", "gopay", "shopeepay", "ovo", "dana"],
         callbacks: {
@@ -71,11 +82,15 @@ export async function createSnapTransaction(input: {
         },
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     const json = await res.json();
     if (!res.ok || !json.token) {
-      return { ok: false, error: json.message ?? json.error_messages?.[0] ?? "MIDTRANS_ERROR" };
+      return {
+        ok: false,
+        error: json.message ?? json.error_messages?.[0] ?? "MIDTRANS_ERROR",
+      };
     }
 
     return {
@@ -87,26 +102,13 @@ export async function createSnapTransaction(input: {
   }
 }
 
-export function verifyMidtransSignature(
-  orderId: string,
-  statusCode: string,
-  grossAmount: string,
-  receivedSignature: string
-): boolean {
-  const serverKey = process.env.MIDTRANS_SERVER_KEY ?? "";
-  if (!serverKey || !receivedSignature) return false;
-
-  const raw = orderId + statusCode + grossAmount + serverKey;
-  const computed = crypto.createHash("sha512").update(raw).digest("hex");
-  const a = Buffer.from(computed, "utf8");
-  const b = Buffer.from(receivedSignature, "utf8");
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
-export async function checkMidtransStatus(
-  orderId: string
-): Promise<{ ok: boolean; status?: string; grossAmount?: string }> {
+export async function checkMidtransStatus(orderId: string): Promise<{
+  ok: boolean;
+  status?: "PAID" | "PENDING" | "FAILED" | "EXPIRED";
+  grossAmount?: string;
+  paymentType?: string;
+  transactionId?: string;
+}> {
   const serverKey = process.env.MIDTRANS_SERVER_KEY;
   if (!serverKey) return { ok: false };
 
@@ -119,6 +121,7 @@ export async function checkMidtransStatus(
         Authorization: `Basic ${authString}`,
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     const json = await res.json();
@@ -126,13 +129,15 @@ export async function checkMidtransStatus(
 
     const txStatus = json.transaction_status;
     const fraudStatus = json.fraud_status;
-    let normalized = "PENDING";
+    let normalized: "PAID" | "PENDING" | "FAILED" | "EXPIRED" = "PENDING";
     if (
       (txStatus === "settlement" || txStatus === "capture") &&
       (!fraudStatus || fraudStatus === "accept")
     ) {
       normalized = "PAID";
-    } else if (["cancel", "deny", "expire"].includes(txStatus)) {
+    } else if (txStatus === "expire") {
+      normalized = "EXPIRED";
+    } else if (["cancel", "deny"].includes(txStatus)) {
       normalized = "FAILED";
     }
 
@@ -140,6 +145,10 @@ export async function checkMidtransStatus(
       ok: true,
       status: normalized,
       grossAmount: json.gross_amount ? String(json.gross_amount) : undefined,
+      paymentType:
+        typeof json.payment_type === "string" ? json.payment_type : undefined,
+      transactionId:
+        typeof json.transaction_id === "string" ? json.transaction_id : undefined,
     };
   } catch {
     return { ok: false };

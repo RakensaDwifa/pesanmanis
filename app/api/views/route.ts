@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { hasValidGateCookie } from "@/lib/gate-cookie";
+import { isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +13,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "RATE_LIMIT_EXCEEDED" }, { status: 429 });
   }
 
-  let body: { ucapanId?: string };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
-  if (!body.ucapanId) {
+  const ucapanId = isRecord(body) ? body.ucapanId : undefined;
+  if (!isValidUuid(ucapanId)) {
     return NextResponse.json({ ok: false, error: "MISSING_FIELDS" }, { status: 400 });
   }
 
@@ -30,8 +32,8 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: target } = await admin
     .from("ucapan")
-    .select("id,paid")
-    .eq("id", body.ucapanId)
+    .select("id, paid, gate_type")
+    .eq("id", ucapanId)
     .eq("paid", true)
     .maybeSingle();
 
@@ -39,10 +41,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
+  // Delay view count until Intimate Gate has been unlocked.
+  if (target.gate_type && !(await hasValidGateCookie(ucapanId))) {
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  const { error } = await admin
     .from("views")
-    .insert({ ucapan_id: body.ucapanId });
+    .insert({ ucapan_id: ucapanId });
 
   if (error) {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });

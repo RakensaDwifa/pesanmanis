@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -16,6 +23,8 @@ import {
   MessageSquareHeart,
   Music,
   PartyPopper,
+  Pause,
+  Play,
   Plus,
   Redo2,
   Sparkles,
@@ -25,7 +34,13 @@ import {
 } from "lucide-react";
 import { getTemplate, fillContentDefaults } from "@/lib/templates";
 import type { UcapanContent } from "@/lib/types";
-import { getDraft, getUcapan, saveDraft, savePaidUcapan } from "@/lib/store";
+import {
+  clearDraft,
+  getDraft,
+  getUcapan,
+  saveDraft,
+  savePaidUcapan,
+} from "@/lib/store";
 import { makeUcapanId } from "@/lib/templates";
 import { createClient } from "@/lib/supabase/client";
 import { isRemote, supabaseUrl } from "@/lib/supabase/config";
@@ -46,10 +61,8 @@ import type { SyncStatus } from "@/lib/drafts";
 import { useContentHistory } from "@/lib/history";
 import { useKeyboardShortcuts } from "@/lib/shortcuts";
 import ShortcutsHelpModal from "@/components/ui/shortcuts-help";
-import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
-import { BRAND } from "@/lib/brand";
+import { AnalyticsEvents } from "@/lib/analytics";
 import { usePricing } from "@/lib/use-pricing";
-import { planForPaid } from "@/lib/plans";
 import {
   ADDON_PRICING,
   calculateCheckoutTotal,
@@ -73,9 +86,15 @@ const ADDON_NOTES: Record<AddonKey, string> = {
   custom_slug: "Pilih alamat link (mis. /u/ari-nadia)",
   custom_qr: "Foto kalian di tengah QR Code",
   touch_particles: "Efek kelopak/hati saat layar disentuh",
-  intimate_gate: "Harus jawab PIN sebelum surat terbuka",
+  intimate_gate: "Harus masukkan PIN atau jawab kuis nostalgia sebelum surat terbuka",
   love_receipt: "Struk cinta bisa diunduh ke galeri HP",
 };
+
+const TRIVIA_PROMPTS = [
+  "Tanggal jadian kita?",
+  "Tempat kencan pertama kita?",
+  "Makanan favoritku?",
+] as const;
 
 const PARTICLE_OPTIONS = [
   { key: "hearts", label: "Hati", emoji: "❤️" },
@@ -96,59 +115,164 @@ function draftAddonsStorageKey(templateSlug: string) {
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emptySubscribe = () => () => {};
+
+function readStoredPreviewMode(): "mobile" | "desktop" {
+  if (typeof window === "undefined") return "mobile";
+  try {
+    const stored = window.localStorage.getItem("up_preview_mode");
+    return stored === "desktop" ? "desktop" : "mobile";
+  } catch {
+    return "mobile";
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("gagal membaca gambar"));
+    reader.onerror = () => reject(new Error("gagal membaca gambar"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function mapServerSaveError(code?: string, fallbackMessage?: string): string {
+  if (fallbackMessage) return fallbackMessage;
+  switch (code) {
+    case "EDIT_WINDOW_EXPIRED":
+      return "Masa edit 7 hari sudah habis.";
+    case "TO_NAME_INVALID":
+      return "Nama penerima wajib diisi (maks. 80 karakter).";
+    case "FROM_NAME_INVALID":
+      return "Nama pengirim wajib diisi (maks. 80 karakter).";
+    case "TITLE_TOO_LONG":
+      return "Judul surat maksimal 120 karakter.";
+    case "MESSAGE_TOO_LONG":
+      return "Isi pesan maksimal 5.000 karakter.";
+    case "PHOTO_URL_INVALID":
+    case "PHOTO_URL_TOO_LONG":
+    case "PHOTOS_INVALID":
+      return "URL foto tidak valid (gunakan HTTPS dan maks. 10 foto).";
+    case "MUSIC_URL_INVALID":
+      return "URL musik latar harus berupa tautan HTTPS yang valid.";
+    case "VIDEO_URL_INVALID":
+      return "URL video harus berupa tautan HTTPS/YouTube yang valid.";
+    case "EMAIL_INVALID":
+      return "Format email tidak valid.";
+    case "RATE_LIMIT_EXCEEDED":
+      return "Terlalu banyak permintaan. Coba lagi dalam 1 menit.";
+    default:
+      return "Gagal menyimpan ucapan. Coba lagi ya.";
+  }
+}
 
 export default function BuilderPage({ slug, editId }: { slug: string; editId?: string }) {
   const pricing = usePricing();
   const template = getTemplate(slug);
   const router = useRouter();
-  const [content, setContent] = useState<Partial<UcapanContent>>(() => {
-    if (editId) {
-      const existing = getUcapan(editId);
-      if (existing) {
-        return fillContentDefaults({
-          templateSlug: existing.templateSlug,
-          toName: existing.toName,
-          fromName: existing.fromName,
-          title: existing.title,
-          message: existing.message,
-          photos: existing.photos,
-          musicUrl: existing.musicUrl,
-          videoUrl: existing.videoUrl,
-          mood: existing.mood,
-          email: existing.email,
-          timeline: existing.timeline,
-        });
-      }
-    }
-    return fillContentDefaults(getDraft(slug) ?? { templateSlug: slug });
-  });
-  const initialPaid = editId ? Boolean(getUcapan(editId)?.paid) : false;
-  const [isPaid, setIsPaid] = useState(initialPaid);
-  const plan = planForPaid(isPaid);
+
+  // Deterministic SSR-safe initial state (hydrated asynchronously in useEffect below).
+  const [content, setContent] = useState<Partial<UcapanContent>>(() =>
+    fillContentDefaults({ templateSlug: slug })
+  );
+  const [isPaid, setIsPaid] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openSection, setOpenSection] = useState<SectionId | null>("identitas");
-  const [previewMode, setPreviewMode] = useState<"mobile" | "desktop">("mobile");
+  const storedPreviewMode = useSyncExternalStore(
+    emptySubscribe,
+    readStoredPreviewMode,
+    () => "mobile" as const
+  );
+  const [overridePreviewMode, setOverridePreviewMode] = useState<"mobile" | "desktop" | null>(null);
+  const previewMode = overridePreviewMode ?? storedPreviewMode;
 
   // ── Add-on (monetisasi) ──
   const [selectedAddons, setSelectedAddons] = useState<Set<AddonKey>>(new Set());
   const [slugInput, setSlugInput] = useState("");
+  const [slugAvailability, setSlugAvailability] = useState<{
+    status: "idle" | "checking" | "available" | "taken" | "error";
+    reason?: string;
+    checkedSlug?: string;
+  }>({ status: "idle" });
+  const [gateMode, setGateMode] = useState<"pin" | "trivia">("pin");
   const [pinInput, setPinInput] = useState("");
+  const [triviaQuestion, setTriviaQuestion] = useState("");
+  const [triviaAnswer, setTriviaAnswer] = useState("");
   const [particleStyle, setParticleStyle] = useState<"hearts" | "roses" | "sparkles">("hearts");
   const [previewGateOpen, setPreviewGateOpen] = useState(false);
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.src = "";
+        previewAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  const toggleTrackPreview = useCallback(
+    (track: (typeof MUSIC_LIBRARY)[number]) => {
+      if (playingTrackId === track.id) {
+        previewAudioRef.current?.pause();
+        setPlayingTrackId(null);
+        return;
+      }
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.src = "";
+      }
+      const audio = new Audio(track.url);
+      audio.volume = 0.65;
+      audio.onended = () => setPlayingTrackId(null);
+      audio.onerror = () => {
+        setPlayingTrackId(null);
+        toast.error("Gagal memutar pratinjau lagu.");
+      };
+      previewAudioRef.current = audio;
+      setPlayingTrackId(track.id);
+      void audio.play().catch(() => {
+        setPlayingTrackId(null);
+        toast.error("Gagal memutar pratinjau lagu.");
+      });
+    },
+    [playingTrackId]
+  );
+
+  const applyContent = useCallback(
+    (next: Partial<UcapanContent>) => setContent(next),
+    []
+  );
+  const { canUndo, canRedo, undo, redo, markRestored } =
+    useContentHistory<Partial<UcapanContent>>(content, applyContent);
 
   const toggleAddon = (key: AddonKey) => {
+    if (isPaid) return;
     if (!selectedAddons.has(key) && key === "intimate_gate") setPreviewGateOpen(true);
     setSelectedAddons((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
-        if (key === "custom_slug") setSlugInput("");
-        if (key === "intimate_gate") setPinInput("");
+        if (key === "custom_slug") {
+          setSlugInput("");
+          setSlugAvailability({ status: "idle" });
+        }
+        if (key === "intimate_gate") {
+          setGateMode("pin");
+          setPinInput("");
+          setTriviaQuestion("");
+          setTriviaAnswer("");
+        }
       } else {
         next.add(key);
       }
@@ -159,17 +283,8 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const slugCheck = validateSlugFormat(slugInput);
   const checkoutCalc = calculateCheckoutTotal(pricing.amount, Array.from(selectedAddons));
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("up_preview_mode");
-      if (stored === "mobile" || stored === "desktop") setPreviewMode(stored);
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const switchPreviewMode = useCallback((mode: "mobile" | "desktop") => {
-    setPreviewMode(mode);
+    setOverridePreviewMode(mode);
     try {
       window.localStorage.setItem("up_preview_mode", mode);
     } catch {
@@ -178,61 +293,156 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   }, []);
 
   const remoteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftAddonsLoadedRef = useRef(false);
+  const draftHydratedRef = useRef(false);
 
-  // Pulihkan draft add-on untuk pembuatan baru (!editId)
+  // Live check ketersediaan custom slug ke /api/ucapan/check-slug (debounced 450ms)
+  useEffect(() => {
+    if (isPaid || !selectedAddons.has("custom_slug") || !slugInput.trim() || !slugCheck.valid) {
+      return;
+    }
+    const normalized = slugCheck.normalized;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSlugAvailability({ status: "checking", checkedSlug: normalized });
+      try {
+        const qs = new URLSearchParams({ slug: normalized });
+        if (editId) qs.set("ucapanId", editId);
+        const res = await fetch(`/api/ucapan/check-slug?${qs.toString()}`, {
+          signal: controller.signal,
+        });
+        const json = (await res.json()) as {
+          available?: boolean;
+          reason?: string;
+        };
+        if (controller.signal.aborted) return;
+        if (res.ok && json.available) {
+          setSlugAvailability({ status: "available", checkedSlug: normalized });
+        } else if (res.ok && json.available === false) {
+          setSlugAvailability({
+            status: "taken",
+            reason: json.reason ?? "Alamat ini sudah dipakai orang lain.",
+            checkedSlug: normalized,
+          });
+        } else {
+          setSlugAvailability({
+            status: "error",
+            reason: json.reason ?? "Gagal memeriksa ketersediaan alamat.",
+            checkedSlug: normalized,
+          });
+        }
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
+        setSlugAvailability({
+          status: "error",
+          reason: "Tidak dapat mengecek ketersediaan alamat.",
+          checkedSlug: normalized,
+        });
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [editId, isPaid, selectedAddons, slugCheck.normalized, slugCheck.valid, slugInput]);
+
+  // Pulihkan draft lokal & remote (mode buat baru, !editId) tanpa hydration mismatch
   useEffect(() => {
     if (editId) return;
-    try {
-      const raw = window.localStorage.getItem(draftAddonsStorageKey(slug));
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          addons?: AddonKey[];
-          customSlug?: string;
-          pin?: string;
-          particleStyle?: "hearts" | "roses" | "sparkles";
-        };
-        if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
-        if (parsed.customSlug) setSlugInput(parsed.customSlug);
-        if (parsed.pin) setPinInput(parsed.pin);
-        if (parsed.particleStyle && ["hearts", "roses", "sparkles"].includes(parsed.particleStyle)) {
-          setParticleStyle(parsed.particleStyle);
+    let cancelled = false;
+    void (async () => {
+      // 1) Pulihkan draft konten & pilihan add-on dari localStorage
+      let localDraft: UcapanContent | null = null;
+      try {
+        localDraft = getDraft(slug);
+        if (localDraft && !cancelled) {
+          setContent(fillContentDefaults({ ...localDraft, templateSlug: slug }));
+          markRestored();
         }
+        const raw = window.localStorage.getItem(draftAddonsStorageKey(slug));
+        if (raw && !cancelled) {
+          const parsed = JSON.parse(raw) as {
+            addons?: AddonKey[];
+            customSlug?: string;
+            gateType?: "pin" | "trivia";
+            pin?: string;
+            question?: string;
+            answer?: string;
+            particleStyle?: "hearts" | "roses" | "sparkles";
+          };
+          if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
+          if (parsed.customSlug) setSlugInput(parsed.customSlug);
+          if (parsed.gateType === "trivia" || parsed.gateType === "pin") {
+            setGateMode(parsed.gateType);
+          }
+          if (parsed.pin) setPinInput(parsed.pin);
+          if (parsed.question) setTriviaQuestion(parsed.question);
+          if (parsed.answer) setTriviaAnswer(parsed.answer);
+          if (parsed.particleStyle && ["hearts", "roses", "sparkles"].includes(parsed.particleStyle)) {
+            setParticleStyle(parsed.particleStyle);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        draftHydratedRef.current = true;
       }
-    } catch {
-      // ignore
-    } finally {
-      draftAddonsLoadedRef.current = true;
-    }
-  }, [slug, editId]);
+
+      // 2) Sinkronkan draft remote jika lebih baru dari lokal
+      if (!isRemote() || cancelled) return;
+      try {
+        const [remote, localAt] = await Promise.all([
+          getDraftRemote(slug),
+          Promise.resolve(getLocalSavedAt(slug)),
+        ]);
+        if (cancelled || !remote) return;
+        if (remote.updatedAt > localAt) {
+          // Urutan spread benar: remote menimpa nilai lokal/default lama
+          setContent((c) => fillContentDefaults({ ...c, ...remote.content, templateSlug: slug }));
+          markRestored();
+          toast.info("Draft tersinkron dari perangkat lain dipulihkan");
+        }
+      } catch {
+        // silent — fallback ke draft lokal
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, editId, markRestored]);
 
   // Simpan draft add-on ke localStorage selama pembuatan baru (!editId)
   useEffect(() => {
-    if (editId || !draftAddonsLoadedRef.current) return;
+    if (editId || !draftHydratedRef.current) return;
     try {
       window.localStorage.setItem(
         draftAddonsStorageKey(slug),
         JSON.stringify({
           addons: Array.from(selectedAddons),
           customSlug: slugInput,
+          gateType: gateMode,
           pin: pinInput,
+          question: triviaQuestion,
+          answer: triviaAnswer,
           particleStyle,
         })
       );
     } catch {
       // ignore
     }
-  }, [slug, editId, selectedAddons, slugInput, pinInput, particleStyle]);
+  }, [slug, editId, selectedAddons, slugInput, gateMode, pinInput, triviaQuestion, triviaAnswer, particleStyle]);
 
+  // Auto-save draft lokal & remote (debounced 3 detik)
   useEffect(() => {
-    if (!template || editId) return;
+    if (!template || editId || !draftHydratedRef.current) return;
     saveDraft(slug, content);
     markLocalSaved(slug);
 
     if (!isRemote()) return;
-    setSyncStatus("saving");
     if (remoteSaveTimer.current) clearTimeout(remoteSaveTimer.current);
     remoteSaveTimer.current = setTimeout(async () => {
+      setSyncStatus("saving");
       const result = await saveDraftRemote(content);
       setSyncStatus(
         result === "ok" ? "saved" : result === "skipped" ? "idle" : "error"
@@ -243,64 +453,52 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     };
   }, [content, slug, template, editId]);
 
-  // Restore draft remote saat pertama kali buka builder (bukan mode edit)
-  useEffect(() => {
-    if (!isRemote() || editId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [remote, localAt] = await Promise.all([
-          getDraftRemote(slug),
-          Promise.resolve(getLocalSavedAt(slug)),
-        ]);
-        if (cancelled || !remote) return;
-        // Hanya pakai remote jika lebih baru dari lokal
-        if (remote.updatedAt > localAt) {
-          setContent((c) => fillContentDefaults({ ...remote.content, ...c, templateSlug: slug }));
-          markRestored();
-          toast.info("Draft tersinkron dari perangkat lain dipulihkan");
-        }
-      } catch {
-        // silent — fallback ke draft lokal
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
-
+  // Muat data ucapan pada mode edit (?edit=id)
   useEffect(() => {
     if (!editId) return;
-    // Pulihkan pilihan add-on dari sessionStorage jika ada
-    try {
-      const raw = sessionStorage.getItem(addonsStorageKey(editId));
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          addons?: AddonKey[];
-          customSlug?: string;
-          pin?: string;
-          particleStyle?: "hearts" | "roses" | "sparkles";
-        };
-        if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
-        if (parsed.customSlug) setSlugInput(parsed.customSlug);
-        if (parsed.pin) setPinInput(parsed.pin);
-        if (parsed.particleStyle) setParticleStyle(parsed.particleStyle);
-      }
-    } catch {
-      // ignore
-    }
-
-    if (!isRemote()) return;
     let cancelled = false;
-    fetch(`/api/ucapan/${editId}`)
-      .then(async (r) => {
+    void (async () => {
+      // 1) Pulihkan data lokal (Demo Mode) & sessionStorage add-on
+      try {
+        const localExisting = getUcapan(editId);
+        if (localExisting && !cancelled) {
+          setContent(fillContentDefaults(localExisting));
+          setIsPaid(Boolean(localExisting.paid));
+          markRestored();
+        }
+        const raw = sessionStorage.getItem(addonsStorageKey(editId));
+        if (raw && !cancelled) {
+          const parsed = JSON.parse(raw) as {
+            addons?: AddonKey[];
+            customSlug?: string;
+            gateType?: "pin" | "trivia";
+            pin?: string;
+            question?: string;
+            answer?: string;
+            particleStyle?: "hearts" | "roses" | "sparkles";
+          };
+          if (Array.isArray(parsed.addons)) setSelectedAddons(new Set(parsed.addons));
+          if (parsed.customSlug) setSlugInput(parsed.customSlug);
+          if (parsed.gateType === "trivia" || parsed.gateType === "pin") {
+            setGateMode(parsed.gateType);
+          }
+          if (parsed.pin) setPinInput(parsed.pin);
+          if (parsed.question) setTriviaQuestion(parsed.question);
+          if (parsed.answer) setTriviaAnswer(parsed.answer);
+          if (parsed.particleStyle) setParticleStyle(parsed.particleStyle);
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!isRemote() || cancelled) return;
+      try {
+        const r = await fetch(`/api/ucapan/${encodeURIComponent(editId)}`);
         const json = await r.json();
         if (!cancelled && json.ok && json.ucapan) {
           const u = json.ucapan;
           setContent(fillContentDefaults(u));
           setIsPaid(Boolean(u.paid));
-          // Pulihkan konfigurasi add-on dari database bila belum ada di sessionStorage
           const restored = new Set<AddonKey>();
           if (u.customSlug) {
             restored.add("custom_slug");
@@ -315,27 +513,40 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           }
           if (u.gateType) {
             restored.add("intimate_gate");
-            if (u.gateData?.pin) setPinInput(String(u.gateData.pin));
+            if (u.gateType === "trivia") {
+              setGateMode("trivia");
+              if (u.gateData?.question) setTriviaQuestion(String(u.gateData.question));
+              if (u.gateData?.answer) setTriviaAnswer(String(u.gateData.answer));
+            } else {
+              setGateMode("pin");
+              if (u.gateData?.pin) setPinInput(String(u.gateData.pin));
+            }
+          } else if (!u.paid && u.draftAddons?.addons?.includes("intimate_gate")) {
+            restored.add("intimate_gate");
+            if (u.draftAddons.gateType === "trivia") {
+              setGateMode("trivia");
+              if (u.draftAddons.question) setTriviaQuestion(String(u.draftAddons.question));
+              if (u.draftAddons.answer) setTriviaAnswer(String(u.draftAddons.answer));
+            } else if (u.draftAddons.pin) {
+              setGateMode("pin");
+              setPinInput(String(u.draftAddons.pin));
+            }
           }
           if (u.receiptEnabled) restored.add("love_receipt");
           if (restored.size > 0) setSelectedAddons(restored);
           markRestored();
         }
-      })
-      .catch(() => undefined);
+      } catch {
+        // ignore
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [editId]);
+  }, [editId, markRestored]);
 
   const previewContent = useMemo(() => fillContentDefaults(content), [content]);
-
-  const applyContent = useCallback(
-    (next: Partial<UcapanContent>) => setContent(next),
-    []
-  );
-  const { canUndo, canRedo, undo, redo, markRestored } =
-    useContentHistory<Partial<UcapanContent>>(content, applyContent);
 
   const isValidEmail = useCallback((email: string) => EMAIL_REGEX.test(email.trim()), []);
 
@@ -363,8 +574,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
     setUploading(true);
     try {
-      const supabase = createClient();
+      const uploadedUrls: string[] = [];
+
       if (isRemote()) {
+        const supabase = createClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -373,19 +586,27 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           router.push(`/login?next=${encodeURIComponent(`/buat/${slug}${editId ? `?edit=${editId}` : ""}`)}`);
           return;
         }
+        for (const file of selectedFiles) {
+          const blob = await compressImage(file);
+          const ext = blob.type === "image/webp" ? "webp" : "jpg";
+          // Simpan di bawah folder milik user (<user.id>/<uuid>.<ext>) untuk keamanan Storage RLS
+          const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+          const { error } = await supabase.storage
+            .from("foto")
+            .upload(path, blob, { contentType: blob.type });
+          if (error) throw error;
+          const url = `${supabaseUrl()}/storage/v1/object/public/foto/${path}`;
+          uploadedUrls.push(url);
+        }
+      } else {
+        // Demo Mode lokal: simpan gambar terkompres sebagai Data URL di browser
+        for (const file of selectedFiles) {
+          const blob = await compressImage(file, 900, 0.78);
+          const dataUrl = await blobToDataUrl(blob);
+          uploadedUrls.push(dataUrl);
+        }
       }
-      const uploadedUrls: string[] = [];
-      for (const file of selectedFiles) {
-        const blob = await compressImage(file);
-        const ext = blob.type === "image/webp" ? "webp" : "jpg";
-        const path = `${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage
-          .from("foto")
-          .upload(path, blob, { contentType: blob.type });
-        if (error) throw error;
-        const url = `${supabaseUrl()}/storage/v1/object/public/foto/${path}`;
-        uploadedUrls.push(url);
-      }
+
       if (uploadedUrls.length > 0) {
         setContent((c) => ({
           ...c,
@@ -401,12 +622,34 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   };
 
   const addonsInvalidReason = (): string | null => {
+    if (isPaid) return null;
     if (selectedAddons.has("custom_slug")) {
       if (!slugInput.trim()) return "Isi dulu alamat link cantikmu.";
       if (!slugCheck.valid) return slugCheck.reason ?? "Alamat link tidak valid.";
+      if (
+        slugAvailability.checkedSlug === slugCheck.normalized &&
+        slugAvailability.status === "taken"
+      ) {
+        return slugAvailability.reason ?? "Alamat custom sudah dipakai orang lain.";
+      }
+      if (
+        slugAvailability.checkedSlug === slugCheck.normalized &&
+        slugAvailability.status === "checking"
+      ) {
+        return "Tunggu sebentar, sedang memeriksa ketersediaan link cantik…";
+      }
     }
-    if (selectedAddons.has("intimate_gate") && !/^\d{4,6}$/.test(pinInput)) {
-      return "PIN harus 4–6 angka.";
+    if (selectedAddons.has("intimate_gate")) {
+      if (gateMode === "trivia") {
+        const q = triviaQuestion.trim();
+        const a = triviaAnswer.trim();
+        if (q.length < 3) return "Pertanyaan kuis nostalgia minimal 3 karakter.";
+        if (q.length > 160) return "Pertanyaan kuis nostalgia maksimal 160 karakter.";
+        if (a.length < 1) return "Isi dulu jawaban rahasia kuis nostalgia.";
+        if (a.length > 80) return "Jawaban rahasia maksimal 80 karakter.";
+      } else if (!/^\d{4,6}$/.test(pinInput)) {
+        return "PIN harus 4–6 angka.";
+      }
     }
     return null;
   };
@@ -418,12 +661,21 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
         JSON.stringify({
           addons: Array.from(selectedAddons),
           customSlug: selectedAddons.has("custom_slug") ? slugCheck.normalized : undefined,
-          pin: selectedAddons.has("intimate_gate") ? pinInput : undefined,
+          gateType: selectedAddons.has("intimate_gate") ? gateMode : undefined,
+          pin: selectedAddons.has("intimate_gate") && gateMode === "pin" ? pinInput : undefined,
+          question:
+            selectedAddons.has("intimate_gate") && gateMode === "trivia"
+              ? triviaQuestion.trim()
+              : undefined,
+          answer:
+            selectedAddons.has("intimate_gate") && gateMode === "trivia"
+              ? triviaAnswer.trim()
+              : undefined,
           particleStyle: selectedAddons.has("touch_particles") ? particleStyle : undefined,
         })
       );
     } catch {
-      // sessionStorage tidak tersedia — checkout akan tampil tanpa add-on
+      // sessionStorage tidak tersedia — checkout akan fallback ke draft_addons DB
     }
   };
 
@@ -443,7 +695,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       toast.error(addonError);
       return;
     }
-    AnalyticsEvents.paymentStarted(slug, BRAND.price);
+    AnalyticsEvents.paymentStarted(slug, checkoutCalc.totalAmount);
     setSaving(true);
     try {
       if (isRemote()) {
@@ -452,12 +704,21 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           ? {
               addons: Array.from(selectedAddons),
               customSlug: selectedAddons.has("custom_slug") ? slugCheck.normalized : undefined,
-              pin: selectedAddons.has("intimate_gate") ? pinInput : undefined,
+              gateType: selectedAddons.has("intimate_gate") ? gateMode : undefined,
+              pin: selectedAddons.has("intimate_gate") && gateMode === "pin" ? pinInput : undefined,
+              question:
+                selectedAddons.has("intimate_gate") && gateMode === "trivia"
+                  ? triviaQuestion.trim()
+                  : undefined,
+              answer:
+                selectedAddons.has("intimate_gate") && gateMode === "trivia"
+                  ? triviaAnswer.trim()
+                  : undefined,
               particleStyle: selectedAddons.has("touch_particles") ? particleStyle : undefined,
             }
           : {};
         const res = await fetch(
-          editId ? `/api/ucapan/${editId}` : "/api/ucapan",
+          editId ? `/api/ucapan/${encodeURIComponent(editId)}` : "/api/ucapan",
           {
             method: editId ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
@@ -469,13 +730,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           router.push(`/login?next=${encodeURIComponent(`/buat/${slug}${editId ? `?edit=${editId}` : ""}`)}`);
           return;
         }
-        const json = await res.json();
-        if (!json.ok) {
-          toast.error(
-            json.error === "EDIT_WINDOW_EXPIRED"
-              ? "Masa edit 7 hari sudah habis."
-              : "Gagal menyimpan ucapan. Coba lagi ya."
-          );
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          id?: string;
+          error?: string;
+          message?: string;
+        };
+        if (!res.ok || !json.ok) {
+          toast.error(mapServerSaveError(json.error, json.message));
           return;
         }
         const finalId: string = json.id ?? editId ?? "";
@@ -491,19 +753,21 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           } catch {
             // ignore
           }
-          saveDraft(slug, content);
+          clearDraft(slug);
           void clearDraftRemote(slug);
         }
         router.push(`/checkout/${finalId}`);
       } else {
         const id = editId ?? makeUcapanId();
-        const alreadyPaid = editId ? Boolean(getUcapan(id)?.paid) : false;
+        const existingLocal = editId ? getUcapan(id) : null;
+        const alreadyPaid = Boolean(existingLocal?.paid);
+        const nowTs = Date.now();
         savePaidUcapan({
           ...fillContentDefaults(content),
           id,
           paid: alreadyPaid,
-          paidAt: editId ? getUcapan(id)?.paidAt : undefined,
-          createdAt: editId ? getUcapan(id)?.createdAt ?? Date.now() : Date.now(),
+          paidAt: existingLocal?.paidAt,
+          createdAt: existingLocal?.createdAt ?? nowTs,
         });
         if (alreadyPaid && editId) {
           toast.success("Perubahan ucapan berhasil disimpan!");
@@ -511,6 +775,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           return;
         }
         persistAddons(id);
+        if (!editId) clearDraft(slug);
         router.push(`/checkout/${id}`);
       }
     } catch {
@@ -520,7 +785,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
   };
 
-  // Ref ke aksi builder — diisi setelah fungsi-fungsi didefinisikan (di bawah).
+  // Ref ke aksi builder — disinkronkan di dalam useEffect agar patuh aturan React 19 refs.
   const actionsRef = useRef<{
     undo: () => void;
     redo: () => void;
@@ -531,6 +796,18 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     redo: () => {},
     save: () => {},
     gotoSection: () => {},
+  });
+
+  useEffect(() => {
+    actionsRef.current.undo = undo;
+    actionsRef.current.redo = redo;
+    actionsRef.current.save = () => {
+      if (!saving) void goToPayment();
+    };
+    actionsRef.current.gotoSection = (i: number) => {
+      const section = SECTIONS[i];
+      if (section) setOpenSection(section.id);
+    };
   });
 
   useKeyboardShortcuts({
@@ -557,16 +834,6 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       </div>
     );
   }
-
-  actionsRef.current.undo = undo;
-  actionsRef.current.redo = redo;
-  actionsRef.current.save = () => {
-    if (!saving) void goToPayment();
-  };
-  actionsRef.current.gotoSection = (i: number) => {
-    const section = SECTIONS[i];
-    if (section) setOpenSection(section.id);
-  };
 
   const openSectionIndex = SECTIONS.findIndex((s) => s.id === openSection);
 
@@ -737,6 +1004,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 <input
                                   className={inputClass}
                                   placeholder="cth: Nabila"
+                                  maxLength={80}
                                   value={content.toName ?? ""}
                                   onChange={(e) => set("toName", e.target.value)}
                                 />
@@ -748,6 +1016,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 <input
                                   className={inputClass}
                                   placeholder="cth: Raka"
+                                  maxLength={80}
                                   value={content.fromName ?? ""}
                                   onChange={(e) => set("fromName", e.target.value)}
                                 />
@@ -759,6 +1028,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 <input
                                   className={inputClass}
                                   placeholder="cth: Untuk Kamu"
+                                  maxLength={120}
                                   value={content.title ?? ""}
                                   onChange={(e) => set("title", e.target.value)}
                                 />
@@ -803,11 +1073,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 <textarea
                                   className={`${inputClass} min-h-56 resize-y`}
                                   placeholder="Ceritakan perasaanmu…"
+                                  maxLength={5000}
                                   value={content.message ?? ""}
                                   onChange={(e) => set("message", e.target.value)}
                                 />
                                 <p className="text-label-md text-on-surface-variant mt-1.5">
-                                  {content.message?.length ?? 0} karakter
+                                  {content.message?.length ?? 0} / 5.000 karakter
                                 </p>
                               </div>
                               {pesanComplete && (
@@ -854,6 +1125,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                         key={`${photo}-${i}`}
                                         className="relative aspect-square rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low"
                                       >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                           src={photo}
                                           alt={`Foto ${i + 1}`}
@@ -913,53 +1185,77 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   Musik Latar
                                 </label>
                                 <p className="text-label-md text-on-surface-variant mb-3">
-                                  Pilih dari galeri royalty-free, atau (versi berbayar) tempel
-                                  URL MP3 sendiri.
+                                  Pilih dari galeri royalty-free, atau tempel URL audio MP3 sendiri (HTTPS).
                                 </p>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {MUSIC_LIBRARY.map((t) => {
                                     const active = content.musicUrl === t.url;
+                                    const isPlaying = playingTrackId === t.id;
                                     return (
-                                      <button
+                                      <div
                                         key={t.id}
-                                        type="button"
-                                        onClick={() => set("musicUrl", t.url)}
                                         className={cn(
-                                          "text-left rounded-xl border px-3 py-2 transition-all",
+                                          "flex items-center gap-1.5 rounded-xl border transition-all",
                                           active
                                             ? "border-transparent text-white shadow-md"
                                             : "border-outline-variant bg-white text-on-surface-variant hover:border-primary/40"
                                         )}
                                         style={active ? { background: "var(--color-primary)" } : undefined}
                                       >
-                                        <span className="block text-label-md font-semibold">
-                                          {t.title}
-                                        </span>
-                                        <span className="block text-label-sm opacity-80">
-                                          {t.artist} · {t.license}
-                                        </span>
-                                      </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => set("musicUrl", t.url)}
+                                          className="flex-1 min-w-0 text-left px-3 py-2"
+                                        >
+                                          <span className="block text-label-md font-semibold truncate">
+                                            {t.title}
+                                          </span>
+                                          <span className="block text-label-sm opacity-80 truncate">
+                                            {t.artist} · {t.license}
+                                          </span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleTrackPreview(t)}
+                                          aria-label={
+                                            isPlaying
+                                              ? `Hentikan pratinjau ${t.title}`
+                                              : `Putar pratinjau ${t.title}`
+                                          }
+                                          title={
+                                            isPlaying
+                                              ? "Hentikan pratinjau"
+                                              : "Dengarkan pratinjau"
+                                          }
+                                          className={cn(
+                                            "mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                                            active
+                                              ? "bg-white/20 text-white hover:bg-white/30"
+                                              : isPlaying
+                                                ? "bg-primary text-white"
+                                                : "bg-primary-fixed/40 text-primary hover:bg-primary hover:text-white"
+                                          )}
+                                        >
+                                          {isPlaying ? (
+                                            <Pause className="h-3.5 w-3.5" />
+                                          ) : (
+                                            <Play className="h-3.5 w-3.5 ml-0.5" />
+                                          )}
+                                        </button>
+                                      </div>
                                     );
                                   })}
                                 </div>
-                                {plan.music ? (
-                                  <div className="relative mt-3">
-                                    <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
-                                    <input
-                                      className={`${inputClass} pl-11`}
-                                      placeholder="https://…/lagu.mp3"
-                                      value={content.musicUrl ?? ""}
-                                      onChange={(e) => set("musicUrl", e.target.value)}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-3 mt-3 text-center">
-                                    <p className="text-label-md text-on-surface-variant">
-                                      URL MP3 sendiri hanya untuk versi berbayar. Galeri di atas
-                                      gratis digunakan.
-                                    </p>
-                                  </div>
-                                )}
+                                <div className="relative mt-3">
+                                  <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
+                                  <input
+                                    className={`${inputClass} pl-11`}
+                                    placeholder="https://…/lagu.mp3"
+                                    maxLength={500}
+                                    value={content.musicUrl ?? ""}
+                                    onChange={(e) => set("musicUrl", e.target.value)}
+                                  />
+                                </div>
 
                                 <div className="mt-4">
                                   <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
@@ -967,13 +1263,13 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   </label>
                                   <input
                                     className={inputClass}
-                                    placeholder="https://…/video.mp4"
+                                    placeholder="https://…/video.mp4 atau link YouTube"
+                                    maxLength={500}
                                     value={content.videoUrl ?? ""}
                                     onChange={(e) => set("videoUrl", e.target.value)}
                                   />
                                   <p className="text-label-md text-on-surface-variant mt-1.5">
-                                    Upload video menyusul (butuh akun berbayar + storage). Untuk
-                                    sekarang cukup tempel URL video publik.
+                                    Mendukung tautan YouTube / Shorts atau URL video MP4 publik (HTTPS).
                                   </p>
                                 </div>
                               </div>
@@ -1066,23 +1362,33 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
                           {section.id === "tambahan" && (
                             <div className="space-y-5">
-                              <p className="text-label-md text-on-surface-variant leading-relaxed">
-                                Opsional. Semua efek di bawah langsung bisa dicoba di Live Preview.
-                              </p>
+                              {isPaid ? (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-label-md text-amber-800">
+                                  🔒 Pengaturan add-on terkunci setelah ucapan aktif. Kamu tetap
+                                  bisa mengedit isi surat, foto, musik, video, dan timeline.
+                                </div>
+                              ) : (
+                                <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                  Opsional. Semua efek di bawah langsung bisa dicoba di Live Preview.
+                                </p>
+                              )}
 
                               <div className="space-y-2.5">
                                 {(Object.keys(ADDON_PRICING) as AddonKey[]).map((key) => {
                                   const addon = ADDON_PRICING[key];
                                   const active = selectedAddons.has(key);
+                                  const slugLiveMatches =
+                                    slugAvailability.checkedSlug === slugCheck.normalized;
                                   return (
                                     <div key={key}>
                                       <button
                                         type="button"
+                                        disabled={isPaid}
                                         onClick={() => toggleAddon(key)}
                                         aria-pressed={active}
                                         aria-expanded={active}
                                         className={cn(
-                                          "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3",
+                                          "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3 disabled:opacity-70 disabled:cursor-not-allowed",
                                           active
                                             ? "border-primary bg-primary-fixed/20 ring-1 ring-primary/20"
                                             : "border-outline-variant/50 bg-white hover:border-primary/40"
@@ -1122,50 +1428,161 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                               </label>
                                               <input
                                                 className={inputClass}
+                                                disabled={isPaid}
                                                 placeholder="cth: ari-nadia"
+                                                maxLength={50}
                                                 value={slugInput}
                                                 onChange={(e) => setSlugInput(e.target.value)}
                                               />
                                               <p
-                                                className={`text-label-md mt-1.5 ${
+                                                className={`text-label-md mt-1.5 flex items-center gap-1.5 ${
                                                   !slugInput.trim()
                                                     ? "text-on-surface-variant"
-                                                    : slugCheck.valid
-                                                      ? "text-green-600"
-                                                      : "text-red-500"
+                                                    : !slugCheck.valid
+                                                      ? "text-red-500"
+                                                      : !isPaid && slugLiveMatches && slugAvailability.status === "checking"
+                                                        ? "text-on-surface-variant"
+                                                        : !isPaid && slugLiveMatches && (slugAvailability.status === "taken" || slugAvailability.status === "error")
+                                                          ? "text-red-500"
+                                                          : "text-green-600"
                                                 }`}
                                               >
-                                                {!slugInput.trim()
-                                                  ? "Link jadi: /u/…"
-                                                  : slugCheck.valid
-                                                    ? `Link jadi: /u/${slugCheck.normalized}`
-                                                    : slugCheck.reason}
+                                                {!slugInput.trim() ? (
+                                                  "Link jadi: /u/…"
+                                                ) : !slugCheck.valid ? (
+                                                  slugCheck.reason
+                                                ) : isPaid ? (
+                                                  `Link aktif: /u/${slugCheck.normalized}`
+                                                ) : slugLiveMatches && slugAvailability.status === "checking" ? (
+                                                  <>
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    Memeriksa ketersediaan /u/{slugCheck.normalized}…
+                                                  </>
+                                                ) : slugLiveMatches && (slugAvailability.status === "taken" || slugAvailability.status === "error") ? (
+                                                  slugAvailability.reason
+                                                ) : slugLiveMatches && slugAvailability.status === "available" ? (
+                                                  `✓ Tersedia — Link jadi: /u/${slugCheck.normalized}`
+                                                ) : (
+                                                  `Link jadi: /u/${slugCheck.normalized}`
+                                                )}
                                               </p>
                                             </div>
                                           )}
 
                                           {key === "intimate_gate" && (
-                                            <div>
-                                              <label className="block text-label-md font-semibold text-on-surface mb-1.5">
-                                                PIN Rahasia (4–6 angka)
-                                              </label>
-                                              <input
-                                                type="password"
-                                                inputMode="numeric"
-                                                maxLength={6}
-                                                className={inputClass}
-                                                placeholder="cth: 1204"
-                                                value={pinInput}
-                                                onChange={(e) =>
-                                                  setPinInput(
-                                                    e.target.value.replace(/\D/g, "").slice(0, 6)
-                                                  )
-                                                }
-                                              />
-                                              <p className="text-label-md text-on-surface-variant mt-1.5">
-                                                Penerima harus mengetik PIN ini. Coba di preview
-                                                sekarang.
-                                              </p>
+                                            <div className="space-y-3">
+                                              <div>
+                                                <p className="text-label-md font-semibold text-on-surface mb-1.5">
+                                                  Pilih Jenis Kunci
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Jenis kunci pesan">
+                                                  {(
+                                                    [
+                                                      { id: "pin" as const, label: "🔢 Kode PIN" },
+                                                      { id: "trivia" as const, label: "💌 Kuis Nostalgia" },
+                                                    ]
+                                                  ).map((opt) => (
+                                                    <button
+                                                      key={opt.id}
+                                                      type="button"
+                                                      disabled={isPaid}
+                                                      aria-pressed={gateMode === opt.id}
+                                                      onClick={() => {
+                                                        setGateMode(opt.id);
+                                                        setPreviewGateOpen(true);
+                                                      }}
+                                                      className={cn(
+                                                        "rounded-2xl border px-3 py-2 text-label-md font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed",
+                                                        gateMode === opt.id
+                                                          ? "border-primary bg-primary-fixed/25 text-primary ring-1 ring-primary/20"
+                                                          : "border-outline-variant/50 bg-white text-on-surface-variant hover:border-primary/40"
+                                                      )}
+                                                    >
+                                                      {opt.label}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              </div>
+
+                                              {gateMode === "pin" ? (
+                                                <div>
+                                                  <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                    PIN Rahasia (4–6 angka)
+                                                  </label>
+                                                  <input
+                                                    type="password"
+                                                    inputMode="numeric"
+                                                    disabled={isPaid}
+                                                    maxLength={6}
+                                                    className={inputClass}
+                                                    placeholder="cth: 1204"
+                                                    value={pinInput}
+                                                    onChange={(e) =>
+                                                      setPinInput(
+                                                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                                                      )
+                                                    }
+                                                  />
+                                                  <p className="text-label-md text-on-surface-variant mt-1.5">
+                                                    Penerima harus mengetik PIN ini. Coba di preview
+                                                    sekarang.
+                                                  </p>
+                                                </div>
+                                              ) : (
+                                                <div className="space-y-3">
+                                                  <div>
+                                                    <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                      Pertanyaan Kuis Nostalgia
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      disabled={isPaid}
+                                                      maxLength={160}
+                                                      className={inputClass}
+                                                      placeholder="cth: Di mana kencan pertama kita?"
+                                                      value={triviaQuestion}
+                                                      onChange={(e) =>
+                                                        setTriviaQuestion(e.target.value)
+                                                      }
+                                                    />
+                                                    {!isPaid && (
+                                                      <div className="flex flex-wrap gap-1.5 mt-2">
+                                                        {TRIVIA_PROMPTS.map((prompt) => (
+                                                          <button
+                                                            key={prompt}
+                                                            type="button"
+                                                            onClick={() => setTriviaQuestion(prompt)}
+                                                            className="rounded-full border border-outline-variant/60 bg-white px-2.5 py-1 text-[11px] font-medium text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors"
+                                                          >
+                                                            {prompt}
+                                                          </button>
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                      Jawaban Rahasia
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      disabled={isPaid}
+                                                      maxLength={80}
+                                                      className={inputClass}
+                                                      placeholder="cth: Kedai Kopi Senja"
+                                                      value={triviaAnswer}
+                                                      onChange={(e) =>
+                                                        setTriviaAnswer(e.target.value)
+                                                      }
+                                                    />
+                                                    <p className="text-label-md text-on-surface-variant mt-1.5">
+                                                      Tidak membedakan huruf besar/kecil atau spasi
+                                                      ganda. Coba di preview sekarang.
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
 
@@ -1179,10 +1596,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                   <button
                                                     key={p.key}
                                                     type="button"
+                                                    disabled={isPaid}
                                                     onClick={() => setParticleStyle(p.key)}
                                                     aria-pressed={particleStyle === p.key}
                                                     className={cn(
-                                                      "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all",
+                                                      "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed",
                                                       particleStyle === p.key
                                                         ? "border-primary bg-primary-fixed/20 text-primary ring-1 ring-primary/20"
                                                         : "border-outline-variant/50 bg-white text-on-surface-variant"
@@ -1375,6 +1793,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             <motion.div
               ref={previewFrameRef}
               data-light-card
+              data-lenis-prevent
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
@@ -1382,7 +1801,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                 previewMode === "mobile" ? "max-w-[375px] mx-auto" : "max-w-full"
               }`}
             >
-              <div className="h-[560px] overflow-y-auto bg-surface">
+              <div data-lenis-prevent className="h-[560px] overflow-y-auto bg-surface">
                 <TemplateRenderer content={previewContent} preview />
               </div>
 
@@ -1393,10 +1812,15 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
               {selectedAddons.has("intimate_gate") && previewGateOpen && (
                 <GateOverlay
+                  key={gateMode}
                   toName={content.toName || "Kamu"}
                   fromName={content.fromName || "Aku"}
-                  gateType="pin"
-                  gateData={{ pin: pinInput }}
+                  gateType={gateMode}
+                  gateData={
+                    gateMode === "trivia"
+                      ? { question: triviaQuestion, answer: triviaAnswer }
+                      : { pin: pinInput }
+                  }
                   variant="embedded"
                   onUnlock={() => setPreviewGateOpen(false)}
                 />
@@ -1426,18 +1850,33 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       {/* CTA mobile mengambang */}
       <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 backdrop-blur border-t border-outline-variant/30 px-5 py-3.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
-          <p className="text-title-md font-bold text-primary">
-            {formatPrice(checkoutCalc.totalAmount)}
-          </p>
+          {isPaid ? (
+            <>
+              <p className="text-label-md text-on-surface-variant">Mode edit</p>
+              <p className="text-title-md font-bold text-green-700">Ucapan Aktif</p>
+            </>
+          ) : (
+            <>
+              <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
+              <p className="text-title-md font-bold text-primary">
+                {formatPrice(checkoutCalc.totalAmount)}
+              </p>
+            </>
+          )}
         </div>
         <button
           onClick={() => void goToPayment()}
           disabled={saving || !canPay}
           className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] disabled:opacity-50 transition-all"
         >
-          {saving ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <CreditCard className="h-4.5 w-4.5" />}
-          Bayar
+          {saving ? (
+            <Loader2 className="h-4.5 w-4.5 animate-spin" />
+          ) : isPaid ? (
+            <Check className="h-4.5 w-4.5" />
+          ) : (
+            <CreditCard className="h-4.5 w-4.5" />
+          )}
+          {isPaid ? "Simpan" : "Bayar"}
         </button>
       </div>
 

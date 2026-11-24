@@ -1,30 +1,92 @@
 -- ============================================================
--- PesanManis: Skema Migrasi v9 — Keamanan RLS & Batas Bucket
--- Jalankan setelah schema_v8.sql di database yang sudah ada.
+-- PesanManis: Skema Migrasi v9 — Keamanan RLS, Privasi & Integritas Pembayaran
+-- Jalankan setelah schema_v8.sql di database yang sudah ada (idempotent).
 -- ============================================================
 
--- 1. RLS: Publik tidak boleh baca seluruh tabel ucapan (strip email & gate_data)
+-- 1. Ucapan: kolom draft_addons + partial unique index custom_slug (hanya paid = true)
+alter table public.ucapan
+  add column if not exists draft_addons jsonb default null;
+
+alter table public.ucapan
+  drop constraint if exists ucapan_custom_slug_key;
+
+drop index if exists public.ucapan_custom_slug_idx;
+
+create unique index if not exists ucapan_paid_custom_slug_uniq
+  on public.ucapan (custom_slug)
+  where paid = true and custom_slug is not null;
+
+create index if not exists ucapan_owner_created_idx
+  on public.ucapan (owner_id, created_at desc);
+
+create index if not exists ucapan_gate_type_idx
+  on public.ucapan (gate_type)
+  where gate_type is not null;
+
+-- 2. RLS public.ucapan (TO authenticated + initPlan (select auth.uid()))
 drop policy if exists "publik bisa baca ucapan" on public.ucapan;
 create policy "publik bisa baca ucapan" on public.ucapan
-  for select using (auth.uid() = owner_id);
+  for select to authenticated
+  using ((select auth.uid()) = owner_id);
 
--- 2. RLS: Tambah with check pada update + trigger pengaman kolom berbayar
+drop policy if exists "pemilik buat ucapan" on public.ucapan;
+create policy "pemilik buat ucapan" on public.ucapan
+  for insert to authenticated
+  with check ((select auth.uid()) = owner_id);
+
 drop policy if exists "pemilik update ucapan" on public.ucapan;
 create policy "pemilik update ucapan" on public.ucapan
-  for update using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  for update to authenticated
+  using ((select auth.uid()) = owner_id)
+  with check ((select auth.uid()) = owner_id);
 
--- Trigger: tolak perubahan kolom berbayar kecuali service_role
+drop policy if exists "pemilik hapus ucapan" on public.ucapan;
+create policy "pemilik hapus ucapan" on public.ucapan
+  for delete to authenticated
+  using ((select auth.uid()) = owner_id);
+
+-- 3. Trigger: tolak penyetelan kolom berbayar pada INSERT maupun UPDATE oleh non-service_role
+create or replace function public.prevent_paid_columns_insert()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+begin
+  if caller_role is distinct from 'service_role' then
+    if new.paid is true
+      or new.paid_at is not null
+      or new.custom_slug is not null
+      or new.qr_photo_enabled is true
+      or new.touch_particles is not null
+      or new.gate_type is not null
+      or new.gate_data is not null
+      or new.receipt_enabled is true
+    then
+      raise exception 'Kolom berbayar dan add-on hanya bisa diaktifkan oleh sistem';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prevent_paid_columns_insert on public.ucapan;
+create trigger trg_prevent_paid_columns_insert
+  before insert on public.ucapan
+  for each row
+  execute function public.prevent_paid_columns_insert();
+
 create or replace function public.prevent_paid_columns_update()
 returns trigger
 language plpgsql
-security definer
+set search_path = ''
 as $$
 declare
-  caller_role text := current_setting('request.jwt.claim.role', true);
+  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
 begin
-  -- Hanya service_role (webhook, admin) yang boleh ubah kolom ini
-  if caller_role <> 'service_role' then
+  -- Hanya service_role (webhook, status server, admin) yang boleh ubah kolom ini
+  if caller_role is distinct from 'service_role' then
     if new.paid is distinct from old.paid then
       raise exception 'Kolom paid hanya bisa diubah oleh sistem';
     end if;
@@ -52,6 +114,9 @@ begin
     if new.receipt_enabled is distinct from old.receipt_enabled then
       raise exception 'Kolom receipt_enabled hanya bisa diubah oleh sistem';
     end if;
+    if old.paid is true and new.draft_addons is distinct from old.draft_addons then
+      raise exception 'Kolom draft_addons tidak boleh diubah setelah pembayaran lunas';
+    end if;
   end if;
   return new;
 end;
@@ -63,18 +128,103 @@ create trigger trg_prevent_paid_columns_update
   for each row
   execute function public.prevent_paid_columns_update();
 
--- 3. Storage bucket 'foto': batas 5 MB & tipe MIME gambar
-update storage.buckets
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+-- 4. Payments: simpan snapshot add-on, harga dasar, promo flag, credit_used, & ON DELETE SET NULL
+alter table public.payments
+  add column if not exists credit_used bigint not null default 0,
+  add column if not exists base_amount bigint,
+  add column if not exists is_promo boolean not null default false,
+  add column if not exists addon_config jsonb not null default '{}'::jsonb;
+
+-- Backfill transaksi promo lama (sebelum kolom is_promo ada)
+update public.payments
 set
-  file_size_limit = 5242880,
-  allowed_mime_types = array['image/jpeg','image/png','image/webp','image/gif']
-where id = 'foto';
+  is_promo = true,
+  base_amount = coalesce(base_amount, 8900)
+where status = 'PAID'
+  and amount = 8900
+  and is_promo = false;
 
--- 4. Opsional: index untuk performa verifikasi gate
-create index if not exists ucapan_gate_type_idx on public.ucapan (gate_type) where gate_type is not null;
+-- Jangan hapus riwayat pembayaran saat ucapan dihapus pemilik
+alter table public.payments
+  drop constraint if exists payments_ucapan_id_fkey;
 
--- 5. Referral multi-invite: izinkan satu kode referral dipakai oleh beberapa teman
---    (1 baris master dengan referee_id IS NULL per referrer, dan 1 baris per referee_id)
+alter table public.payments
+  add constraint payments_ucapan_id_fkey
+  foreign key (ucapan_id) references public.ucapan(id) on delete set null;
+
+create index if not exists payments_ucapan_id_idx
+  on public.payments (ucapan_id);
+
+create index if not exists payments_tripay_ref_idx
+  on public.payments (tripay_ref)
+  where tripay_ref is not null;
+
+create index if not exists payments_status_promo_idx
+  on public.payments (status, is_promo)
+  where status = 'PAID' and is_promo = true;
+
+drop policy if exists "pemilik bisa baca payment" on public.payments;
+create policy "pemilik bisa baca payment" on public.payments
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = payments.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
+  );
+
+-- 5. Kunci RLS views, reactions, dan replies (baca/tulis publik wajib lewat API Next.js)
+drop policy if exists "anon bisa insert view" on public.views;
+drop policy if exists "pemilik bisa baca views" on public.views;
+create policy "pemilik bisa baca views" on public.views
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = views.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "publik bisa baca reactions" on public.reactions;
+drop policy if exists "publik bisa insert reactions" on public.reactions;
+drop policy if exists "pemilik bisa baca reactions" on public.reactions;
+create policy "pemilik bisa baca reactions" on public.reactions
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = reactions.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
+  );
+
+drop policy if exists "publik bisa baca replies" on public.replies;
+drop policy if exists "publik bisa insert replies" on public.replies;
+drop policy if exists "pemilik bisa baca replies" on public.replies;
+create policy "pemilik bisa baca replies" on public.replies
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = replies.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
+  );
+
+-- 6. Referral multi-invite & Credits idempotency
 alter table public.referrals
   drop constraint if exists referrals_code_key;
 
@@ -86,9 +236,19 @@ create unique index if not exists referrals_referee_unique_idx
   on public.referrals (referee_id)
   where referee_id is not null;
 
--- 6. Payments: simpan nominal saldo referral (credits) yang dipakai saat checkout
-alter table public.payments
-  add column if not exists credit_used bigint not null default 0;
+drop policy if exists "pemilik baca referrals" on public.referrals;
+create policy "pemilik baca referrals" on public.referrals
+  for select to authenticated
+  using (referrer_id = (select auth.uid()));
+
+create unique index if not exists credits_user_type_ref_uniq
+  on public.credits (user_id, type, reference_id)
+  where reference_id is not null;
+
+drop policy if exists "pemilik baca credits" on public.credits;
+create policy "pemilik baca credits" on public.credits
+  for select to authenticated
+  using (user_id = (select auth.uid()));
 
 -- 7. Drafts: tabel penyimpanan draft ucapan antar-perangkat untuk user login
 create table if not exists public.drafts (
@@ -104,10 +264,72 @@ alter table public.drafts enable row level security;
 
 drop policy if exists "pemilik kelola drafts" on public.drafts;
 create policy "pemilik kelola drafts" on public.drafts
-  for all
+  for all to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
--- 8. Catatan: Halaman publik (/t/..., /u/...) sekarang harus menggunakan
---    createAdminClient() di Server Component dan melakukan strip email/gate_data
---    sebelum mengirim ke client.
+-- 8. Newsletter Subscribers (hanya ditulis oleh server melalui service_role)
+create table if not exists public.newsletter_subscribers (
+  id bigint generated always as identity primary key,
+  email text unique not null,
+  source text not null default 'footer',
+  created_at timestamptz not null default now()
+);
+
+alter table public.newsletter_subscribers enable row level security;
+
+-- 9. Storage bucket 'foto': batas 5 MB, tipe MIME gambar, dan wajib authenticated per folder user
+update storage.buckets
+set
+  file_size_limit = 5242880,
+  allowed_mime_types = array['image/jpeg','image/png','image/webp','image/gif']
+where id = 'foto';
+
+drop policy if exists "anonim upload foto" on storage.objects;
+drop policy if exists "pemilik upload foto" on storage.objects;
+create policy "pemilik upload foto" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'foto'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "pemilik hapus foto" on storage.objects;
+create policy "pemilik hapus foto" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'foto'
+    and (
+      owner_id = (select auth.uid())::text
+      or (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+  );
+
+-- 10. Realtime Publications (lengkapi views & ucapan dengan reactions & replies untuk Dashboard live)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'views'
+  ) then
+    alter publication supabase_realtime add table public.views;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ucapan'
+  ) then
+    alter publication supabase_realtime add table public.ucapan;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'reactions'
+  ) then
+    alter publication supabase_realtime add table public.reactions;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'replies'
+  ) then
+    alter publication supabase_realtime add table public.replies;
+  end if;
+end $$;

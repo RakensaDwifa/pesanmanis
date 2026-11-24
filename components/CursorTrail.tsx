@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
 
 const HEARTS = ["💖", "💕", "🌸", "✨", "💗"];
 
 export default function CursorTrail() {
   const reduced = usePrefersReducedMotion();
-  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     if (reduced) return;
     const coarse = window.matchMedia?.("(pointer: coarse)").matches;
     if (coarse) return;
-    setEnabled(true);
-  }, [reduced]);
 
-  useEffect(() => {
-    if (!enabled) return;
     let lastT = 0;
     const onMove = (e: PointerEvent) => {
       const now = Date.now();
@@ -43,7 +38,7 @@ export default function CursorTrail() {
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
-  }, [enabled]);
+  }, [reduced]);
 
   return null;
 }

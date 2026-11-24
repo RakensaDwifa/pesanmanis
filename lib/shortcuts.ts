@@ -11,7 +11,6 @@ function eventToCombo(e: KeyboardEvent): string {
   if (e.shiftKey) parts.push("shift");
   if (e.altKey) parts.push("alt");
   const key = e.key.toLowerCase();
-  // Hindari dobel saat key itu sendiri adalah modifier
   if (!["control", "meta", "shift", "alt"].includes(key)) {
     parts.push(key === " " ? "space" : key);
   }
@@ -28,7 +27,10 @@ export function useKeyboardShortcuts(
   enabled = true
 ) {
   const handlersRef = useRef(shortcuts);
-  handlersRef.current = shortcuts;
+
+  useEffect(() => {
+    handlersRef.current = shortcuts;
+  }, [shortcuts]);
 
   useEffect(() => {
     if (!enabled) return;

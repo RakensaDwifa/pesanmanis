@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { buildDraftAddonColumns, mapUcapanRow, toUcapanRow, validateUcapanInput } from "@/lib/supabase/rows";
+import {
+  buildDraftAddonState,
+  mapUcapanRow,
+  toUcapanRow,
+  validateUcapanInput,
+} from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
 import type { UcapanContent } from "@/lib/types";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { isRecord } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -98,66 +103,78 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
   }
 
-  const { success } = await checkRateLimit(getClientIp(request), 5, 60000);
+  const { success } = await checkRateLimit(`ucapan-create:${getClientIp(request)}`, 5, 60000);
   if (!success) {
     return NextResponse.json(
-      { ok: false, error: "RATE_LIMIT_EXCEEDED", message: "Terlalu banyak permintaan. Coba lagi dalam 1 menit." },
+      {
+        ok: false,
+        error: "RATE_LIMIT_EXCEEDED",
+        message: "Terlalu banyak permintaan. Coba lagi dalam 1 menit.",
+      },
       { status: 429 }
     );
-  }
-
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // Validasi input
-  const validation = validateUcapanInput(body as Partial<UcapanContent>);
-  if (!validation.valid) {
-    return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
-  }
-
   if (!user) {
     return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
   }
 
-  if (!body.templateSlug) {
-    return NextResponse.json({ ok: false, error: "MISSING_TEMPLATE" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
-  const addonCols = buildDraftAddonColumns({
+  if (!isRecord(body)) {
+    return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  const validation = validateUcapanInput(body);
+  if (!validation.valid) {
+    return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
+  }
+
+  const draftAddons = buildDraftAddonState({
     addons: body.addons,
     customSlug: typeof body.customSlug === "string" ? body.customSlug : null,
+    gateType: typeof body.gateType === "string" ? body.gateType : null,
     pin: typeof body.pin === "string" ? body.pin : null,
+    question: typeof body.question === "string" ? body.question : null,
+    answer: typeof body.answer === "string" ? body.answer : null,
     particleStyle: typeof body.particleStyle === "string" ? body.particleStyle : null,
   });
 
-  const admin = createAdminClient();
-  if (addonCols.custom_slug) {
-    const { data: taken } = await admin
-      .from("ucapan")
-      .select("id")
-      .eq("custom_slug", addonCols.custom_slug)
-      .maybeSingle();
-    if (taken) addonCols.custom_slug = null;
-  }
+  const basePayload: Record<string, unknown> = {
+    owner_id: user.id,
+    ...toUcapanRow(body as Partial<UcapanContent>),
+  };
 
-  const { data, error } = await admin
+  const insertPayload =
+    draftAddons !== null
+      ? { ...basePayload, draft_addons: draftAddons }
+      : basePayload;
+
+  // Use user-scoped Supabase client so RLS and BEFORE INSERT trigger are enforced.
+  let { data, error } = await supabase
     .from("ucapan")
-    .insert({
-      owner_id: user.id,
-      ...toUcapanRow(body as Partial<UcapanContent>),
-      ...addonCols,
-    })
+    .insert(insertPayload)
     .select("id")
     .single();
+
+  // Graceful fallback if schema_v9 draft_addons column has not been applied yet.
+  if (error?.code === "42703" && "draft_addons" in insertPayload) {
+    console.warn("[ucapan-create] kolom draft_addons belum tersedia, menyimpan tanpa draft_addons");
+    ({ data, error } = await supabase
+      .from("ucapan")
+      .insert(basePayload)
+      .select("id")
+      .single());
+  }
 
   if (error || !data) {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });

@@ -1,36 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 
 const THEME_KEY = "up_theme";
+const emptySubscribe = () => () => {};
 
 function applyTheme(dark: boolean) {
   document.documentElement.classList.toggle("dark", dark);
 }
 
-export default function ThemeToggle({ className = "" }: { className?: string }) {
-  const [dark, setDark] = useState(false);
-  const [mounted, setMounted] = useState(false);
+function readPreferredDark(): boolean {
+  if (typeof window === "undefined") return false;
+  let stored: string | null = null;
+  try {
+    stored = window.localStorage.getItem(THEME_KEY);
+  } catch {
+    // ignore
+  }
+  return (
+    stored === "dark" ||
+    (stored === null &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches)
+  );
+}
 
-  useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = window.localStorage.getItem(THEME_KEY);
-    } catch {
-      // ignore
-    }
-    const prefersDark =
-      stored === "dark" ||
-      (stored === null &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
-    setDark(prefersDark);
-    setMounted(true);
-  }, []);
+export default function ThemeToggle({ className = "" }: { className?: string }) {
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+  const initialDark = useSyncExternalStore(
+    emptySubscribe,
+    readPreferredDark,
+    () => false
+  );
+  const [overrideDark, setOverrideDark] = useState<boolean | null>(null);
+  const dark = overrideDark ?? initialDark;
 
   const toggle = () => {
     const next = !dark;
-    setDark(next);
+    setOverrideDark(next);
     applyTheme(next);
     try {
       window.localStorage.setItem(THEME_KEY, next ? "dark" : "light");

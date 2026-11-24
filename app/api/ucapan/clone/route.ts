@@ -3,8 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import type { UcapanRow } from "@/lib/supabase/rows";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+const COPY_SUFFIX = " (Salinan)";
+const MAX_TITLE_LENGTH = 120;
+
+function makeClonedTitle(rawTitle: string | null | undefined): string {
+  const base = (rawTitle ?? "").trim() || "Untuk Kamu";
+  const maxBaseLen = MAX_TITLE_LENGTH - COPY_SUFFIX.length;
+  const trimmedBase = base.length > maxBaseLen ? base.slice(0, maxBaseLen).trimEnd() : base;
+  return `${trimmedBase}${COPY_SUFFIX}`;
+}
 
 export async function POST(request: Request) {
   if (!isRemote()) {
@@ -16,15 +27,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "RATE_LIMIT_EXCEEDED" }, { status: 429 });
   }
 
-  let body: { id?: string };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
-  const sourceId = body.id;
-  if (!sourceId) {
+  const sourceId = isRecord(body) ? body.id : undefined;
+  if (!isValidUuid(sourceId)) {
     return NextResponse.json({ ok: false, error: "MISSING_ID" }, { status: 400 });
   }
 
@@ -51,7 +62,7 @@ export async function POST(request: Request) {
   const src = source as UcapanRow;
   const now = new Date().toISOString();
 
-  // Clone: konten sama, status unpaid, judul diberi suffix
+  // Clone: konten sama, status unpaid, judul dibatasi <= 120 karakter
   const { data: clone, error: insertErr } = await supabase
     .from("ucapan")
     .insert({
@@ -59,7 +70,7 @@ export async function POST(request: Request) {
       template_slug: src.template_slug,
       to_name: src.to_name,
       from_name: src.from_name,
-      title: `${src.title || "Untuk Kamu"} (Salinan)`,
+      title: makeClonedTitle(src.title),
       message: src.message,
       photos: src.photos ?? [],
       music_url: src.music_url,

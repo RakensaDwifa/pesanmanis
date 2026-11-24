@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Download, Heart, Receipt, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface LoveReceiptModalProps {
   toName: string;
@@ -10,6 +11,15 @@ interface LoveReceiptModalProps {
   templateSlug?: string;
   /** "embedded" → tombol menempel di dalam frame preview. */
   variant?: "floating" | "embedded";
+}
+
+function sanitizeFileSegment(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return cleaned || "spesial";
 }
 
 export default function LoveReceiptModal({
@@ -28,11 +38,7 @@ export default function LoveReceiptModal({
         month: "short",
         year: "numeric",
       })
-    : new Date().toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
+    : "Hari Spesial";
 
   async function handleDownload() {
     if (!receiptRef.current) return;
@@ -46,11 +52,11 @@ export default function LoveReceiptModal({
       });
 
       const link = document.createElement("a");
-      link.download = `Struk-Cinta-${toName}.png`;
+      link.download = `Struk-Cinta-${sanitizeFileSegment(toName)}.png`;
       link.href = dataUrl;
       link.click();
-    } catch (err) {
-      console.error("Gagal mengunduh struk cinta:", err);
+    } catch {
+      toast.error("Gagal mengunduh struk cinta. Coba lagi ya.");
     } finally {
       setDownloading(false);
     }
@@ -75,6 +81,7 @@ export default function LoveReceiptModal({
       {/* Modal Backdrop */}
       {isOpen && (
         <div
+          data-lenis-prevent
           className={
             variant === "floating"
               ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
@@ -85,6 +92,7 @@ export default function LoveReceiptModal({
             {/* Close Button */}
             <button
               onClick={() => setIsOpen(false)}
+              aria-label="Tutup struk"
               className="absolute top-4 right-4 rounded-full p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors"
             >
               <X className="h-5 w-5" />
@@ -151,7 +159,7 @@ export default function LoveReceiptModal({
             {/* Action Download */}
             <div className="mt-4 w-full flex gap-2">
               <button
-                onClick={handleDownload}
+                onClick={() => void handleDownload()}
                 disabled={downloading}
                 className="w-full rounded-full bg-rose-500 py-3 text-xs font-semibold text-white shadow hover:bg-rose-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >

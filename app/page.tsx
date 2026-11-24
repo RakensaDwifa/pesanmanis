@@ -145,7 +145,7 @@ export default function HomePage() {
                 className="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-primary-fixed/60 to-surface-container-highest blur-2xl"
               />
               <div className="relative w-[300px] sm:w-[340px] rounded-[2.5rem] border-[10px] border-white shadow-[0_30px_80px_rgba(222,112,56,0.25)] overflow-hidden bg-surface">
-                <div className="h-[520px] overflow-y-auto no-scrollbar">
+                <div data-lenis-prevent className="h-[520px] overflow-y-auto no-scrollbar">
                   <TemplateRenderer content={heroSample} preview />
                 </div>
               </div>

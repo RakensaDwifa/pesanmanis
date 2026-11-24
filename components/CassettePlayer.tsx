@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Play, Pause } from "lucide-react";
 import type { UcapanContent } from "@/lib/types";
@@ -8,37 +8,68 @@ import { playSfx } from "@/lib/sfx";
 
 export default function CassettePlayer({ content }: { content: UcapanContent }) {
   const [playing, setPlaying] = useState(false);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentUrlRef = useRef<string | undefined>(content.musicUrl);
+
+  // Sync audio element when musicUrl changes (e.g. switching tracks inside Builder Live Preview).
+  useEffect(() => {
+    const prevUrl = currentUrlRef.current;
+    currentUrlRef.current = content.musicUrl;
+    if (prevUrl === content.musicUrl) return;
+
+    const existing = audioRef.current;
+    if (!existing) return;
+
+    const wasPlaying = !existing.paused;
+    existing.pause();
+
+    if (!content.musicUrl) {
+      existing.src = "";
+      audioRef.current = null;
+      return;
+    }
+
+    existing.src = content.musicUrl;
+    existing.load();
+    if (wasPlaying) {
+      existing.play().catch(() => {
+        setPlaying(false);
+      });
+    }
+  }, [content.musicUrl]);
 
   useEffect(() => {
     return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = "";
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
       }
     };
-  }, [audio]);
+  }, []);
 
   if (!content.musicUrl) return null;
 
   const toggle = () => {
-    if (!audio) {
-      const el = new Audio(content.musicUrl);
+    let el = audioRef.current;
+    if (!el) {
+      el = new Audio(content.musicUrl);
       el.loop = true;
-      el.play()
-        .then(() => playSfx("pop"))
-        .catch(() => {});
-      setAudio(el);
-      setPlaying(true);
-      return;
+      audioRef.current = el;
     }
+
     if (playing) {
-      audio.pause();
+      el.pause();
       setPlaying(false);
     } else {
-      audio.play().catch(() => {});
-      setPlaying(true);
-      playSfx("pop");
+      el.play()
+        .then(() => {
+          setPlaying(true);
+          playSfx("pop");
+        })
+        .catch(() => {
+          setPlaying(false);
+        });
     }
   };
 

@@ -6,7 +6,6 @@ import NarrativeEngine from "@/lib/narrative/NarrativeEngine";
 import { KACA_BEREMBUN_MANIFEST } from "@/lib/narrative/manifests/kaca-berembun";
 import { RainyWindowSVG } from "./narrative-assets";
 import { Heart, Sparkles } from "lucide-react";
-import Image from "next/image";
 import CassettePlayer from "@/components/CassettePlayer";
 import SfxToggle from "@/components/SfxToggle";
 import { VideoBlock } from "./shared";
@@ -96,13 +95,11 @@ export default function KacaBerembunTemplate({
           {photos.length > 0 ? (
             <div className="w-full mb-8 space-y-3">
               <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={mainPhoto}
                   alt={`Kenangan bersama ${activePhotoIdx + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 420px"
-                  priority
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
                 <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end text-xs text-white/80">
@@ -129,12 +126,12 @@ export default function KacaBerembunTemplate({
                           : "border-white/15 opacity-60 hover:opacity-100"
                       }`}
                     >
-                      <Image
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={src}
                         alt={`Thumbnail ${idx + 1}`}
-                        fill
-                        sizes="80px"
-                        className="object-cover"
+                        loading="lazy"
+                        className="w-full h-full object-cover"
                       />
                     </button>
                   ))}

@@ -1,9 +1,16 @@
 "use client";
 
-import React, { Component, useEffect } from "react";
+import React, { Component } from "react";
 import { RefreshCw, Home, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
+
+interface SentryLike {
+  captureException: (error: Error, context?: { extra?: unknown }) => void;
+}
+
+interface WindowWithSentry extends Window {
+  Sentry?: SentryLike;
+}
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -35,23 +42,21 @@ export default class ErrorBoundary extends Component<
       errorInfo,
     });
 
-    // Log to console in development
     if (process.env.NODE_ENV === "development") {
       console.error("ErrorBoundary caught an error:", error, errorInfo);
     }
 
-    // Log to Sentry if configured
-    if (typeof window !== "undefined" && (window as any).Sentry) {
-      (window as any).Sentry.captureException(error, { extra: errorInfo });
+    const sentry =
+      typeof window !== "undefined"
+        ? (window as WindowWithSentry).Sentry
+        : undefined;
+    if (sentry) {
+      sentry.captureException(error, { extra: errorInfo });
     }
   }
 
   handleRetry = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
-  };
-
-  handleGoHome = () => {
-    window.location.href = "/";
   };
 
   render() {
@@ -82,7 +87,7 @@ export default class ErrorBoundary extends Component<
               </button>
               <Link
                 href="/"
-                onClick={this.handleGoHome}
+                onClick={this.handleRetry}
                 className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-full text-label-lg font-semibold text-on-surface-variant hover:bg-surface-container-low transition-colors"
               >
                 <Home className="h-4 w-4" />

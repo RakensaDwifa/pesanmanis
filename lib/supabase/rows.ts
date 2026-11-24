@@ -1,7 +1,19 @@
-import type { UcapanContent } from "../types.ts";
+import type {
+  DraftAddonConfig,
+  GateData,
+  GateType,
+  ParticleStyle,
+  StoredUcapan,
+  TimelineItem,
+  UcapanContent,
+  ViewSummary,
+} from "../types.ts";
 import type { MoodKey } from "../mood.ts";
 import { sanitizeAddons } from "../pricing.ts";
 import { validateSlugFormat } from "../slug.ts";
+import { isRecord, isValidEmail, isValidMediaUrl } from "../validation.ts";
+
+export type { DraftAddonConfig, GateData, StoredUcapan, ViewSummary };
 
 const VALID_MOODS: Record<MoodKey, true> = {
   romantic: true,
@@ -10,108 +22,232 @@ const VALID_MOODS: Record<MoodKey, true> = {
   sunset: true,
   lavender: true,
 };
-const VALID_PARTICLES = ["hearts", "roses", "sparkles"];
+const VALID_PARTICLES: readonly ParticleStyle[] = ["hearts", "roses", "sparkles"];
 const META_TIMELINE_TAG = "__pm_meta__";
+
+export const VALID_TEMPLATE_SLUGS: Record<string, true> = {
+  "amplop-cinta": true,
+  "botol-kenangan": true,
+  "buket-bunga": true,
+  "surat-cinta": true,
+  "kartu-ucapan": true,
+  valentine: true,
+  "permintaan-maaf": true,
+  "kaca-berembun": true,
+  "bonceng-malam": true,
+};
+
+interface TimelineMetaEntry {
+  date: typeof META_TIMELINE_TAG;
+  title: string;
+  mood: MoodKey | null;
+  videoUrl: string | null;
+}
+
+export type RawTimelineEntry = TimelineItem | TimelineMetaEntry;
 
 export interface DraftAddonInput {
   addons?: unknown;
   customSlug?: string | null;
+  gateType?: string | null;
   pin?: string | null;
+  question?: string | null;
+  answer?: string | null;
   particleStyle?: string | null;
 }
 
-/** Konversi pilihan add-on dari Builder menjadi kolom ucapan (hanya untuk ucapan unpaid). */
-export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, unknown> {
-  if (!input || input.addons === undefined) return {};
-  const selected = sanitizeAddons(input.addons);
+function normalizeParticleStyle(raw: unknown): ParticleStyle | null {
+  if (typeof raw !== "string") return null;
+  return (VALID_PARTICLES as readonly string[]).includes(raw)
+    ? (raw as ParticleStyle)
+    : null;
+}
+
+/**
+ * Sanitizes draft add-on preferences into a JSONB payload stored in `ucapan.draft_addons`
+ * (and snapshotted into `payments.addon_config`) without mutating live paid columns.
+ */
+export function buildDraftAddonState(
+  input?: DraftAddonInput
+): DraftAddonConfig | null {
+  if (!input || input.addons === undefined) return null;
+  const addons = sanitizeAddons(input.addons);
   let customSlug: string | null = null;
-  if (selected.includes("custom_slug") && input.customSlug) {
+  if (addons.includes("custom_slug") && typeof input.customSlug === "string") {
     const check = validateSlugFormat(input.customSlug);
     if (check.valid) customSlug = check.normalized;
   }
-  const pin = String(input.pin ?? "").trim();
-  const validPin = selected.includes("intimate_gate") && /^\d{4,6}$/.test(pin) ? pin : null;
-  const particle =
-    selected.includes("touch_particles") &&
-    input.particleStyle &&
-    VALID_PARTICLES.includes(String(input.particleStyle))
-      ? String(input.particleStyle)
-      : selected.includes("touch_particles")
-        ? "hearts"
-        : null;
+
+  const hasGate = addons.includes("intimate_gate");
+  const isTrivia = hasGate && input.gateType === "trivia";
+  const pinRaw = typeof input.pin === "string" ? input.pin.trim() : "";
+  const pin = hasGate && !isTrivia && /^\d{4,6}$/.test(pinRaw) ? pinRaw : null;
+
+  const questionRaw = typeof input.question === "string" ? input.question.trim() : "";
+  const answerRaw = typeof input.answer === "string" ? input.answer.trim() : "";
+  const validTrivia =
+    isTrivia &&
+    questionRaw.length >= 3 &&
+    questionRaw.length <= 160 &&
+    answerRaw.length >= 1 &&
+    answerRaw.length <= 80;
+
+  const particleStyle: ParticleStyle | null = addons.includes("touch_particles")
+    ? normalizeParticleStyle(input.particleStyle) ?? "hearts"
+    : null;
+
+  if (isTrivia) {
+    return {
+      addons,
+      customSlug,
+      gateType: "trivia",
+      pin: null,
+      question: validTrivia ? questionRaw : null,
+      answer: validTrivia ? answerRaw : null,
+      particleStyle,
+    };
+  }
 
   return {
-    custom_slug: customSlug,
-    qr_photo_enabled: selected.includes("custom_qr"),
-    touch_particles: particle,
-    gate_type: validPin ? "pin" : null,
-    gate_data: validPin ? { pin: validPin } : null,
-    receipt_enabled: selected.includes("love_receipt"),
+    addons,
+    customSlug,
+    pin,
+    particleStyle,
   };
 }
 
-/** Validasi input ucapan sebelum insert/update. Melempar error jika tidak valid. */
-export function validateUcapanInput(content: Partial<UcapanContent>): { valid: true } | { valid: false; reason: string } {
-  if (!content.templateSlug || !getTemplate(content.templateSlug)) {
-    return { valid: false, reason: "INVALID_TEMPLATE" };
-  }
-  const t = (content.toName ?? "").trim();
-  if (!t || t.length > 80) return { valid: false, reason: "TO_NAME_INVALID" };
-  const f = (content.fromName ?? "").trim();
-  if (!f || f.length > 80) return { valid: false, reason: "FROM_NAME_INVALID" };
-  const title = (content.title ?? "").trim();
-  if (title.length > 120) return { valid: false, reason: "TITLE_TOO_LONG" };
-  const msg = (content.message ?? "").trim();
-  if (msg.length > 5000) return { valid: false, reason: "MESSAGE_TOO_LONG" };
-  const photos = content.photos ?? [];
-  if (!Array.isArray(photos) || photos.length > 10) return { valid: false, reason: "PHOTOS_INVALID" };
-  for (const p of photos) {
-    if (typeof p !== "string" || p.length > 500) return { valid: false, reason: "PHOTO_URL_TOO_LONG" };
-    if (p && !p.startsWith("/") && !p.startsWith("https://")) return { valid: false, reason: "PHOTO_URL_INVALID" };
-  }
-  const music = content.musicUrl ?? "";
-  if (music && (music.length > 500 || (!music.startsWith("/") && !music.startsWith("https://")))) {
-    return { valid: false, reason: "MUSIC_URL_INVALID" };
-  }
-  const video = content.videoUrl ?? "";
-  if (video && (video.length > 500 || (!video.startsWith("/") && !video.startsWith("https://")))) {
-    return { valid: false, reason: "VIDEO_URL_INVALID" };
-  }
-  if (content.mood && !VALID_MOODS[content.mood]) {
-    return { valid: false, reason: "MOOD_INVALID" };
-  }
-  const email = content.email ?? "";
-  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-    return { valid: false, reason: "EMAIL_INVALID" };
-  }
-  const timeline = content.timeline;
-  if (timeline !== undefined && timeline !== null) {
-    if (!Array.isArray(timeline) || timeline.length > 12) return { valid: false, reason: "TIMELINE_INVALID" };
-    for (const item of timeline) {
-      if (!item || typeof item !== "object") return { valid: false, reason: "TIMELINE_ITEM_INVALID" };
-      if (item.title && (typeof item.title !== "string" || item.title.length > 80)) return { valid: false, reason: "TIMELINE_TITLE_TOO_LONG" };
-      if (item.date && (typeof item.date !== "string" || item.date.length > 20)) return { valid: false, reason: "TIMELINE_DATE_TOO_LONG" };
-      if (item.description && (typeof item.description !== "string" || item.description.length > 500)) return { valid: false, reason: "TIMELINE_DESC_TOO_LONG" };
+/**
+ * Converts a DraftAddonInput into live `ucapan` add-on columns.
+ * Used during server-side payment activation and retained for unit test compatibility.
+ */
+export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, unknown> {
+  const state = buildDraftAddonState(input);
+  if (!state) return {};
+
+  const hasGate = state.addons.includes("intimate_gate");
+  let gateType: GateType | null = null;
+  let gateData: GateData | null = null;
+
+  if (hasGate) {
+    if (state.gateType === "trivia") {
+      if (state.question && state.answer) {
+        gateType = "trivia";
+        gateData = { question: state.question, answer: state.answer };
+      }
+    } else if (state.pin) {
+      gateType = "pin";
+      gateData = { pin: state.pin };
     }
   }
-  return { valid: true };
+
+  return {
+    custom_slug: state.addons.includes("custom_slug") ? state.customSlug ?? null : null,
+    qr_photo_enabled: state.addons.includes("custom_qr"),
+    touch_particles: state.addons.includes("touch_particles")
+      ? state.particleStyle ?? "hearts"
+      : null,
+    gate_type: gateType,
+    gate_data: gateData,
+    receipt_enabled: state.addons.includes("love_receipt"),
+  };
 }
 
-// Lazy import untuk menghindari circular dependency
-function getTemplate(slug: string) {
-  // Synchronous check - will be replaced by actual import at runtime
-  const templates: Record<string, boolean> = {
-    "amplop-cinta": true,
-    "botol-kenangan": true,
-    "buket-bunga": true,
-    "surat-cinta": true,
-    "kartu-ucapan": true,
-    valentine: true,
-    "permintaan-maaf": true,
-    "kaca-berembun": true,
-    "bonceng-malam": true,
-  };
-  return templates[slug] ?? false;
+/** Validates ucapan payload at runtime (guards against non-string JSON values & protocol-relative URLs). */
+export function validateUcapanInput(
+  raw: unknown
+): { valid: true } | { valid: false; reason: string } {
+  if (!isRecord(raw)) {
+    return { valid: false, reason: "INVALID_BODY" };
+  }
+
+  if (typeof raw.templateSlug !== "string" || !VALID_TEMPLATE_SLUGS[raw.templateSlug]) {
+    return { valid: false, reason: "INVALID_TEMPLATE" };
+  }
+
+  if (typeof raw.toName !== "string") {
+    return { valid: false, reason: "TO_NAME_INVALID" };
+  }
+  const t = raw.toName.trim();
+  if (!t || t.length > 80) return { valid: false, reason: "TO_NAME_INVALID" };
+
+  if (typeof raw.fromName !== "string") {
+    return { valid: false, reason: "FROM_NAME_INVALID" };
+  }
+  const f = raw.fromName.trim();
+  if (!f || f.length > 80) return { valid: false, reason: "FROM_NAME_INVALID" };
+
+  if (raw.title !== undefined && raw.title !== null) {
+    if (typeof raw.title !== "string" || raw.title.trim().length > 120) {
+      return { valid: false, reason: "TITLE_TOO_LONG" };
+    }
+  }
+
+  if (raw.message !== undefined && raw.message !== null) {
+    if (typeof raw.message !== "string" || raw.message.trim().length > 5000) {
+      return { valid: false, reason: "MESSAGE_TOO_LONG" };
+    }
+  }
+
+  const photos = raw.photos ?? [];
+  if (!Array.isArray(photos) || photos.length > 10) {
+    return { valid: false, reason: "PHOTOS_INVALID" };
+  }
+  for (const p of photos) {
+    if (typeof p !== "string") return { valid: false, reason: "PHOTO_URL_INVALID" };
+    if (p.length > 500) return { valid: false, reason: "PHOTO_URL_TOO_LONG" };
+    if (p && !isValidMediaUrl(p, 500)) {
+      return { valid: false, reason: "PHOTO_URL_INVALID" };
+    }
+  }
+
+  if (raw.musicUrl !== undefined && raw.musicUrl !== null && raw.musicUrl !== "") {
+    if (typeof raw.musicUrl !== "string" || !isValidMediaUrl(raw.musicUrl, 500)) {
+      return { valid: false, reason: "MUSIC_URL_INVALID" };
+    }
+  }
+
+  if (raw.videoUrl !== undefined && raw.videoUrl !== null && raw.videoUrl !== "") {
+    if (typeof raw.videoUrl !== "string" || !isValidMediaUrl(raw.videoUrl, 500)) {
+      return { valid: false, reason: "VIDEO_URL_INVALID" };
+    }
+  }
+
+  if (raw.mood !== undefined && raw.mood !== null && raw.mood !== "") {
+    if (typeof raw.mood !== "string" || !VALID_MOODS[raw.mood as MoodKey]) {
+      return { valid: false, reason: "MOOD_INVALID" };
+    }
+  }
+
+  if (raw.email !== undefined && raw.email !== null && raw.email !== "") {
+    if (!isValidEmail(raw.email)) {
+      return { valid: false, reason: "EMAIL_INVALID" };
+    }
+  }
+
+  const timeline = raw.timeline;
+  if (timeline !== undefined && timeline !== null) {
+    if (!Array.isArray(timeline) || timeline.length > 12) {
+      return { valid: false, reason: "TIMELINE_INVALID" };
+    }
+    for (const item of timeline) {
+      if (!isRecord(item)) return { valid: false, reason: "TIMELINE_ITEM_INVALID" };
+      if (item.title !== undefined && item.title !== null && (typeof item.title !== "string" || item.title.length > 80)) {
+        return { valid: false, reason: "TIMELINE_TITLE_TOO_LONG" };
+      }
+      if (item.date !== undefined && item.date !== null && (typeof item.date !== "string" || item.date.length > 20)) {
+        return { valid: false, reason: "TIMELINE_DATE_TOO_LONG" };
+      }
+      if (
+        item.description !== undefined &&
+        item.description !== null &&
+        (typeof item.description !== "string" || item.description.length > 500)
+      ) {
+        return { valid: false, reason: "TIMELINE_DESC_TOO_LONG" };
+      }
+    }
+  }
+
+  return { valid: true };
 }
 
 export interface UcapanRow {
@@ -125,12 +261,13 @@ export interface UcapanRow {
   photos: string[];
   music_url: string | null;
   email: string | null;
-  timeline: any | null;
+  timeline: RawTimelineEntry[] | null;
+  draft_addons?: DraftAddonConfig | null;
   custom_slug?: string | null;
   qr_photo_enabled?: boolean;
   touch_particles?: string | null;
   gate_type?: string | null;
-  gate_data?: any | null;
+  gate_data?: GateData | null;
   receipt_enabled?: boolean;
   paid: boolean;
   paid_at: string | null;
@@ -145,24 +282,30 @@ export interface UcapanStatsRow {
   last_view_at: string | null;
 }
 
-export interface ViewSummary {
-  count: number;
-  firstSeen?: number;
-  lastSeen?: number;
+function parseGateData(raw: unknown): GateData | null {
+  if (!isRecord(raw)) return null;
+  const result: GateData = {};
+  if (typeof raw.pin === "string") result.pin = raw.pin;
+  if (typeof raw.question === "string") result.question = raw.question;
+  if (typeof raw.answer === "string") result.answer = raw.answer;
+  return Object.keys(result).length > 0 ? result : null;
 }
 
-export interface StoredUcapan extends UcapanContent {
-  id: string;
-  paid: boolean;
-  paidAt?: number;
-  createdAt: number;
-  views?: ViewSummary;
-  customSlug?: string | null;
-  qrPhotoEnabled?: boolean;
-  touchParticles?: string | null;
-  gateType?: string | null;
-  gateData?: any | null;
-  receiptEnabled?: boolean;
+function parseDraftAddons(raw: unknown): DraftAddonConfig | null {
+  if (!isRecord(raw)) return null;
+  const addons = sanitizeAddons(raw.addons);
+  const gateType: GateType | null =
+    raw.gateType === "trivia" ? "trivia" : raw.gateType === "pin" ? "pin" : null;
+  const config: DraftAddonConfig = {
+    addons,
+    customSlug: typeof raw.customSlug === "string" ? raw.customSlug : null,
+    pin: typeof raw.pin === "string" ? raw.pin : null,
+    particleStyle: normalizeParticleStyle(raw.particleStyle),
+  };
+  if (gateType) config.gateType = gateType;
+  if (typeof raw.question === "string") config.question = raw.question;
+  if (typeof raw.answer === "string") config.answer = raw.answer;
+  return config;
 }
 
 export function mapUcapanRow(
@@ -170,22 +313,86 @@ export function mapUcapanRow(
   stats?: UcapanStatsRow | null
 ): StoredUcapan {
   const rawTimeline = Array.isArray(row.timeline) ? row.timeline : [];
-  const cleanTimeline: NonNullable<UcapanContent["timeline"]> = [];
+  const cleanTimeline: TimelineItem[] = [];
   let mood: MoodKey | undefined;
   let videoUrl: string | undefined;
 
   for (const item of rawTimeline) {
-    if (item && typeof item === "object" && item.date === META_TIMELINE_TAG) {
+    if (isRecord(item) && item.date === META_TIMELINE_TAG) {
       if (typeof item.mood === "string" && VALID_MOODS[item.mood as MoodKey]) {
         mood = item.mood as MoodKey;
       }
       if (typeof item.videoUrl === "string" && item.videoUrl) {
         videoUrl = item.videoUrl;
       }
-    } else if (item && typeof item === "object") {
-      cleanTimeline.push(item);
+    } else if (isRecord(item)) {
+      cleanTimeline.push({
+        date: typeof item.date === "string" ? item.date : "",
+        title: typeof item.title === "string" ? item.title : "",
+        description: typeof item.description === "string" ? item.description : undefined,
+      });
     }
   }
+
+  const parsedDraft = parseDraftAddons(row.draft_addons);
+  const liveGateData = parseGateData(row.gate_data);
+
+  // For unpaid drafts, fall back to draft_addons so Builder & Checkout restore preferences cross-device.
+  const effectiveCustomSlug = row.paid
+    ? row.custom_slug ?? null
+    : parsedDraft
+      ? parsedDraft.addons.includes("custom_slug")
+        ? parsedDraft.customSlug ?? null
+        : null
+      : row.custom_slug ?? null;
+
+  const effectiveQrPhoto = row.paid
+    ? Boolean(row.qr_photo_enabled)
+    : parsedDraft
+      ? parsedDraft.addons.includes("custom_qr")
+      : Boolean(row.qr_photo_enabled);
+
+  const effectiveTouchParticles = row.paid
+    ? row.touch_particles ?? null
+    : parsedDraft
+      ? parsedDraft.addons.includes("touch_particles")
+        ? parsedDraft.particleStyle ?? "hearts"
+        : null
+      : row.touch_particles ?? null;
+
+  const effectiveGateType = row.paid
+    ? row.gate_type ?? null
+    : parsedDraft
+      ? parsedDraft.addons.includes("intimate_gate")
+        ? parsedDraft.gateType === "trivia"
+          ? parsedDraft.question && parsedDraft.answer
+            ? "trivia"
+            : null
+          : parsedDraft.pin
+            ? "pin"
+            : null
+        : null
+      : row.gate_type ?? null;
+
+  const effectiveGateData = row.paid
+    ? liveGateData
+    : parsedDraft
+      ? parsedDraft.addons.includes("intimate_gate")
+        ? parsedDraft.gateType === "trivia"
+          ? parsedDraft.question && parsedDraft.answer
+            ? { question: parsedDraft.question, answer: parsedDraft.answer }
+            : null
+          : parsedDraft.pin
+            ? { pin: parsedDraft.pin }
+            : null
+        : null
+      : liveGateData;
+
+  const effectiveReceipt = row.paid
+    ? Boolean(row.receipt_enabled)
+    : parsedDraft
+      ? parsedDraft.addons.includes("love_receipt")
+      : Boolean(row.receipt_enabled);
 
   return {
     id: row.id,
@@ -203,35 +410,34 @@ export function mapUcapanRow(
     paid: row.paid,
     paidAt: row.paid_at ? Date.parse(row.paid_at) : undefined,
     createdAt: Date.parse(row.created_at),
-    customSlug: row.custom_slug ?? null,
-    qrPhotoEnabled: Boolean(row.qr_photo_enabled),
-    touchParticles: row.touch_particles ?? null,
-    gateType: row.gate_type ?? null,
-    gateData: row.gate_data ?? null,
-    receiptEnabled: Boolean(row.receipt_enabled),
+    customSlug: effectiveCustomSlug,
+    qrPhotoEnabled: effectiveQrPhoto,
+    touchParticles: effectiveTouchParticles,
+    gateType: effectiveGateType,
+    gateData: effectiveGateData,
+    receiptEnabled: effectiveReceipt,
+    draftAddons: parsedDraft,
     views: stats
       ? {
           count: stats.total_views ?? 0,
-          firstSeen: stats.first_view_at
-            ? Date.parse(stats.first_view_at)
-            : undefined,
-          lastSeen: stats.last_view_at
-            ? Date.parse(stats.last_view_at)
-            : undefined,
+          firstSeen: stats.first_view_at ? Date.parse(stats.first_view_at) : undefined,
+          lastSeen: stats.last_view_at ? Date.parse(stats.last_view_at) : undefined,
         }
       : undefined,
   };
 }
 
 export function toUcapanRow(content: Partial<UcapanContent>) {
-  const cleanPhotos = (content.photos ?? []).filter((p) => typeof p === "string" && p.trim() !== "");
-  const cleanTimeline = (content.timeline ?? []).filter(
+  const cleanPhotos = (content.photos ?? []).filter(
+    (p): p is string => typeof p === "string" && p.trim() !== ""
+  );
+  const cleanTimeline: TimelineItem[] = (content.timeline ?? []).filter(
     (item) =>
       item &&
       item.date !== META_TIMELINE_TAG &&
       Boolean(item.date?.trim() || item.title?.trim() || item.description?.trim())
   );
-  const metaEntry =
+  const metaEntry: TimelineMetaEntry[] =
     content.mood || content.videoUrl?.trim()
       ? [
           {
@@ -242,7 +448,7 @@ export function toUcapanRow(content: Partial<UcapanContent>) {
           },
         ]
       : [];
-  const finalTimeline = [...cleanTimeline, ...metaEntry];
+  const finalTimeline: RawTimelineEntry[] = [...cleanTimeline, ...metaEntry];
 
   return {
     template_slug: content.templateSlug ?? "",
@@ -257,15 +463,48 @@ export function toUcapanRow(content: Partial<UcapanContent>) {
   };
 }
 
-/** Hapus email dan rahasia gate_data (pin/answer) sebelum dikirim ke client publik. */
+/** Strips creator email, draftAddons, and gate secrets (pin/answer) before sending to public clients. */
 export function stripPublicUcapan(ucapan: StoredUcapan): StoredUcapan {
-  const safeGateData =
-    ucapan.gateData && typeof ucapan.gateData === "object" && "question" in ucapan.gateData
-      ? { question: ucapan.gateData.question }
-      : null;
+  const safeGateData: GateData | null =
+    ucapan.gateData?.question ? { question: ucapan.gateData.question } : null;
   return {
     ...ucapan,
     email: undefined,
+    draftAddons: undefined,
     gateData: safeGateData,
+    locked: false,
+  };
+}
+
+/**
+ * Redacts all private letter content (message, title, photos, media, timeline)
+ * when an Intimate Gate is active and has not yet been unlocked on the server.
+ */
+export function stripLockedUcapan(ucapan: StoredUcapan): StoredUcapan {
+  const safeGateData: GateData | null =
+    ucapan.gateData?.question ? { question: ucapan.gateData.question } : null;
+  return {
+    id: ucapan.id,
+    templateSlug: ucapan.templateSlug,
+    toName: ucapan.toName,
+    fromName: ucapan.fromName,
+    title: "",
+    message: "",
+    photos: [],
+    musicUrl: undefined,
+    videoUrl: undefined,
+    mood: ucapan.mood,
+    email: undefined,
+    timeline: undefined,
+    paid: ucapan.paid,
+    paidAt: ucapan.paidAt,
+    createdAt: ucapan.createdAt,
+    customSlug: ucapan.customSlug,
+    qrPhotoEnabled: ucapan.qrPhotoEnabled,
+    touchParticles: ucapan.touchParticles,
+    gateType: ucapan.gateType,
+    gateData: safeGateData,
+    receiptEnabled: ucapan.receiptEnabled,
+    locked: true,
   };
 }

@@ -3,9 +3,9 @@
 -- Jalankan skrip ini sekali di Supabase SQL Editor pada database baru.
 -- Sudah mencakup:
 --   - Tabel templates, ucapan, payments, views, reactions, replies
---   - Tabel referrals, credits, checkout_sessions
---   - Storage bucket 'foto' + storage policies
---   - RLS, Realtime publication, ucapan_stats view, trigger updated_at
+--   - Tabel referrals, credits, checkout_sessions, drafts, newsletter_subscribers
+--   - Storage bucket 'foto' + storage policies (authenticated per folder user)
+--   - RLS ketat, Realtime publication, ucapan_stats view, trigger pengaman & updated_at
 -- ============================================================
 
 -- Extensions
@@ -41,7 +41,8 @@ create table if not exists public.ucapan (
   paid_at timestamptz,
   email text,
   timeline jsonb default null,
-  custom_slug varchar(60) unique,
+  draft_addons jsonb default null,
+  custom_slug varchar(60),
   qr_photo_enabled boolean not null default false,
   touch_particles varchar(30) default null,
   gate_type varchar(20) default null,
@@ -53,36 +54,80 @@ create table if not exists public.ucapan (
 
 alter table public.ucapan enable row level security;
 
-create index if not exists ucapan_custom_slug_idx
-  on public.ucapan (custom_slug);
+create unique index if not exists ucapan_paid_custom_slug_uniq
+  on public.ucapan (custom_slug)
+  where paid = true and custom_slug is not null;
 
-create index if not exists ucapan_gate_type_idx on public.ucapan (gate_type) where gate_type is not null;
+create index if not exists ucapan_owner_created_idx
+  on public.ucapan (owner_id, created_at desc);
+
+create index if not exists ucapan_gate_type_idx
+  on public.ucapan (gate_type)
+  where gate_type is not null;
 
 drop policy if exists "publik bisa baca ucapan" on public.ucapan;
 create policy "publik bisa baca ucapan" on public.ucapan
-  for select using (auth.uid() = owner_id);
+  for select to authenticated
+  using ((select auth.uid()) = owner_id);
 
 drop policy if exists "pemilik buat ucapan" on public.ucapan;
-create policy "pemilik buat ucapan" on public.ucapan for insert with check (owner_id = auth.uid());
+create policy "pemilik buat ucapan" on public.ucapan
+  for insert to authenticated
+  with check ((select auth.uid()) = owner_id);
 
 drop policy if exists "pemilik update ucapan" on public.ucapan;
 create policy "pemilik update ucapan" on public.ucapan
-  for update using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+  for update to authenticated
+  using ((select auth.uid()) = owner_id)
+  with check ((select auth.uid()) = owner_id);
 
 drop policy if exists "pemilik hapus ucapan" on public.ucapan;
-create policy "pemilik hapus ucapan" on public.ucapan for delete using (owner_id = auth.uid());
+create policy "pemilik hapus ucapan" on public.ucapan
+  for delete to authenticated
+  using ((select auth.uid()) = owner_id);
+
+-- Trigger: tolak penyetelan kolom berbayar saat INSERT oleh non-service_role
+create or replace function public.prevent_paid_columns_insert()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+begin
+  if caller_role is distinct from 'service_role' then
+    if new.paid is true
+      or new.paid_at is not null
+      or new.custom_slug is not null
+      or new.qr_photo_enabled is true
+      or new.touch_particles is not null
+      or new.gate_type is not null
+      or new.gate_data is not null
+      or new.receipt_enabled is true
+    then
+      raise exception 'Kolom berbayar dan add-on hanya bisa diaktifkan oleh sistem';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prevent_paid_columns_insert on public.ucapan;
+create trigger trg_prevent_paid_columns_insert
+  before insert on public.ucapan
+  for each row
+  execute function public.prevent_paid_columns_insert();
 
 -- Trigger: tolak perubahan kolom berbayar kecuali service_role
 create or replace function public.prevent_paid_columns_update()
 returns trigger
 language plpgsql
-security definer
+set search_path = ''
 as $$
 declare
-  caller_role text := current_setting('request.jwt.claim.role', true);
+  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
 begin
-  if caller_role <> 'service_role' then
+  if caller_role is distinct from 'service_role' then
     if new.paid is distinct from old.paid then
       raise exception 'Kolom paid hanya bisa diubah oleh sistem';
     end if;
@@ -110,6 +155,9 @@ begin
     if new.receipt_enabled is distinct from old.receipt_enabled then
       raise exception 'Kolom receipt_enabled hanya bisa diubah oleh sistem';
     end if;
+    if old.paid is true and new.draft_addons is distinct from old.draft_addons then
+      raise exception 'Kolom draft_addons tidak boleh diubah setelah pembayaran lunas';
+    end if;
   end if;
   return new;
 end;
@@ -125,6 +173,7 @@ create trigger trg_prevent_paid_columns_update
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -141,38 +190,52 @@ create trigger trg_ucapan_updated_at
 -- 3. Payments
 create table if not exists public.payments (
   id bigint generated always as identity primary key,
-  ucapan_id uuid references public.ucapan(id) on delete cascade,
+  ucapan_id uuid references public.ucapan(id) on delete set null,
   merchant_ref text unique not null,
   method text,
   amount bigint not null, -- tanpa default, wajib diisi server
+  base_amount bigint,
+  is_promo boolean not null default false,
   status text not null default 'UNPAID',
   tripay_ref text,
   addons jsonb not null default '[]'::jsonb,
+  addon_config jsonb not null default '{}'::jsonb,
   credit_used bigint not null default 0,
   paid_at timestamptz,
   created_at timestamptz default now()
 );
 
+create index if not exists payments_ucapan_id_idx
+  on public.payments (ucapan_id);
+
 create index if not exists payments_status_amount_idx
   on public.payments (status, amount);
 
+create index if not exists payments_status_promo_idx
+  on public.payments (status, is_promo)
+  where status = 'PAID' and is_promo = true;
+
 create index if not exists payments_merchant_ref_idx
   on public.payments (merchant_ref);
+
+create index if not exists payments_tripay_ref_idx
+  on public.payments (tripay_ref)
+  where tripay_ref is not null;
 
 alter table public.payments enable row level security;
 
 drop policy if exists "pemilik bisa baca payment" on public.payments;
 create policy "pemilik bisa baca payment" on public.payments
-  for select
+  for select to authenticated
   using (
     exists (
       select 1 from public.ucapan u
       where u.id = payments.ucapan_id
-        and u.owner_id = auth.uid()
+        and u.owner_id = (select auth.uid())
     )
   );
 
--- 4. Views (Tracking kunjungan)
+-- 4. Views (Tracking kunjungan — insert publik hanya lewat API Next.js)
 create table if not exists public.views (
   id bigint generated always as identity primary key,
   ucapan_id uuid references public.ucapan(id) on delete cascade,
@@ -188,20 +251,18 @@ create index if not exists views_ucapan_id_idx on public.views (ucapan_id);
 alter table public.views enable row level security;
 
 drop policy if exists "anon bisa insert view" on public.views;
-create policy "anon bisa insert view" on public.views for insert with check (true);
-
 drop policy if exists "pemilik bisa baca views" on public.views;
 create policy "pemilik bisa baca views" on public.views
-  for select
+  for select to authenticated
   using (
     exists (
       select 1 from public.ucapan u
       where u.id = views.ucapan_id
-        and u.owner_id = auth.uid()
+        and u.owner_id = (select auth.uid())
     )
   );
 
--- 5. Reactions (Interaksi emoji)
+-- 5. Reactions (Interaksi emoji — akses publik wajib lewat API Next.js)
 create table if not exists public.reactions (
   id uuid primary key default gen_random_uuid(),
   ucapan_id uuid not null references public.ucapan(id) on delete cascade,
@@ -214,13 +275,19 @@ create index if not exists reactions_ucapan_id_idx on public.reactions (ucapan_i
 alter table public.reactions enable row level security;
 
 drop policy if exists "publik bisa baca reactions" on public.reactions;
-create policy "publik bisa baca reactions" on public.reactions for select using (true);
-
 drop policy if exists "publik bisa insert reactions" on public.reactions;
-create policy "publik bisa insert reactions" on public.reactions
-  for insert with check (char_length(emoji) between 1 and 8);
+drop policy if exists "pemilik bisa baca reactions" on public.reactions;
+create policy "pemilik bisa baca reactions" on public.reactions
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = reactions.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
+  );
 
--- 6. Replies (Balasan pesan)
+-- 6. Replies (Balasan pesan — akses publik wajib lewat API Next.js)
 create table if not exists public.replies (
   id uuid primary key default gen_random_uuid(),
   ucapan_id uuid not null references public.ucapan(id) on delete cascade,
@@ -234,13 +301,16 @@ create index if not exists replies_ucapan_id_idx on public.replies (ucapan_id);
 alter table public.replies enable row level security;
 
 drop policy if exists "publik bisa baca replies" on public.replies;
-create policy "publik bisa baca replies" on public.replies for select using (true);
-
 drop policy if exists "publik bisa insert replies" on public.replies;
-create policy "publik bisa insert replies" on public.replies
-  for insert with check (
-    char_length(from_name) between 1 and 60
-    and char_length(message) between 1 and 1000
+drop policy if exists "pemilik bisa baca replies" on public.replies;
+create policy "pemilik bisa baca replies" on public.replies
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.ucapan u
+      where u.id = replies.ucapan_id
+        and u.owner_id = (select auth.uid())
+    )
   );
 
 -- 7. Referrals
@@ -267,7 +337,8 @@ alter table public.referrals enable row level security;
 
 drop policy if exists "pemilik baca referrals" on public.referrals;
 create policy "pemilik baca referrals" on public.referrals
-  for select using (referrer_id = auth.uid());
+  for select to authenticated
+  using (referrer_id = (select auth.uid()));
 
 -- 8. Credits
 create table if not exists public.credits (
@@ -280,12 +351,16 @@ create table if not exists public.credits (
 );
 
 create index if not exists credits_user_idx on public.credits (user_id);
+create unique index if not exists credits_user_type_ref_uniq
+  on public.credits (user_id, type, reference_id)
+  where reference_id is not null;
 
 alter table public.credits enable row level security;
 
 drop policy if exists "pemilik baca credits" on public.credits;
 create policy "pemilik baca credits" on public.credits
-  for select using (user_id = auth.uid());
+  for select to authenticated
+  using (user_id = (select auth.uid()));
 
 -- 9. Checkout Sessions (Abandoned cart)
 create table if not exists public.checkout_sessions (
@@ -320,9 +395,19 @@ alter table public.drafts enable row level security;
 
 drop policy if exists "pemilik kelola drafts" on public.drafts;
 create policy "pemilik kelola drafts" on public.drafts
-  for all
+  for all to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+-- 9c. Newsletter Subscribers
+create table if not exists public.newsletter_subscribers (
+  id bigint generated always as identity primary key,
+  email text unique not null,
+  source text not null default 'footer',
+  created_at timestamptz not null default now()
+);
+
+alter table public.newsletter_subscribers enable row level security;
 
 -- 10. Realtime Publications
 do $$
@@ -338,6 +423,18 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ucapan'
   ) then
     alter publication supabase_realtime add table public.ucapan;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'reactions'
+  ) then
+    alter publication supabase_realtime add table public.reactions;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'replies'
+  ) then
+    alter publication supabase_realtime add table public.replies;
   end if;
 end $$;
 
@@ -367,9 +464,21 @@ create policy "publik baca foto" on storage.objects
   for select using (bucket_id = 'foto');
 
 drop policy if exists "anonim upload foto" on storage.objects;
-create policy "anonim upload foto" on storage.objects
-  for insert with check (bucket_id = 'foto' and octet_length(name) > 0);
+drop policy if exists "pemilik upload foto" on storage.objects;
+create policy "pemilik upload foto" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'foto'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
 
 drop policy if exists "pemilik hapus foto" on storage.objects;
 create policy "pemilik hapus foto" on storage.objects
-  for delete using (bucket_id = 'foto' and owner_id = auth.uid()::text);
+  for delete to authenticated
+  using (
+    bucket_id = 'foto'
+    and (
+      owner_id = (select auth.uid())::text
+      or (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+  );

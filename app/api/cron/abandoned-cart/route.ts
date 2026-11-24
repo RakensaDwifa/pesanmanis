@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
+import { safeStringEqual } from "@/lib/gate-token";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,9 +14,9 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // jangan email draft >7 hari
  * pending > 30 menit dan belum dibayar.
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const secret = process.env.CRON_SECRET?.trim();
+  const auth = request.headers.get("authorization") ?? "";
+  if (!secret || !safeStringEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
   }
 
   let sent = 0;
+  let failed = 0;
   let skippedPaid = 0;
   let skippedNoEmail = 0;
 
@@ -66,7 +68,6 @@ export async function GET(request: Request) {
 
     if (!u || u.paid) {
       skippedPaid += 1;
-      // Tandai selesai agar sesi yang sudah paid/terhapus tidak menyumbat antrean limit(50)
       await admin
         .from("checkout_sessions")
         .update({
@@ -81,7 +82,6 @@ export async function GET(request: Request) {
     const recipientEmail = u.email || fallbackSessionEmail;
     if (!recipientEmail) {
       skippedNoEmail += 1;
-      // Tandai supaya tidak diproses terus-menerus
       await admin
         .from("checkout_sessions")
         .update({ recovery_email_sent: true })
@@ -98,13 +98,20 @@ export async function GET(request: Request) {
         templateSlug: u.template_slug,
         ucapanId: s.ucapan_id,
       });
-      await admin
-        .from("checkout_sessions")
-        .update({ recovery_email_sent: true, recovery_sent_at: new Date().toISOString() })
-        .eq("id", s.id);
-      if (res.ok) sent += 1;
+      if (res.ok) {
+        await admin
+          .from("checkout_sessions")
+          .update({
+            recovery_email_sent: true,
+            recovery_sent_at: new Date().toISOString(),
+          })
+          .eq("id", s.id);
+        sent += 1;
+      } else {
+        failed += 1;
+      }
     } catch {
-      // biarkan session dicoba lagi di run berikutnya
+      failed += 1;
     }
   }
 
@@ -112,6 +119,7 @@ export async function GET(request: Request) {
     ok: true,
     processed: sessions?.length ?? 0,
     sent,
+    failed,
     skippedPaid,
     skippedNoEmail,
   });

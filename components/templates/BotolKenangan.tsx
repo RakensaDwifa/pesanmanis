@@ -1,28 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TemplateShell, Signature, PhotoGrid, TimelineSection } from "./shared";
 import type { TemplateRenderProps } from "@/lib/types";
 
+const SPLASH_PARTICLES = Array.from({ length: 14 }, (_, i) => ({
+  left: 10 + ((i * 23 + 7) % 80),
+  y: -80 - ((i * 37 + 13) % 120),
+}));
+
 export default function BotolKenangan({ content, preview }: TemplateRenderProps) {
   const [broken, setBroken] = useState(Boolean(preview));
   const [shaking, setShaking] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => setIsClient(true), []);
-
-  const splashParticles = useMemo(() => {
-    if (!isClient) {
-      return Array.from({ length: 14 }, (_, i) => ({
-        left: 10 + (i * 5) % 80,
-        y: -80 - (i * 8.5) % 120,
-      }));
-    }
-    return Array.from({ length: 14 }, () => ({
-      left: 10 + Math.random() * 80,
-      y: -80 - Math.random() * 120,
-    }));
-  }, [isClient]);
+  const splashParticles = SPLASH_PARTICLES;
 
   const smash = () => {
     if (broken) return;

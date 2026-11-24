@@ -12,8 +12,9 @@ import {
  * Ambil harga aktif dari database: promo berakhir setelah PROMO_QUOTA
  * pembelian promo yang lunas.
  *
- * Mode demo (tanpa Supabase) selalu memakai harga promo supaya alur
- * checkout bisa diuji tanpa konfigurasi.
+ * Menggunakan kolom eksplisit `is_promo` agar pembeli promo yang mengambil add-on
+ * atau memakai saldo kredit referral tetap dihitung dalam kuota promo.
+ * Fallback ke `amount = PROMO_AMOUNT` hanya bila migrasi `schema_v9.sql` belum dijalankan.
  */
 export async function getActivePrice(): Promise<PriceInfo> {
   if (!isRemote()) {
@@ -24,11 +25,19 @@ export async function getActivePrice(): Promise<PriceInfo> {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
 
-    const { count, error } = await admin
+    let { count, error } = await admin
       .from("payments")
       .select("id", { count: "exact", head: true })
       .eq("status", "PAID")
-      .eq("amount", PROMO_AMOUNT);
+      .eq("is_promo", true);
+
+    if (error?.code === "42703") {
+      ({ count, error } = await admin
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "PAID")
+        .eq("amount", PROMO_AMOUNT));
+    }
 
     if (error) {
       console.warn("[pricing] gagal menghitung kuota promo:", error.message);

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { Lock, Sparkles, KeyRound, HelpCircle } from "lucide-react";
+import type { GateData, StoredUcapan } from "@/lib/types";
 
 interface GateOverlayProps {
   toName: string;
   fromName: string;
   gateType: string;
-  gateData?: Record<string, unknown> | null;
-  onUnlock: () => void;
+  gateData?: GateData | null;
+  onUnlock: (unlockedUcapan?: StoredUcapan) => void;
   /** "embedded" → kartu di dalam frame preview, tanpa backdrop penuh. */
   variant?: "fullscreen" | "embedded";
   /** Jika diberikan, verifikasi PIN/jawaban via server (mode publik). */
@@ -30,13 +31,12 @@ export default function GateOverlay({
   const [loading, setLoading] = useState(false);
 
   const isPin = gateType === "pin";
-  // Di mode server (ucapanId diberikan), gateData hanya berisi question (untuk trivia)
-  // PIN/answer tidak dikirim ke client.
   const expectedPin = String(gateData?.pin ?? "").trim();
+  const rawQuestion = String(gateData?.question ?? "").trim();
   const triviaQuestion =
-    String(gateData?.question ?? "").trim() ||
-    `Ada pertanyaan rahasia dari ${fromName} untuk ${toName}:`;
-  const expectedAnswer = String(gateData?.answer ?? "").trim().toLowerCase();
+    rawQuestion || `Ada pertanyaan rahasia dari ${fromName} untuk ${toName}:`;
+  const normalizeTrivia = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();
+  const expectedAnswer = normalizeTrivia(String(gateData?.answer ?? ""));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,30 +48,41 @@ export default function GateOverlay({
       return;
     }
 
-    // Fail-closed: jika data gerbang tidak lengkap, jangan pernah buka.
+    // Fail-closed: jika data gerbang tidak lengkap di mode preview, jangan pernah buka.
     if (isPin && !expectedPin && !ucapanId) {
       setErrorMsg("PIN belum diatur oleh pengirim. Hubungi dia ya!");
       return;
     }
-    if (!isPin && (!triviaQuestion || !expectedAnswer) && !ucapanId) {
+    if (!isPin && (!rawQuestion || !expectedAnswer) && !ucapanId) {
       setErrorMsg("Kuis belum diatur oleh pengirim. Hubungi dia ya!");
       return;
     }
 
     setLoading(true);
     let isCorrect = false;
+    let unlockedUcapan: StoredUcapan | undefined;
 
     if (ucapanId) {
-      // Mode publik: verifikasi via server
+      // Mode publik: verifikasi via server & terima payload konten lengkap + cookie HttpOnly
       try {
-        const res = await fetch(`/api/ucapan/${ucapanId}/verify-gate`, {
+        const res = await fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/verify-gate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ input: trimmed }),
         });
-        const json = await res.json();
-        if (json.ok) {
+        const json = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          ucapan?: StoredUcapan;
+        };
+        if (res.ok && json.ok) {
           isCorrect = true;
+          unlockedUcapan = json.ucapan;
+        } else if (res.status === 429) {
+          setErrorMsg(
+            json.message ?? "Terlalu banyak percobaan. Coba lagi dalam 1 menit."
+          );
         } else {
           setErrorMsg(
             isPin
@@ -83,11 +94,11 @@ export default function GateOverlay({
         setErrorMsg("Terjadi kesalahan jaringan. Coba lagi ya.");
       }
     } else {
-      // Mode preview (Builder): verifikasi lokal
+      // Mode preview (Builder) / Demo lokal: verifikasi lokal
       if (isPin) {
         isCorrect = trimmed === expectedPin;
       } else {
-        isCorrect = trimmed.toLowerCase() === expectedAnswer;
+        isCorrect = normalizeTrivia(trimmed) === expectedAnswer;
       }
       if (!isCorrect) {
         setErrorMsg(
@@ -101,7 +112,7 @@ export default function GateOverlay({
     setLoading(false);
 
     if (isCorrect) {
-      onUnlock();
+      onUnlock(unlockedUcapan);
     } else {
       setShaking(true);
       setTimeout(() => setShaking(false), 600);
@@ -110,6 +121,7 @@ export default function GateOverlay({
 
   return (
     <div
+      data-lenis-prevent
       className={
         variant === "fullscreen"
           ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"

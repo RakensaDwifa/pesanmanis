@@ -1,9 +1,10 @@
 import "server-only";
 import { Resend } from "resend";
 import { BRAND } from "@/lib/brand";
+import { normalizeBaseUrl } from "@/lib/validation";
 
 function fromAddress(): string {
-  return process.env.RESEND_FROM_EMAIL ?? `${BRAND.name} <onboarding@resend.dev>`;
+  return process.env.RESEND_FROM_EMAIL?.trim() || `${BRAND.name} <onboarding@resend.dev>`;
 }
 
 function escapeHtml(raw: string): string {
@@ -15,16 +16,19 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeHeaderText(raw: string): string {
+  return String(raw ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 120);
+}
+
 function resend(): Resend | null {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) return null;
   return new Resend(apiKey);
 }
 
 function appBaseUrl(): string {
-  return (
-    process.env.APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
+  return normalizeBaseUrl(
+    process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL,
     "http://localhost:3000"
   );
 }
@@ -122,7 +126,7 @@ export async function sendAbandonedCartEmail(input: {
   const { error } = await client.emails.send({
     from: fromAddress(),
     to: [input.to],
-    subject: `Kejutanmu untuk ${input.toName} belum selesai 💝`,
+    subject: `Kejutanmu untuk ${sanitizeHeaderText(input.toName)} belum selesai 💝`,
     html,
   });
   return error ? { ok: false, error: error.message } : { ok: true };
@@ -152,7 +156,44 @@ export async function sendAdminTransactionEmail(input: {
   const { error } = await client.emails.send({
     from: fromAddress(),
     to: [input.to],
-    subject: `Transaksi baru: ${input.fromName} → ${input.toName} 💰`,
+    subject: `Transaksi baru: ${sanitizeHeaderText(input.fromName)} → ${sanitizeHeaderText(input.toName)} 💰`,
+    html,
+  });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function sendReplyNotificationEmail(input: {
+  to: string;
+  fromName: string;
+  toName: string;
+  replyFromName: string;
+  replyMessage: string;
+  ucapanTitle?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const client = resend();
+  if (!client) return { ok: false, error: "RESEND_NOT_CONFIGURED" };
+
+  const dashboardUrl = `${appBaseUrl()}/dashboard`;
+  const trimmedReply = input.replyMessage.trim();
+  const excerpt =
+    trimmedReply.length > 400 ? `${trimmedReply.slice(0, 400)}…` : trimmedReply;
+  const titleLine = input.ucapanTitle?.trim()
+    ? ` pada ucapan <b>“${escapeHtml(input.ucapanTitle.trim())}”</b>`
+    : "";
+
+  const html = layout(
+    "Ada balasan baru untuk ucapanmu! 💌",
+    `<p style="margin:0 0 12px;line-height:1.7;">Hai <b>${escapeHtml(input.fromName)}</b>,</p>
+     <p style="margin:0 0 14px;line-height:1.7;"><b>${escapeHtml(input.replyFromName)}</b> baru saja mengirim balasan${titleLine} (untuk ${escapeHtml(input.toName)}):</p>
+     <blockquote style="margin:0 0 16px;padding:14px 18px;background:#fff3ea;border-left:4px solid #de7038;border-radius:12px;font-style:italic;line-height:1.7;color:#3a241a;">“${escapeHtml(excerpt)}”</blockquote>
+     ${ctaButton(dashboardUrl, "Baca di Dashboard 💕")}
+     <p style="margin:0;line-height:1.6;font-size:12px;color:#b08a75;">Notifikasi balasan dibatasi maksimal 1 email per 10 menit agar kotak masukmu tetap nyaman.</p>`
+  );
+
+  const { error } = await client.emails.send({
+    from: fromAddress(),
+    to: [input.to],
+    subject: `${sanitizeHeaderText(input.replyFromName)} membalas ucapanmu 💌`,
     html,
   });
   return error ? { ok: false, error: error.message } : { ok: true };

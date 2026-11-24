@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Share2, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,33 +16,18 @@ import SfxToggle from "@/components/SfxToggle";
 
 const HEART_EMOJIS = ["❤️", "💖", "💕", "🌹", "✨"];
 
+// Deterministic pseudo-random spread so SSR and client render identically with organic layout.
+const HEART_PRESETS = Array.from({ length: 14 }, (_, i) => ({
+  id: i,
+  left: ((i * 29 + 11) % 94) + 3,
+  delay: ((i * 1.9 + 0.4) % 9.5),
+  duration: 9 + ((i * 3.1) % 8),
+  size: 14 + ((i * 5.7) % 22),
+  emoji: HEART_EMOJIS[i % HEART_EMOJIS.length],
+}));
+
 function FloatingHearts({ count = 12 }: { count?: number }) {
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => setIsClient(true), []);
-
-  const hearts = useMemo(() => {
-    if (!isClient) {
-      // Server-side: return deterministic defaults to avoid hydration mismatch
-      return Array.from({ length: 14 }, (_, i) => ({
-        id: i,
-        left: (i * 7.14) % 100, // Deterministic spread
-        delay: (i * 0.7) % 10,
-        duration: 9 + (i % 8),
-        size: 14 + (i * 1.5) % 22,
-        emoji: HEART_EMOJIS[i % HEART_EMOJIS.length],
-      })).slice(0, count);
-    }
-
-    // Client-side: generate random patterns
-    return Array.from({ length: 14 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 10,
-      duration: 9 + Math.random() * 8,
-      size: 14 + Math.random() * 22,
-      emoji: HEART_EMOJIS[i % HEART_EMOJIS.length],
-    })).slice(0, count);
-  }, [count, isClient]);
+  const hearts = useMemo(() => HEART_PRESETS.slice(0, count), [count]);
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
@@ -79,18 +65,15 @@ function CloseButton({ href }: { href?: string }) {
   );
 }
 
-/** Tombol bagikan — hanya tampil di halaman publik (/t/...), bukan preview builder. */
+/** Tombol bagikan — hanya tampil di halaman publik (/t/... atau /u/...), bukan preview builder. */
 function ShareCardButton() {
-  const [status, setStatus] = useState<"hidden" | "ready" | "copied">("hidden");
+  const pathname = usePathname();
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const p = window.location.pathname;
-    if (p.startsWith("/t/") || p.startsWith("/u/")) {
-      setStatus("ready");
-    }
-  }, []);
-
-  if (status === "hidden") return null;
+  const visible = Boolean(
+    pathname && (pathname.startsWith("/t/") || pathname.startsWith("/u/"))
+  );
+  if (!visible) return null;
 
   const share = async () => {
     const url = window.location.href;
@@ -103,15 +86,14 @@ function ShareCardButton() {
         AnalyticsEvents.shareClicked("unknown", "native");
         return;
       } catch (err) {
-        // User membatalkan share sheet — bukan error
         if ((err as Error)?.name === "AbortError") return;
       }
     }
     try {
       await navigator.clipboard.writeText(url);
       AnalyticsEvents.shareClicked("unknown", "clipboard");
-      setStatus("copied");
-      setTimeout(() => setStatus("ready"), 2000);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // ignore
     }
@@ -124,7 +106,7 @@ function ShareCardButton() {
       title="Bagikan"
       className="fixed top-16 right-5 z-50 flex items-center justify-center rounded-full bg-white/85 backdrop-blur-md border border-outline-variant/40 text-primary shadow-lg w-11 h-11 hover:scale-105 transition-transform"
     >
-      {status === "copied" ? <Check className="h-5 w-5 text-green-600" /> : <Share2 className="h-5 w-5" />}
+      {copied ? <Check className="h-5 w-5 text-green-600" /> : <Share2 className="h-5 w-5" />}
     </button>
   );
 }

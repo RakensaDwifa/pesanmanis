@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { asTrimmedString, isRecord, isValidEmail } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
   const { success } = await checkRateLimit(`newsletter:${getClientIp(request)}`, 5, 60000);
@@ -13,17 +12,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "RATE_LIMIT_EXCEEDED" }, { status: 429 });
   }
 
-  let body: { email?: string; source?: string };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
+  if (!isRecord(body)) {
+    return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
+  }
 
-  const email = body.email?.trim().toLowerCase() ?? "";
-  if (!email || !EMAIL_REGEX.test(email)) {
+  const rawEmail = asTrimmedString(body.email);
+  if (!rawEmail || !isValidEmail(rawEmail)) {
     return NextResponse.json({ ok: false, error: "INVALID_EMAIL" }, { status: 400 });
   }
+  const email = rawEmail.toLowerCase();
 
   if (!isRemote()) {
     return NextResponse.json({ ok: true, demo: true });

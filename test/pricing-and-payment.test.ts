@@ -14,10 +14,10 @@ import {
   ALL_ADDON_KEYS,
 } from "../lib/pricing.ts";
 
-import { validateSlugFormat, RESERVED_SLUGS } from "../lib/slug.ts";
+import { validateSlugFormat } from "../lib/slug.ts";
 import { buildDraftAddonColumns } from "../lib/supabase/rows.ts";
 
-import { verifyMidtransSignature } from "../lib/midtrans.ts";
+import { verifyMidtransSignature } from "../lib/midtrans-signature.ts";
 
 import {
   REFERRAL_REWARD_AMOUNT,

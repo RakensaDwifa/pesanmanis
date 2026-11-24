@@ -6,6 +6,7 @@ import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
 import FloatingChat from "@/components/landing/FloatingChat";
 import CaptureReferral from "@/components/referral/CaptureReferral";
+import { SmoothScrollProvider } from "@/components/ui/smooth-scroll";
 import { ToasterWrapper } from "@/components/ui/toast";
 import { BRAND } from "@/lib/brand";
 
@@ -64,13 +65,15 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <FloatingChat />
-        <CaptureReferral />
-        <ToasterWrapper />
-        {process.env.VERCEL === "1" && <Analytics />}
+        <SmoothScrollProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <FloatingChat />
+          <CaptureReferral />
+          <ToasterWrapper />
+          {process.env.VERCEL === "1" && <Analytics />}
+        </SmoothScrollProvider>
       </body>
     </html>
   );

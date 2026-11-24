@@ -157,6 +157,6 @@ export function fillContentDefaults(
     mood: content.mood,
     email: content.email,
     timeline: content.timeline,
-    createdAt: content.createdAt ?? Date.now(),
+    createdAt: content.createdAt,
   };
 }

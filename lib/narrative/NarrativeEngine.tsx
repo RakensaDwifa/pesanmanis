@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useRef, useEffect, ReactNode } from "react";
+import { useCallback, useState, useRef, useEffect, ReactNode } from "react";
 import type { NarrativeChapter } from "./types";
 import { sfx } from "./sound";
 import ScratchCanvas from "./ScratchCanvas";
@@ -42,7 +42,7 @@ export default function NarrativeEngine({
   const holdStartRef = useRef<number>(0);
   const currentChapter = chapters[currentIdx];
 
-  const advanceChapter = () => {
+  const advanceChapter = useCallback(() => {
     setIsTransitioning(true);
     sfx.click();
     setTimeout(() => {
@@ -51,29 +51,28 @@ export default function NarrativeEngine({
         setHoldProgress(0);
         setTapCount(0);
         setSelectedChoice(null);
+        setDragProgress(0);
+        setIsDragging(false);
       } else {
         sfx.chime();
         onFinish();
       }
       setIsTransitioning(false);
     }, 350);
-  };
-
-  // Reset state tiap ganti babak
-  useEffect(() => {
-    setHoldProgress(0);
-    setTapCount(0);
-    setSelectedChoice(null);
-    setDragProgress(0);
-    setIsDragging(false);
-  }, [currentIdx]);
+  }, [chapters.length, currentIdx, onFinish]);
 
   // Babak maju dari lapisan gestur eksternal (GSAP Draggable di template).
   const advanceSignalRef = useRef(advanceSignal);
+  const advanceChapterRef = useRef(advanceChapter);
+  useEffect(() => {
+    advanceChapterRef.current = advanceChapter;
+  }, [advanceChapter]);
+
   useEffect(() => {
     if (advanceSignal === advanceSignalRef.current) return;
     advanceSignalRef.current = advanceSignal;
-    advanceChapter();
+    const timer = setTimeout(() => advanceChapterRef.current(), 0);
+    return () => clearTimeout(timer);
   }, [advanceSignal]);
 
   // Handler Hold

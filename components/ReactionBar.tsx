@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircleHeart, Send } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { isRemote } from "@/lib/supabase/config";
 import { playSfx } from "@/lib/sfx";
@@ -25,46 +26,79 @@ export default function ReactionBar({ ucapanId }: { ucapanId: string }) {
   const [replies, setReplies] = useState<Reply[]>([]);
   const [fromName, setFromName] = useState("");
   const [message, setMessage] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const remote = isRemote();
 
-  const load = useCallback(async () => {
+  const fetchInteractions = useCallback(async (): Promise<{
+    reactions: Reaction[];
+    replies: Reply[];
+  } | null> => {
     if (remote) {
-      const [r, p] = await Promise.all([
-        fetch(`/api/ucapan/${ucapanId}/reactions`).then((x) => x.json()),
-        fetch(`/api/ucapan/${ucapanId}/replies`).then((x) => x.json()),
-      ]);
-      setReactions(r.reactions ?? []);
-      setReplies(p.replies ?? []);
-    } else {
       try {
-        setReactions(
-          JSON.parse(localStorage.getItem(`pm:reactions:${ucapanId}`) ?? "[]")
-        );
-        setReplies(
-          JSON.parse(localStorage.getItem(`pm:replies:${ucapanId}`) ?? "[]")
-        );
+        const [rRes, pRes] = await Promise.all([
+          fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/reactions`),
+          fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/replies`),
+        ]);
+        const [r, p] = await Promise.all([rRes.json(), pRes.json()]);
+        return {
+          reactions: Array.isArray(r.reactions) ? r.reactions : [],
+          replies: Array.isArray(p.replies) ? p.replies : [],
+        };
       } catch {
-        /* ignore */
+        return null;
       }
     }
-    setLoaded(true);
+    try {
+      return {
+        reactions: JSON.parse(localStorage.getItem(`pm:reactions:${ucapanId}`) ?? "[]"),
+        replies: JSON.parse(localStorage.getItem(`pm:replies:${ucapanId}`) ?? "[]"),
+      };
+    } catch {
+      return null;
+    }
   }, [remote, ucapanId]);
 
+  const refresh = useCallback(async () => {
+    const data = await fetchInteractions();
+    if (!data) return;
+    setReactions(data.reactions);
+    setReplies(data.replies);
+  }, [fetchInteractions]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void fetchInteractions().then((data) => {
+      if (cancelled || !data) return;
+      setReactions(data.reactions);
+      setReplies(data.replies);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchInteractions]);
 
   const react = async (emoji: string) => {
     playSfx("heart");
     if (remote) {
-      await fetch(`/api/ucapan/${ucapanId}/reactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emoji }),
-      }).catch(() => undefined);
-      void load();
+      try {
+        const res = await fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/reactions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji }),
+        });
+        if (!res.ok) {
+          toast.error(
+            res.status === 429
+              ? "Pelan-pelan ya, coba lagi sebentar."
+              : "Gagal mengirim reaksi."
+          );
+          return;
+        }
+        void refresh();
+      } catch {
+        toast.error("Gagal mengirim reaksi. Periksa koneksi internetmu.");
+      }
     } else {
       const next = [...reactions, { emoji, created_at: new Date().toISOString() }];
       setReactions(next);
@@ -79,31 +113,47 @@ export default function ReactionBar({ ucapanId }: { ucapanId: string }) {
   const sendReply = async () => {
     const name = fromName.trim();
     const msg = message.trim();
-    if (!name || !msg) return;
-    if (remote) {
-      const res = await fetch(`/api/ucapan/${ucapanId}/replies`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromName: name, message: msg }),
-      }).then((x) => x.json());
-      if (res.ok) {
+    if (!name || !msg || submitting) return;
+    setSubmitting(true);
+    try {
+      if (remote) {
+        const res = await fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/replies`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fromName: name, message: msg }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
+        if (res.ok && json.ok) {
+          setFromName("");
+          setMessage("");
+          toast.success("Balasanmu terkirim 💌");
+          void refresh();
+        } else {
+          toast.error(
+            res.status === 429
+              ? "Terlalu banyak balasan. Coba lagi dalam 1 menit."
+              : "Gagal mengirim balasan. Coba lagi ya."
+          );
+        }
+      } else {
+        const next = [
+          ...replies,
+          { from_name: name, message: msg, created_at: new Date().toISOString() },
+        ];
+        setReplies(next);
+        try {
+          localStorage.setItem(`pm:replies:${ucapanId}`, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
         setFromName("");
         setMessage("");
-        void load();
+        toast.success("Balasanmu terkirim 💌");
       }
-    } else {
-      const next = [
-        ...replies,
-        { from_name: name, message: msg, created_at: new Date().toISOString() },
-      ];
-      setReplies(next);
-      try {
-        localStorage.setItem(`pm:replies:${ucapanId}`, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      setFromName("");
-      setMessage("");
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi ya.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -157,15 +207,16 @@ export default function ReactionBar({ ucapanId }: { ucapanId: string }) {
               />
               <button
                 type="button"
+                disabled={submitting || !fromName.trim() || !message.trim()}
                 onClick={() => void sendReply()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-label-md font-semibold hover:scale-105 active:scale-95 transition-transform"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-label-md font-semibold hover:scale-105 active:scale-95 transition-transform disabled:opacity-50"
               >
-                <Send className="h-4 w-4" /> Kirim
+                <Send className="h-4 w-4" /> {submitting ? "Mengirim…" : "Kirim"}
               </button>
             </div>
 
             {(counts.length > 0 || replies.length > 0) && (
-              <div className="mt-3 pt-3 border-t border-outline-variant/30 space-y-2 max-h-48 overflow-auto">
+              <div data-lenis-prevent className="mt-3 pt-3 border-t border-outline-variant/30 space-y-2 max-h-48 overflow-auto">
                 {counts.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {counts.map((c) => (

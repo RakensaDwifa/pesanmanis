@@ -62,6 +62,7 @@ export default function StoryFlow({
   const advance = () => {
     const next = nextStage(stage, total);
     trackEvent("story_step_completed", { stage: stage + 1, category: category ?? "unknown" });
+    setHint(false);
     if (isStoryFinished(next, total)) finish();
     else setStage(next);
   };
@@ -69,7 +70,6 @@ export default function StoryFlow({
   // Petunjuk muncul setelah 8 detik tanpa interaksi.
   useEffect(() => {
     if (stage === 0) return;
-    setHint(false);
     let timer = window.setTimeout(() => setHint(true), 8000);
     const reset = () => {
       window.clearTimeout(timer);
@@ -91,6 +91,7 @@ export default function StoryFlow({
         toName={toName}
         onOpen={() => {
           trackEvent("story_step_completed", { stage: 1, category: category ?? "unknown" });
+          setHint(false);
           if (total > 1) setStage(1);
           else finish();
         }}

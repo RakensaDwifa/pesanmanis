@@ -6,6 +6,8 @@ import {
   getReferralStats,
   applyReferralCode,
 } from "@/lib/referral";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { asTrimmedString, isRecord } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -38,23 +40,36 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const { success } = await checkRateLimit(
+    `referral:${getClientIp(request)}`,
+    10,
+    60000
+  );
+  if (!success) {
+    return NextResponse.json(
+      { ok: false, error: "RATE_LIMIT_EXCEEDED" },
+      { status: 429 }
+    );
+  }
+
   const user = await requireUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
   }
 
-  let body: { code?: string };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
-  if (!body.code) {
+  const code = isRecord(body) ? asTrimmedString(body.code) : null;
+  if (!code || code.length > 32) {
     return NextResponse.json({ ok: false, error: "MISSING_CODE" }, { status: 400 });
   }
 
-  const result = await applyReferralCode(body.code, user.id);
+  const result = await applyReferralCode(code, user.id);
   if (!result.ok) {
     const status = result.error === "INVALID" ? 404 : 409;
     return NextResponse.json({ ok: false, error: result.error }, { status });

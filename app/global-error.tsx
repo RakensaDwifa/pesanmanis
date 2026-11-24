@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { RefreshCw, Home } from "lucide-react";
 import Link from "next/link";
 
 export default function GlobalError({

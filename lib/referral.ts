@@ -1,4 +1,5 @@
 import "server-only";
+import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   REFERRAL_REWARD_AMOUNT,
@@ -6,12 +7,13 @@ import {
 } from "@/lib/referral-policy";
 
 const REWARD_AMOUNT = REFERRAL_REWARD_AMOUNT;
+const RESERVATION_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h Midtrans Snap expiry window
 
 function randomCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
   for (let i = 0; i < 8; i += 1) {
-    s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    s += alphabet[crypto.randomInt(0, alphabet.length)];
   }
   return `REF-${s}`;
 }
@@ -58,6 +60,51 @@ export async function getCreditBalance(userId: string): Promise<number> {
 
   const total = (credits ?? []).reduce((sum, c) => sum + Number(c.amount ?? 0), 0);
   return Math.max(0, total);
+}
+
+/**
+ * Computes spendable credit balance after subtracting credits already reserved by other
+ * active UNPAID payments belonging to the same user (prevents parallel checkout double-spend).
+ */
+export async function getAvailableCreditBalance(
+  userId: string,
+  excludeUcapanId?: string
+): Promise<number> {
+  const totalBalance = await getCreditBalance(userId);
+  if (totalBalance <= 0) return 0;
+
+  const admin = createAdminClient();
+  const { data: ownedRows } = await admin
+    .from("ucapan")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("paid", false);
+
+  const otherUnpaidIds = (ownedRows ?? [])
+    .map((r) => String(r.id))
+    .filter((id) => id !== excludeUcapanId);
+
+  if (otherUnpaidIds.length === 0) return totalBalance;
+
+  const cutoff = new Date(Date.now() - RESERVATION_WINDOW_MS).toISOString();
+  const { data: pendingPayments, error } = await admin
+    .from("payments")
+    .select("credit_used")
+    .in("ucapan_id", otherUnpaidIds)
+    .eq("status", "UNPAID")
+    .gt("credit_used", 0)
+    .gt("created_at", cutoff);
+
+  if (error) {
+    // Graceful fallback if credit_used column hasn't been migrated yet.
+    return totalBalance;
+  }
+
+  const reserved = (pendingPayments ?? []).reduce(
+    (sum, p) => sum + Math.max(0, Number(p.credit_used ?? 0)),
+    0
+  );
+  return Math.max(0, totalBalance - reserved);
 }
 
 export async function getReferralStats(userId: string): Promise<ReferralStats> {
@@ -135,19 +182,20 @@ export async function applyReferralCode(
     return { ok: false, error: "SELF" };
   }
 
-  // Jika baris pertama masih kosong (referee_id null & pending), isi baris itu
+  // Jika baris pertama masih kosong (referee_id null & pending), isi baris itu secara atomik
   if (!codeOwner.referee_id && codeOwner.status === "pending") {
-    const { error } = await admin
+    const { data: updated, error } = await admin
       .from("referrals")
       .update({ referee_id: refereeId })
       .eq("id", codeOwner.id)
-      .is("referee_id", null);
+      .is("referee_id", null)
+      .select("id")
+      .maybeSingle();
 
-    if (!error) return { ok: true };
+    if (!error && updated) return { ok: true };
   }
 
   // Baris pertama sudah terpakai teman lain -> sisipkan baris undangan baru
-  // (memerlukan migrasi schema_v9 yang melepas constraint unique tunggal pada `code`)
   const { error: insertErr } = await admin.from("referrals").insert({
     referrer_id: codeOwner.referrer_id,
     referee_id: refereeId,
@@ -162,7 +210,8 @@ export async function applyReferralCode(
 
 /**
  * Selesaikan semua referral pending milik `userId` (dipanggil saat
- * pembayaran pertamanya sukses). Beri credit ke masing-masing referrer.
+ * pembayaran pertamanya sukses). Menggunakan klaim atomik `status = 'pending'`
+ * + proteksi unique index `credits(user_id, type, reference_id)` agar tidak dobel.
  */
 export async function completePendingReferrals(userId: string): Promise<void> {
   const admin = createAdminClient();
@@ -176,7 +225,6 @@ export async function completePendingReferrals(userId: string): Promise<void> {
   for (const r of pendings ?? []) {
     const now = new Date().toISOString();
 
-    // Hitung dulu reward yang tersisa agar batas per pengundang dihormati.
     const { count } = await admin
       .from("credits")
       .select("id", { count: "exact", head: true })
@@ -185,10 +233,16 @@ export async function completePendingReferrals(userId: string): Promise<void> {
 
     const reward = referralRewardFor(count ?? 0, r.reward_amount);
 
-    await admin
+    // Atomic transition pending -> completed so concurrent callers cannot double-reward.
+    const { data: claimed } = await admin
       .from("referrals")
       .update({ status: "completed", completed_at: now, reward_amount: reward })
-      .eq("id", r.id);
+      .eq("id", r.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+
+    if (!claimed) continue;
 
     if (reward > 0) {
       await admin.from("credits").insert({
@@ -203,15 +257,14 @@ export async function completePendingReferrals(userId: string): Promise<void> {
 
 /**
  * Potong saldo referral (credits) milik `userId` saat pembayaran lunas.
- * Idempoten terhadap `paymentId` supaya tidak terpotong dua kali
- * jika webhook & status-check berjalan bersamaan.
+ * Idempoten terhadap `paymentId` (cek + unique index DB).
  */
 export async function redeemCreditsForPayment(
   userId: string,
   paymentId: number,
   creditUsed: number
 ): Promise<void> {
-  if (!userId || creditUsed <= 0) return;
+  if (!userId || creditUsed <= 0 || paymentId <= 0) return;
   const admin = createAdminClient();
 
   const { data: existing } = await admin

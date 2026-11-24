@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createSnapTransaction } from "@/lib/midtrans";
@@ -5,15 +6,26 @@ import { calculateCheckoutTotal, sanitizeAddons } from "@/lib/pricing";
 import { getActivePrice } from "@/lib/pricing-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { validateSlugFormat } from "@/lib/slug";
-import { getUcapan } from "@/lib/store";
 import { isRemote } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { buildDraftAddonState } from "@/lib/supabase/rows";
+import { asTrimmedString, isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
+const MIN_PAYABLE = 1000;
+const VALID_PARTICLES = ["hearts", "roses", "sparkles"];
+
 export async function POST(request: Request) {
-  // Cegah spam pembuatan transaksi (tiap request membuat baris payments).
-  const { success } = await checkRateLimit(getClientIp(request), 5, 60000);
+  if (!isRemote()) {
+    return NextResponse.json({ ok: false, error: "DEMO_MODE" }, { status: 400 });
+  }
+
+  const { success } = await checkRateLimit(
+    `payment-create:${getClientIp(request)}`,
+    5,
+    60000
+  );
   if (!success) {
     return NextResponse.json(
       {
@@ -25,73 +37,54 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: {
-    ucapanId?: string;
-    customerName?: string;
-    addons?: unknown;
-    customSlug?: string;
-    touchParticles?: string;
-    gateType?: string;
-    gateData?: unknown;
-    useCredits?: boolean;
-  };
+  const supabaseServer = await createClient();
+  const {
+    data: { user },
+  } = await supabaseServer.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
+  }
+
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
 
-  if (!body.ucapanId) {
+  if (!isRecord(body) || !isValidUuid(body.ucapanId)) {
     return NextResponse.json({ ok: false, error: "MISSING_FIELDS" }, { status: 400 });
   }
 
-  const ucapanId = body.ucapanId;
-  const merchantRef = `UP-${ucapanId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}`;
+  const ucapanId = body.ucapanId.trim();
+  const customerName = asTrimmedString(body.customerName) || "Pelanggan";
+  const useCredits = body.useCredits !== false;
+  const randomSuffix = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const merchantRef = `UP-${ucapanId.slice(0, 8)}-${Date.now().toString(36).toUpperCase()}-${randomSuffix}`;
 
-  let templateSlug: string | null = null;
-  let ownerId: string | null = null;
-  let ucapanEmail: string | null = null;
-  let paid = false;
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  const { data: ucapanRow } = await admin
+    .from("ucapan")
+    .select("template_slug, owner_id, email, paid")
+    .eq("id", ucapanId)
+    .maybeSingle();
 
-  if (isRemote()) {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("ucapan")
-      .select("template_slug, owner_id, email, paid")
-      .eq("id", ucapanId)
-      .maybeSingle();
-    templateSlug = data?.template_slug ?? null;
-    ownerId = data?.owner_id ?? null;
-    ucapanEmail = data?.email ?? null;
-    paid = data?.paid ?? false;
-  } else {
-    const local = getUcapan(ucapanId);
-    templateSlug = local?.templateSlug ?? null;
-    paid = local?.paid ?? false;
-  }
-
-  if (!templateSlug) {
+  if (!ucapanRow?.template_slug) {
     return NextResponse.json({ ok: false, error: "UCAPAN_NOT_FOUND" }, { status: 404 });
   }
 
-  // Ownership check & paid check
-  const supabaseServer = await createClient();
-  const { data: { user } } = await supabaseServer.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
-  }
-  if (ownerId && ownerId !== user.id) {
+  // Strict ownership check (rejects orphan rows where owner_id is null as well).
+  if (!ucapanRow.owner_id || ucapanRow.owner_id !== user.id) {
     return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
   }
-  if (paid) {
+  if (ucapanRow.paid) {
     return NextResponse.json({ ok: false, error: "ALREADY_PAID" }, { status: 400 });
   }
 
-  // Sanitasi daftar add-on
   const sanitizedAddons = sanitizeAddons(body.addons);
 
-  // Jika add-on custom slug dipilih, validasi format dan keunikan
+  // Validate custom slug uniqueness strictly against already-paid ucapan.
   let validCustomSlug: string | null = null;
   if (sanitizedAddons.includes("custom_slug")) {
     const validation = validateSlugFormat(body.customSlug);
@@ -103,76 +96,129 @@ export async function POST(request: Request) {
     }
     validCustomSlug = validation.normalized;
 
-    if (isRemote()) {
-      const { createAdminClient } = await import("@/lib/supabase/admin");
-      const admin = createAdminClient();
-      const { data: existingSlug } = await admin
-        .from("ucapan")
-        .select("id")
-        .eq("custom_slug", validCustomSlug)
-        .neq("id", ucapanId)
-        .maybeSingle();
+    const { data: existingSlug } = await admin
+      .from("ucapan")
+      .select("id")
+      .eq("custom_slug", validCustomSlug)
+      .eq("paid", true)
+      .neq("id", ucapanId)
+      .maybeSingle();
 
-      if (existingSlug) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "SLUG_TAKEN",
-            message: "Alamat custom sudah dipakai orang lain. Pilih nama lain ya!",
-          },
-          { status: 400 }
-        );
-      }
-    }
-  }
-
-  // Jika add-on gate dipilih, wajib ada PIN 4-6 digit
-  let validGateData: { pin: string } | null = null;
-  if (sanitizedAddons.includes("intimate_gate")) {
-    const gateData =
-      body.gateData && typeof body.gateData === "object"
-        ? (body.gateData as Record<string, unknown>)
-        : null;
-    const pin = String(gateData?.pin ?? "").trim();
-    if (!/^\d{4,6}$/.test(pin)) {
+    if (existingSlug) {
       return NextResponse.json(
         {
           ok: false,
-          error: "INVALID_GATE",
-          message: "PIN rahasia wajib diisi 4–6 angka.",
+          error: "SLUG_TAKEN",
+          message: "Alamat custom sudah dipakai orang lain. Pilih nama lain ya!",
         },
         { status: 400 }
       );
     }
-    validGateData = { pin };
   }
 
-  // Jika add-on partikel dipilih, validasi jenis yang didukung
-  const VALID_PARTICLES = ["hearts", "roses", "sparkles"];
-  if (
-    sanitizedAddons.includes("touch_particles") &&
-    body.touchParticles &&
-    !VALID_PARTICLES.includes(String(body.touchParticles))
-  ) {
-    return NextResponse.json(
-      { ok: false, error: "INVALID_PARTICLE", message: "Jenis efek partikel tidak dikenal." },
-      { status: 400 }
-    );
+  // Validate Intimate Gate (PIN 4–6 digits OR Nostalgia Trivia Q&A)
+  let validGateType: "pin" | "trivia" | null = null;
+  let validPin: string | null = null;
+  let validQuestion: string | null = null;
+  let validAnswer: string | null = null;
+  if (sanitizedAddons.includes("intimate_gate")) {
+    const rawGateType = asTrimmedString(body.gateType) ?? "pin";
+    const gateData = isRecord(body.gateData) ? body.gateData : null;
+
+    if (rawGateType === "trivia") {
+      const question = asTrimmedString(gateData?.question) ?? "";
+      const answer = asTrimmedString(gateData?.answer) ?? "";
+      if (question.length < 3 || question.length > 160) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "INVALID_GATE",
+            message: "Pertanyaan kuis nostalgia wajib diisi (3–160 karakter).",
+          },
+          { status: 400 }
+        );
+      }
+      if (answer.length < 1 || answer.length > 80) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "INVALID_GATE",
+            message: "Jawaban rahasia kuis wajib diisi (1–80 karakter).",
+          },
+          { status: 400 }
+        );
+      }
+      validGateType = "trivia";
+      validQuestion = question;
+      validAnswer = answer;
+    } else if (rawGateType === "pin") {
+      const pin = asTrimmedString(gateData?.pin) ?? "";
+      if (!/^\d{4,6}$/.test(pin)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "INVALID_GATE",
+            message: "PIN rahasia wajib diisi 4–6 angka.",
+          },
+          { status: 400 }
+        );
+      }
+      validGateType = "pin";
+      validPin = pin;
+    } else {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "INVALID_GATE",
+          message: "Jenis kunci pesan tidak dikenali.",
+        },
+        { status: 400 }
+      );
+    }
   }
 
-  // Harga dasar dari server (promo vs normal)
+  // Validate touch particle style
+  let validParticle: string | null = null;
+  if (sanitizedAddons.includes("touch_particles")) {
+    const rawParticle = asTrimmedString(body.touchParticles);
+    if (rawParticle && !VALID_PARTICLES.includes(rawParticle)) {
+      return NextResponse.json(
+        { ok: false, error: "INVALID_PARTICLE", message: "Jenis efek partikel tidak dikenal." },
+        { status: 400 }
+      );
+    }
+    validParticle = rawParticle ?? "hearts";
+  }
+
+  // Build immutable add-on configuration snapshot stored directly on the payment row.
+  const addonSnapshot = buildDraftAddonState({
+    addons: sanitizedAddons,
+    customSlug: validCustomSlug,
+    gateType: validGateType,
+    pin: validPin,
+    question: validQuestion,
+    answer: validAnswer,
+    particleStyle: validParticle,
+  });
+
+  // Server-authoritative base price (promo vs normal)
   const price = await getActivePrice();
-
-  // Hitung total checkout dengan mempertimbangkan paket bundling add-on
   const calculation = calculateCheckoutTotal(price.amount, sanitizedAddons);
 
-  // Hitung potongan saldo referral (credits) bila user memilih useCredits (default: true)
-  const MIN_PAYABLE = 1000;
+  // Supersede previous UNPAID attempts for the same ucapanId so retrying checkout
+  // does not double-reserve the user's own referral credits.
+  await admin
+    .from("payments")
+    .update({ status: "SUPERSEDED" })
+    .eq("ucapan_id", ucapanId)
+    .eq("status", "UNPAID");
+
+  // Compute spendable referral credits (excluding credits already reserved by other active UNPAID checkouts).
   let creditUsed = 0;
-  if (isRemote() && body.useCredits !== false) {
+  if (useCredits) {
     try {
-      const { getCreditBalance } = await import("@/lib/referral");
-      const balance = await getCreditBalance(user.id);
+      const { getAvailableCreditBalance } = await import("@/lib/referral");
+      const balance = await getAvailableCreditBalance(user.id, ucapanId);
       if (balance > 0 && calculation.totalAmount > MIN_PAYABLE) {
         creditUsed = Math.min(balance, calculation.totalAmount - MIN_PAYABLE);
       }
@@ -182,72 +228,72 @@ export async function POST(request: Request) {
   }
   const payableAmount = Math.max(MIN_PAYABLE, calculation.totalAmount - creditUsed);
 
-  // Simpan konfigurasi add-on ke ucapan, catat pembayaran, & catat sesi abandoned-cart
-  if (isRemote()) {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const admin = createAdminClient();
+  // Persist draft add-on preferences (and fallback creator email) without touching live paid columns.
+  const ucapanDraftUpdate: Record<string, unknown> = {
+    draft_addons: addonSnapshot,
+  };
+  if (!ucapanRow.email && user.email) {
+    ucapanDraftUpdate.email = user.email;
+  }
+  const { error: ucapanDraftErr } = await admin
+    .from("ucapan")
+    .update(ucapanDraftUpdate)
+    .eq("id", ucapanId);
+  if (ucapanDraftErr?.code === "42703" && !ucapanRow.email && user.email) {
+    await admin.from("ucapan").update({ email: user.email }).eq("id", ucapanId);
+  }
 
-    // Update ucapan dengan konfigurasi add-on (+ isi email dari user login bila masih kosong)
-    const ucapanUpdate: Record<string, unknown> = {
-      custom_slug: validCustomSlug,
-      qr_photo_enabled: sanitizedAddons.includes("custom_qr"),
-      receipt_enabled: sanitizedAddons.includes("love_receipt"),
-      touch_particles: sanitizedAddons.includes("touch_particles")
-        ? body.touchParticles ?? "hearts"
-        : null,
-      gate_type: sanitizedAddons.includes("intimate_gate") ? "pin" : null,
-      gate_data: sanitizedAddons.includes("intimate_gate") ? validGateData : null,
-    };
-    if (!ucapanEmail && user.email) {
-      ucapanUpdate.email = user.email;
-    }
+  const paymentRow: Record<string, unknown> = {
+    ucapan_id: ucapanId,
+    merchant_ref: merchantRef,
+    method: "snap",
+    amount: payableAmount,
+    base_amount: price.amount,
+    is_promo: price.isPromo,
+    addons: calculation.addons,
+    addon_config: addonSnapshot ?? {},
+    credit_used: creditUsed,
+    status: "UNPAID",
+  };
 
-    await admin.from("ucapan").update(ucapanUpdate).eq("id", ucapanId);
-
-    const paymentRow: Record<string, unknown> = {
+  let { error: insertError } = await admin.from("payments").insert(paymentRow);
+  // Only fall back when schema_v9 columns are genuinely absent (Postgres undefined_column 42703).
+  if (insertError?.code === "42703") {
+    console.warn("[payment-create] kolom schema_v9 belum dimigrasikan, menggunakan insert kompatibel");
+    const legacyRow: Record<string, unknown> = {
       ucapan_id: ucapanId,
       merchant_ref: merchantRef,
       method: "snap",
-      amount: payableAmount,
+      amount: calculation.totalAmount,
       addons: calculation.addons,
       status: "UNPAID",
     };
-    if (creditUsed > 0) {
-      paymentRow.credit_used = creditUsed;
-    }
+    creditUsed = 0;
+    ({ error: insertError } = await admin.from("payments").insert(legacyRow));
+  }
+  if (insertError) {
+    return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
+  }
 
-    let { error: insertError } = await admin.from("payments").insert(paymentRow);
-    // Fallback jika kolom credit_used belum dimigrasikan di database lama
-    if (insertError && creditUsed > 0) {
-      delete paymentRow.credit_used;
-      creditUsed = 0;
-      paymentRow.amount = calculation.totalAmount;
-      ({ error: insertError } = await admin.from("payments").insert(paymentRow));
-    }
-    if (insertError) {
-      return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
-    }
+  // Record checkout session for abandoned-cart recovery
+  const effectiveEmail = ucapanRow.email || user.email || undefined;
+  try {
+    const { data: existingSession } = await admin
+      .from("checkout_sessions")
+      .select("id")
+      .eq("ucapan_id", ucapanId)
+      .limit(1)
+      .maybeSingle();
 
-    // Catat sesi checkout untuk abandoned-cart recovery sejak user klik Bayar
-    try {
-      const { data: existingSession } = await admin
-        .from("checkout_sessions")
-        .select("id")
-        .eq("ucapan_id", ucapanId)
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingSession) {
-        const effectiveEmail = ucapanEmail ?? user.email ?? null;
-        await admin.from("checkout_sessions").insert({
-          ucapan_id: ucapanId,
-          email: effectiveEmail,
-          started_at: new Date().toISOString(),
-        });
-      }
-    } catch {
-      // non-blocking
+    if (!existingSession) {
+      await admin.from("checkout_sessions").insert({
+        ucapan_id: ucapanId,
+        email: effectiveEmail ?? null,
+        started_at: new Date().toISOString(),
+      });
     }
+  } catch {
+    // non-blocking
   }
 
   const finalPayable = Math.max(MIN_PAYABLE, calculation.totalAmount - creditUsed);
@@ -255,17 +301,14 @@ export async function POST(request: Request) {
   const result = await createSnapTransaction({
     ucapanId,
     merchantRef,
-    templateSlug,
-    customerName: body.customerName ?? "Pelanggan",
+    templateSlug: ucapanRow.template_slug,
+    customerName,
+    customerEmail: effectiveEmail,
     amount: finalPayable,
   });
 
   if (!result.ok) {
-    if (isRemote()) {
-      const { createAdminClient } = await import("@/lib/supabase/admin");
-      const admin = createAdminClient();
-      await admin.from("payments").delete().eq("merchant_ref", merchantRef);
-    }
+    await admin.from("payments").delete().eq("merchant_ref", merchantRef);
     return NextResponse.json(result, { status: 422 });
   }
 
@@ -280,4 +323,3 @@ export async function POST(request: Request) {
     addons: calculation.addons,
   });
 }
-

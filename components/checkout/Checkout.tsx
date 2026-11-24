@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, Lock, QrCode, Wallet, Pencil,
 } from "lucide-react";
-import { getUcapan } from "@/lib/store";
+import { getUcapan, savePaidUcapan } from "@/lib/store";
 import { getTemplate, templateEmoji } from "@/lib/templates";
 import { usePricing } from "@/lib/use-pricing";
 import { ADDON_PRICING, calculateCheckoutTotal, formatPrice, type AddonKey } from "@/lib/pricing";
-import type { StoredUcapan } from "@/lib/store";
+import type { StoredUcapan } from "@/lib/types";
 
 const PAYMENT_METHODS = [
   { icon: "📱", name: "QRIS", note: "GoPay, OVO, DANA, ShopeePay, LinkAja & m-banking" },
@@ -28,7 +28,10 @@ const PARTICLE_LABELS: Record<string, string> = {
 interface SavedAddons {
   addons: AddonKey[];
   customSlug?: string;
+  gateType?: "pin" | "trivia";
   pin?: string;
+  question?: string;
+  answer?: string;
   particleStyle?: string;
 }
 
@@ -38,6 +41,7 @@ function addonsStorageKey(ucapanId: string) {
 }
 
 function readSavedAddons(ucapanId: string): SavedAddons | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(addonsStorageKey(ucapanId));
     if (!raw) return null;
@@ -45,12 +49,50 @@ function readSavedAddons(ucapanId: string): SavedAddons | null {
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
       customSlug: parsed.customSlug,
+      gateType: parsed.gateType === "trivia" ? "trivia" : parsed.gateType === "pin" ? "pin" : undefined,
       pin: parsed.pin,
+      question: parsed.question,
+      answer: parsed.answer,
       particleStyle: parsed.particleStyle,
     };
   } catch {
     return null;
   }
+}
+
+function persistDemoActivation(
+  ucapan: StoredUcapan,
+  selected: AddonKey[],
+  saved: SavedAddons
+) {
+  const hasGate = selected.includes("intimate_gate");
+  const isTrivia =
+    hasGate &&
+    saved.gateType === "trivia" &&
+    Boolean(saved.question?.trim() && saved.answer?.trim());
+  const isPin = hasGate && !isTrivia && Boolean(saved.pin);
+
+  savePaidUcapan({
+    ...ucapan,
+    paid: true,
+    paidAt: Date.now(),
+    customSlug: selected.includes("custom_slug") ? saved.customSlug ?? null : null,
+    qrPhotoEnabled: selected.includes("custom_qr"),
+    touchParticles: selected.includes("touch_particles")
+      ? saved.particleStyle ?? "hearts"
+      : null,
+    gateType: isTrivia ? "trivia" : isPin ? "pin" : null,
+    gateData: isTrivia
+      ? { question: saved.question?.trim(), answer: saved.answer?.trim() }
+      : isPin
+        ? { pin: saved.pin }
+        : null,
+    receiptEnabled: selected.includes("love_receipt"),
+  });
+}
+
+function redirectExternal(url: string) {
+  window.location.assign(url);
 }
 
 export default function Checkout({ id }: { id: string }) {
@@ -67,8 +109,12 @@ export default function Checkout({ id }: { id: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/ucapan/${id}`)
+    fetch(`/api/ucapan/${encodeURIComponent(id)}`)
       .then(async (r) => {
+        if (r.status === 401) {
+          router.replace(`/login?next=${encodeURIComponent(`/checkout/${id}`)}`);
+          return;
+        }
         const json = await r.json();
         if (cancelled) return;
         const u: StoredUcapan | null = json.ucapan ?? getUcapan(id);
@@ -77,34 +123,60 @@ export default function Checkout({ id }: { id: string }) {
           router.replace(`/checkout/${id}/selesai`);
           return;
         }
-        // Fallback: jika sessionStorage kosong (mis. kembali dari email abandoned cart),
-        // baca konfigurasi add-on yang tersimpan di baris ucapan.
+        // Prioritas 1: sessionStorage; Fallback: draftAddons/kolom ucapan (mis. dari email abandoned cart).
         const fromSession = readSavedAddons(id);
-        if (!fromSession || fromSession.addons.length === 0) {
+        if (fromSession && fromSession.addons.length > 0) {
+          setSaved(fromSession);
+        } else if (u?.draftAddons && u.draftAddons.addons.length > 0) {
+          setSaved({
+            addons: u.draftAddons.addons,
+            customSlug: u.draftAddons.customSlug ?? undefined,
+            gateType: u.draftAddons.gateType ?? undefined,
+            pin: u.draftAddons.pin ?? undefined,
+            question: u.draftAddons.question ?? undefined,
+            answer: u.draftAddons.answer ?? undefined,
+            particleStyle: u.draftAddons.particleStyle ?? undefined,
+          });
+        } else {
           const addons: AddonKey[] = [];
           if (u?.customSlug) addons.push("custom_slug");
           if (u?.qrPhotoEnabled) addons.push("custom_qr");
           if (u?.touchParticles) addons.push("touch_particles");
           if (u?.gateType) addons.push("intimate_gate");
           if (u?.receiptEnabled) addons.push("love_receipt");
-          if (addons.length > 0) {
-            setSaved({
-              addons,
-              customSlug: u?.customSlug ?? undefined,
-              pin: u?.gateData?.pin ? String(u.gateData.pin) : undefined,
-              particleStyle: u?.touchParticles ?? undefined,
-            });
-          }
+          setSaved(
+            addons.length > 0
+              ? {
+                  addons,
+                  customSlug: u?.customSlug ?? undefined,
+                  gateType:
+                    u?.gateType === "trivia"
+                      ? "trivia"
+                      : u?.gateType === "pin"
+                        ? "pin"
+                        : undefined,
+                  pin: u?.gateData?.pin ? String(u.gateData.pin) : undefined,
+                  question: u?.gateData?.question ? String(u.gateData.question) : undefined,
+                  answer: u?.gateData?.answer ? String(u.gateData.answer) : undefined,
+                  particleStyle: u?.touchParticles ?? undefined,
+                }
+              : { addons: [] }
+          );
         }
       })
-      .catch(() => { if (!cancelled) setUcapan(getUcapan(id)); })
-      .finally(() => { if (!cancelled) setLoadingUcapan(false); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) {
+          setUcapan(getUcapan(id));
+          setSaved(readSavedAddons(id) ?? { addons: [] });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingUcapan(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
-
-  useEffect(() => {
-    setSaved(readSavedAddons(id) ?? { addons: [] });
-  }, [id]);
 
   useEffect(() => {
     fetch("/api/payment/channels")
@@ -156,11 +228,12 @@ export default function Checkout({ id }: { id: string }) {
     setError("");
     try {
       if (demoMode) {
+        persistDemoActivation(ucapan, selected, saved);
         await new Promise((r) => setTimeout(r, 900));
         router.push(`/checkout/${id}/selesai?demo=1`);
         return;
       }
-      const res = await fetch("/api/payment/create", {
+      const response = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -171,16 +244,31 @@ export default function Checkout({ id }: { id: string }) {
           touchParticles: selected.includes("touch_particles")
             ? saved.particleStyle ?? "hearts"
             : undefined,
-          gateType: selected.includes("intimate_gate") ? "pin" : undefined,
-          gateData: selected.includes("intimate_gate") ? { pin: saved.pin } : undefined,
+          gateType: selected.includes("intimate_gate")
+            ? saved.gateType === "trivia"
+              ? "trivia"
+              : "pin"
+            : undefined,
+          gateData: selected.includes("intimate_gate")
+            ? saved.gateType === "trivia"
+              ? { question: saved.question, answer: saved.answer }
+              : { pin: saved.pin }
+            : undefined,
           useCredits,
         }),
-      }).then((r) => r.json());
+      });
+      if (response.status === 401) {
+        router.replace(`/login?next=${encodeURIComponent(`/checkout/${id}`)}`);
+        return;
+      }
+      const res = await response.json();
       if (res.ok && res.paymentUrl) {
-        window.location.href = res.paymentUrl;
+        redirectExternal(res.paymentUrl);
       } else {
         setError(res.message ?? "Gagal membuat transaksi. Coba lagi ya.");
       }
+    } catch {
+      setError("Koneksi terputus saat menghubungi server pembayaran. Coba lagi ya.");
     } finally {
       setLoading(false);
     }
@@ -251,8 +339,10 @@ export default function Checkout({ id }: { id: string }) {
                           </p>
                         )}
                         {key === "intimate_gate" && (
-                          <p className="text-label-md text-on-surface-variant">
-                            PIN {saved.pin ? "•".repeat(saved.pin.length) : "belum diisi"}
+                          <p className="text-label-md text-on-surface-variant truncate">
+                            {saved.gateType === "trivia"
+                              ? `Kuis: ${saved.question || "belum diisi"}`
+                              : `PIN ${saved.pin ? "•".repeat(saved.pin.length) : "belum diisi"}`}
                           </p>
                         )}
                         {key === "touch_particles" && (

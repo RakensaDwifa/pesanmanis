@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
-import { mapUcapanRow, stripPublicUcapan } from "@/lib/supabase/rows";
+import { hasValidGateCookie } from "@/lib/gate-cookie";
+import {
+  mapUcapanRow,
+  stripLockedUcapan,
+  stripPublicUcapan,
+} from "@/lib/supabase/rows";
 import type { UcapanRow } from "@/lib/supabase/rows";
 import PublicView from "@/components/view/PublicView";
 
@@ -15,7 +20,7 @@ export async function generateMetadata({
   let toName = "Kamu";
   let fromName = "Seseorang";
   let message = "";
-  let hasGate = false;
+  let gateType: string | null = null;
 
   if (isRemote()) {
     try {
@@ -30,7 +35,7 @@ export async function generateMetadata({
         toName = data.to_name ?? toName;
         fromName = data.from_name ?? fromName;
         message = data.message ?? "";
-        hasGate = Boolean(data.gate_type);
+        gateType = data.gate_type ?? null;
       }
     } catch {
       /* fallback */
@@ -39,11 +44,14 @@ export async function generateMetadata({
 
   const teaser = message.trim().split(/\s+/).slice(0, 18).join(" ");
   const title = `Untuk ${toName} 💌 — dari ${fromName}`;
-  const description = hasGate
-    ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
-    : teaser.length > 0
-      ? `Seseorang membuatkan ucapan spesial untukmu: "${teaser}${teaser.endsWith(".") ? "" : "…"}"`
-      : "Seseorang membuatkan ucapan spesial untukmu.";
+  const description =
+    gateType === "trivia"
+      ? "🔒 Pesan rahasia terkunci. Jawab kuis kenangan untuk membuka kejutan spesial ini."
+      : gateType
+        ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
+        : teaser.length > 0
+          ? `Seseorang membuatkan ucapan spesial untukmu: "${teaser}${teaser.endsWith(".") ? "" : "…"}"`
+          : "Seseorang membuatkan ucapan spesial untukmu.";
 
   return {
     title,
@@ -87,7 +95,12 @@ export default async function CustomSlugRoute({
 
   if (!data) notFound();
 
-  const remote = stripPublicUcapan(mapUcapanRow(data as UcapanRow));
+  const row = data as UcapanRow;
+  const mapped = mapUcapanRow(row);
+  const unlocked = !row.gate_type || (await hasValidGateCookie(row.id));
+  const remote = unlocked
+    ? stripPublicUcapan(mapped)
+    : stripLockedUcapan(mapped);
 
   return <PublicView id={remote.id} remote={remote} />;
 }

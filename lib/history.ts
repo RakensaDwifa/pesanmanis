@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export interface UseContentHistoryReturn<T> {
+export interface UseContentHistoryReturn {
   canUndo: boolean;
   canRedo: boolean;
   undo: () => void;
@@ -21,13 +21,23 @@ export function useContentHistory<T>(
   apply: (next: T) => void,
   coalesceMs = 600,
   maxSteps = 50
-): UseContentHistoryReturn<T> {
+): UseContentHistoryReturn {
   const past = useRef<T[]>([]);
   const future = useRef<T[]>([]);
   const prev = useRef<T>(current);
   const lastPushAt = useRef(0);
   const skipNext = useRef(false);
-  const [, forceRender] = useState(0);
+  const [availability, setAvailability] = useState({ canUndo: false, canRedo: false });
+
+  const syncAvailability = useCallback(() => {
+    const nextUndo = past.current.length > 0;
+    const nextRedo = future.current.length > 0;
+    setAvailability((curr) =>
+      curr.canUndo === nextUndo && curr.canRedo === nextRedo
+        ? curr
+        : { canUndo: nextUndo, canRedo: nextRedo }
+    );
+  }, []);
 
   useEffect(() => {
     if (Object.is(prev.current, current)) return;
@@ -35,7 +45,8 @@ export function useContentHistory<T>(
     if (skipNext.current) {
       skipNext.current = false;
       prev.current = current;
-      forceRender((v) => v + 1);
+      const id = queueMicrotask(syncAvailability);
+      void id;
       return;
     }
 
@@ -46,13 +57,11 @@ export function useContentHistory<T>(
       future.current = [];
       lastPushAt.current = now;
     } else {
-      // Masih dalam window coalesce — refresh timestamp agar rantai typing
-      // berikutnya tetap tergabung sampai user berhenti.
       lastPushAt.current = now;
     }
     prev.current = current;
-    forceRender((v) => v + 1);
-  }, [current, coalesceMs, maxSteps]);
+    queueMicrotask(syncAvailability);
+  }, [current, coalesceMs, maxSteps, syncAvailability]);
 
   const undo = useCallback(() => {
     const entry = past.current.pop();
@@ -60,8 +69,9 @@ export function useContentHistory<T>(
     future.current.push(prev.current);
     lastPushAt.current = 0;
     skipNext.current = true;
+    syncAvailability();
     apply(entry);
-  }, [apply]);
+  }, [apply, syncAvailability]);
 
   const redo = useCallback(() => {
     const entry = future.current.pop();
@@ -69,20 +79,21 @@ export function useContentHistory<T>(
     past.current.push(prev.current);
     lastPushAt.current = 0;
     skipNext.current = true;
+    syncAvailability();
     apply(entry);
-  }, [apply]);
+  }, [apply, syncAvailability]);
 
   const markRestored = useCallback(() => {
     skipNext.current = true;
     past.current = [];
     future.current = [];
     lastPushAt.current = 0;
-    forceRender((v) => v + 1);
-  }, []);
+    syncAvailability();
+  }, [syncAvailability]);
 
   return {
-    canUndo: past.current.length > 0,
-    canRedo: future.current.length > 0,
+    canUndo: availability.canUndo,
+    canRedo: availability.canRedo,
     undo,
     redo,
     markRestored,

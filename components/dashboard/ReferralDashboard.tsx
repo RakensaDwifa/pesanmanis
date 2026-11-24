@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Gift, Users, Wallet } from "lucide-react";
+import { Copy, Gift, Users, Wallet } from "lucide-react";
 import { AnalyticsEvents } from "@/lib/analytics";
 import {
   REFERRAL_MAX_REWARDED_PER_REFERRER,
