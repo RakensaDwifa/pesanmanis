@@ -137,7 +137,8 @@ export function TemplateShell({ content, children, className, closeHref, preview
   return (
     <div
       className={cn(
-        "relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center text-on-surface",
+        "relative w-full overflow-hidden flex flex-col items-center justify-center text-on-surface",
+        preview ? "h-full min-h-full" : "min-h-screen",
         className
       )}
       style={moodStyle}
@@ -148,7 +149,7 @@ export function TemplateShell({ content, children, className, closeHref, preview
       <div
         className={
           preview
-            ? "absolute bottom-4 left-4 z-30 flex items-center gap-2"
+            ? "absolute bottom-3 left-3 z-30 flex items-center gap-2 scale-90 origin-bottom-left"
             : "fixed bottom-20 left-5 z-50 flex items-center gap-2"
         }
       >
@@ -157,7 +158,14 @@ export function TemplateShell({ content, children, className, closeHref, preview
       </div>
       <CloseButton href={closeHref} />
       {!preview && <ShareCardButton />}
-      <div className="relative z-10 w-full max-w-xl px-5 py-16">
+      <div
+        className={cn(
+          "relative z-10 w-full max-w-xl",
+          preview
+            ? "px-3 py-2 my-auto flex flex-col items-center justify-center"
+            : "px-5 py-16"
+        )}
+      >
         {content.videoUrl ? <VideoBlock url={content.videoUrl} /> : null}
         {children}
       </div>

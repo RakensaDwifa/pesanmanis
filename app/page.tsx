@@ -145,9 +145,9 @@ export default function HomePage() {
                 aria-hidden
                 className="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-primary-fixed/60 to-surface-container-highest blur-2xl"
               />
-              <div className="relative w-[300px] sm:w-[340px] rounded-[2.5rem] border-[10px] border-white shadow-[0_30px_80px_rgba(222,112,56,0.25)] overflow-hidden bg-surface">
-                <div data-lenis-prevent className="h-[520px] overflow-y-auto no-scrollbar">
-                  <TemplateRenderer content={heroSample} preview />
+              <div className="relative w-[300px] sm:w-[340px] h-[520px] rounded-[2.5rem] border-[10px] border-white shadow-[0_30px_80px_rgba(222,112,56,0.25)] overflow-hidden bg-surface">
+                <div data-lenis-prevent className="h-full w-full overflow-hidden flex items-center justify-center">
+                  <TemplateRenderer content={heroSample} preview interactive />
                 </div>
               </div>
               <span className="absolute -right-4 -top-3 rotate-6 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white rounded-full shadow-card text-label-md font-semibold text-on-surface">

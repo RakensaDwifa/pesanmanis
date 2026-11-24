@@ -103,6 +103,7 @@ export interface StoredUcapan extends UcapanContent {
 export interface TemplateRenderProps {
   content: UcapanContent;
   preview?: boolean;
+  interactive?: boolean;
 }
 
 export const MOCK_CONTENT: UcapanContent = {
