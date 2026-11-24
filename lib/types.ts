@@ -27,6 +27,13 @@ export interface TemplateMeta {
   gradient: string;
   /** Template punya alur naratif sendiri, jadi StoryFlow (ketuk hati) dilewati. */
   hasNarrative?: boolean;
+  badge?: "popular" | "new";
+  mockupSubtitle?: string;
+  mockupHeadline?: string;
+  mockupCta?: string;
+  glowColor?: string;
+  phoneGradient?: string;
+  phoneDark?: boolean;
 }
 
 export interface TimelineItem {

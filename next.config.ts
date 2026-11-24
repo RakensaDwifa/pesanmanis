@@ -15,6 +15,9 @@ const cspHeader = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  experimental: {
+    cpus: 2,
+  },
   async headers() {
     return [
       {
