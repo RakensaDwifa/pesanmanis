@@ -11,19 +11,13 @@ const LINKS = [
 
 export default function Footer() {
   return (
-    <footer data-site-chrome className="w-full py-20 bg-primary">
-      <div className="relative z-[1] flex flex-col items-center text-center px-5 md:px-16 max-w-[1200px] mx-auto space-y-6">
-        <div className="flex flex-col items-center gap-4">
+    <footer data-site-chrome className="w-full py-16 md:py-20 bg-primary">
+      <div className="relative z-[1] flex flex-col items-center text-center px-5 md:px-16 max-w-[1200px] mx-auto space-y-7">
+        <div className="flex flex-col items-center gap-3">
           <Logo light className="flex-col gap-2" />
           <p className="text-body-md text-white/90 max-w-md mx-auto">
-            Buat kejutan serupa untuk orang yang paling kamu sayang.
+            Kirim rasa tulus untuk pacar, sahabat, atau siapa pun yang paling berarti buatmu.
           </p>
-          <Link
-            href="/templates"
-            className="inline-block px-6 py-3 bg-white text-primary text-label-lg font-semibold rounded-full hover:bg-gray-50 transition-colors duration-300 shadow-md"
-          >
-            Buat kejutan serupa
-          </Link>
         </div>
 
         <div className="bg-white rounded-3xl shadow-card p-6 md:p-7 w-full max-w-md">
@@ -35,7 +29,7 @@ export default function Footer() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-body-md text-white/80 hover:text-white transition-colors"
+              className="text-body-md text-white/85 hover:text-white transition-colors"
             >
               {link.label}
             </Link>
@@ -47,7 +41,7 @@ export default function Footer() {
             href={BRAND.socials.instagram}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-white/90 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/12 text-white/95 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
           >
             <Camera className="h-5 w-5" />
             <span>Instagram</span>
@@ -56,15 +50,15 @@ export default function Footer() {
             href={BRAND.socials.tiktok}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-white/90 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/12 text-white/95 hover:text-white hover:bg-white/20 transition-all text-body-sm font-medium"
           >
             <Music className="h-5 w-5" />
             <span>TikTok</span>
           </a>
         </div>
 
-        <div className="w-full h-px bg-white/20"></div>
-        <p className="text-label-md font-normal text-white/80 flex items-center gap-1 justify-center">
+        <div className="w-full h-px bg-white/20" />
+        <p className="text-label-md font-normal text-white/85 flex items-center gap-1 justify-center">
           © 2026 {BRAND.name}.com — Dibuat dengan penuh cinta{" "}
           <Heart className="h-4 w-4 fill-current" />
         </p>

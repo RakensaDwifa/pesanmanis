@@ -217,16 +217,16 @@ export default function CourierGame() {
   return (
     <section
       id="kurir"
-      className="w-full relative bg-surface-container-low overflow-hidden select-none"
+      className="w-full relative bg-surface-container-low overflow-hidden select-none pb-14 md:pb-20"
     >
-      {/* Header section sesuai Figma */}
+      {/* Header section */}
       <div className="text-center max-w-2xl mx-auto mb-8 md:mb-10 px-5 pt-16 md:pt-24">
         <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-surface text-primary text-label-md font-semibold rounded-full mb-5 border border-outline-variant/40 shadow-xs">
           <Gamepad2 className="h-4 w-4" />
           Coba dulu, gratis
         </span>
         <h2 className="font-heading text-headline-lg text-on-surface mb-3">
-          Kurir Kado, main 20 detik
+          Kurir Kado, main ~1 menit
         </h2>
         <p className="text-body-lg font-medium text-on-surface-variant">
           Kumpulkan foto, lagu, dan surat — lalu antar ke penerima. Ini
@@ -815,6 +815,14 @@ export default function CourierGame() {
           {liveText}
         </p>
       </div>
+
+      <p className="hidden sm:flex items-center justify-center gap-4 pt-4 px-5 text-label-md text-on-surface-variant">
+        <span>← / → Berjalan</span>
+        <span aria-hidden className="text-outline-variant">•</span>
+        <span>Spasi Melompat (2x lompat ganda)</span>
+        <span aria-hidden className="text-outline-variant">•</span>
+        <span>Injak Paket Bandel dari atas</span>
+      </p>
     </section>
   );
 }

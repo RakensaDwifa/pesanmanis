@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, useCallback, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -162,7 +162,7 @@ function CoverflowItem({
           <h3 className="font-heading text-title-md font-bold text-[#241914] dark:text-[#FCEEE6] line-clamp-1">
             {template.name}
           </h3>
-          <p className="text-xs font-medium text-[#7A6256] dark:text-[#D6BFB4] flex items-center justify-center gap-1">
+          <p className="text-xs font-medium text-[#685247] dark:text-[#D6BFB4] flex items-center justify-center gap-1">
             <span>{CATEGORY_META[template.type].emoji}</span>
             <span>{CATEGORY_META[template.type].label}</span>
           </p>
@@ -179,7 +179,7 @@ function CoverflowItem({
               href={`/buat/${template.slug}`}
               onClick={preventWhenDragging}
               tabIndex={isActive ? 0 : -1}
-              className="text-label-md font-semibold text-[#7A6256] dark:text-[#D6BFB4] hover:text-primary dark:hover:text-primary transition py-0.5"
+              className="text-label-md font-semibold text-[#685247] dark:text-[#D6BFB4] hover:text-primary dark:hover:text-primary transition py-0.5"
             >
               Buat sekarang
             </Link>
@@ -190,7 +190,19 @@ function CoverflowItem({
   );
 }
 
-export default function TemplateCarousel({ templates }: { templates: TemplateMeta[] }) {
+export type TemplateCarouselHandle = {
+  jumpTo: (index: number) => void;
+};
+
+export default function TemplateCarousel({
+  templates,
+  carouselRef,
+  onActiveIndexChange,
+}: {
+  templates: TemplateMeta[];
+  carouselRef?: RefObject<TemplateCarouselHandle | null>;
+  onActiveIndexChange?: (index: number) => void;
+}) {
   const n = templates.length || 1;
   // virtualIndex bergerak terus (..., -1, 0, 1, 2, ...) tanpa mentok
   const [virtualIndex, setVirtualIndex] = useState(0);
@@ -229,13 +241,15 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
     (targetVirtual: number) => {
       const target = Math.round(targetVirtual);
       setVirtualIndex(target);
+      const nextActive = ((target % n) + n) % n;
+      onActiveIndexChange?.(nextActive);
       animate(scrollX, -target * metrics.itemWidth, {
         type: "spring",
         stiffness: 300,
         damping: 30,
       });
     },
-    [metrics.itemWidth, scrollX]
+    [metrics.itemWidth, n, onActiveIndexChange, scrollX]
   );
 
   // Sinkronisasi posisi saat itemWidth berubah (resize layar)
@@ -278,11 +292,32 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
   };
 
   // Navigasi titik indikator (dots): hitung integer delta putaran terpendek
-  const goToDot = (dotIndex: number) => {
-    const currentMod = ((virtualIndex % n) + n) % n;
-    let delta = ((dotIndex - currentMod) % n + n) % n;
-    if (delta > n / 2) delta -= n;
-    goTo(virtualIndex + delta);
+  const goToDot = useCallback(
+    (dotIndex: number) => {
+      const currentMod = ((virtualIndex % n) + n) % n;
+      let delta = ((dotIndex - currentMod) % n + n) % n;
+      if (delta > n / 2) delta -= n;
+      goTo(virtualIndex + delta);
+    },
+    [goTo, n, virtualIndex]
+  );
+
+  useImperativeHandle(
+    carouselRef,
+    () => ({
+      jumpTo: goToDot,
+    }),
+    [goToDot]
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      handlePrev();
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      handleNext();
+    }
   };
 
   // Klik langsung pada kartu: putar ke kartu yang diklik via rute terpendek
@@ -298,7 +333,14 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
   const activeIndex = Math.round(((virtualIndex % n) + n) % n);
 
   return (
-    <div className="relative w-full">
+    <div
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Koleksi template PesanManis. Gunakan panah kiri dan kanan untuk memilih template."
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className="relative w-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-3xl"
+    >
       {/* Mask Container: linear gradient di kiri dan kanan untuk fade out samping */}
       <div
         className="relative w-full overflow-hidden flex items-center justify-center py-4 select-none touch-pan-y"
@@ -340,7 +382,7 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
           type="button"
           onClick={handlePrev}
           aria-label="Template sebelumnya"
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-primary border border-outline-variant/30 shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
@@ -366,7 +408,7 @@ export default function TemplateCarousel({ templates }: { templates: TemplateMet
           type="button"
           onClick={handleNext}
           aria-label="Template berikutnya"
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-primary border border-outline-variant/30 shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
         >
           <ChevronRight className="h-6 w-6" />
         </button>

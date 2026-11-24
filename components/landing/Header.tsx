@@ -12,7 +12,7 @@ import { isRemote } from "@/lib/supabase/config";
 const NAV_LINKS = [
   { label: "Cara Kerja", href: "/#cara-kerja" },
   { label: "Fitur", href: "/#fitur" },
-  { label: "Template", href: "/templates" },
+  { label: "Template", href: "/#koleksi" },
   { label: "FAQ", href: "/#faq" },
 ];
 
@@ -166,7 +166,7 @@ export default function Header({
           ) : (
             <Link
               href="/login"
-              className="text-body-md font-semibold text-gray-600 hover:text-primary transition-colors"
+              className="text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors"
             >
               Masuk
             </Link>
@@ -180,11 +180,18 @@ export default function Header({
           </Link>
         </div>
 
-        <div className="flex lg:hidden items-center gap-1">
+        <div className="flex lg:hidden items-center gap-1.5">
+          <Link
+            href="/templates"
+            className="inline-flex items-center justify-center px-3.5 py-1.5 bg-primary text-white text-xs sm:text-label-md font-semibold rounded-full shadow-xs hover:opacity-95 active:scale-95 transition-all whitespace-nowrap"
+          >
+            Buat<span className="hidden min-[380px]:inline">&nbsp;Ucapan</span>
+          </Link>
           <ThemeToggle />
           <button
             className="text-on-surface p-2"
             aria-label="Toggle menu"
+            aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -247,7 +254,7 @@ export default function Header({
               <Link
                 href="/login"
                 onClick={() => setOpen(false)}
-                className="px-1 py-2.5 block text-body-md font-semibold text-gray-600 hover:text-primary transition-colors"
+                className="px-1 py-2.5 block text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors"
               >
                 Masuk
               </Link>

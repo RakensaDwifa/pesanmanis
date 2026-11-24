@@ -104,6 +104,7 @@ export interface TemplateRenderProps {
   content: UcapanContent;
   preview?: boolean;
   interactive?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const MOCK_CONTENT: UcapanContent = {

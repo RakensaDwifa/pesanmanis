@@ -113,6 +113,7 @@ body {
 /* ---------- DARK MODE ---------- */
 .dark {
   --color-primary-container: #58220b;
+  --color-on-primary-container: #ffdbcb;
   --color-primary-fixed: #63290f;
   --color-on-primary-fixed: #ffdbcb;
   --color-on-primary-fixed-variant: #ffb597;
@@ -137,7 +138,7 @@ body {
 /* Kartu-kartu yang memakai bg-white hardcode ikut gelap di halaman utama/dashboard,
    namun dikecualikan di halaman immersive (/t/, /u/, /preview/) dan frame preview Builder
    agar palet template & kertas struk cinta tetap konsisten. */
-html:not([data-immersive]).dark .bg-white:not([data-light-card] *) {
+html:not([data-immersive]).dark .bg-white:not([data-light-card]):not([data-light-card] *) {
   background-color: var(--color-surface-container-low);
 }
 

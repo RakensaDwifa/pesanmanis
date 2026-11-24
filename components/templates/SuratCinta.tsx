@@ -5,8 +5,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TemplateShell, Signature, PhotoGrid, TimelineSection } from "./shared";
 import type { TemplateRenderProps } from "@/lib/types";
 
-export default function SuratCinta({ content, preview, interactive }: TemplateRenderProps) {
+export default function SuratCinta({ content, preview, interactive, onOpenChange }: TemplateRenderProps) {
   const [opened, setOpened] = useState(interactive ? false : Boolean(preview));
+
+  const openLetter = () => {
+    setOpened(true);
+    onOpenChange?.(true);
+  };
 
   return (
     <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FDF6EC] via-[#F9EEDC] to-[#F3E3C8]">
@@ -34,7 +39,7 @@ export default function SuratCinta({ content, preview, interactive }: TemplateRe
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.5 }}
-              onClick={() => setOpened(true)}
+              onClick={openLetter}
               className={`relative cursor-pointer transition-transform ${
                 preview ? "w-56 h-38" : "w-72 h-52"
               }`}
@@ -70,7 +75,7 @@ export default function SuratCinta({ content, preview, interactive }: TemplateRe
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className={`bg-[#FFFDF7] rounded-2xl shadow-[0_12px_35px_rgba(139,109,63,0.22)] border border-[#EAD9B8] w-full mx-auto my-auto ${
-              preview ? "p-5 max-w-[270px]" : "p-8"
+              preview ? "p-5 pb-6 max-w-[270px]" : "p-8"
             }`}
             style={{
               backgroundImage:
@@ -111,7 +116,9 @@ export default function SuratCinta({ content, preview, interactive }: TemplateRe
               >
                 {content.message}
               </motion.p>
-              <Signature fromName={content.fromName} />
+              <div className={preview ? "[&_p]:!text-lg [&_p]:!mt-4" : ""}>
+                <Signature fromName={content.fromName} />
+              </div>
             </div>
             {content.photos && content.photos.length > 0 && (
               <PhotoGrid photos={content.photos} />

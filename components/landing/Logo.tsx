@@ -18,7 +18,7 @@ export default function Logo({
       />
       <span
         className={cn(
-          "font-heading text-xl lg:text-2xl italic tracking-tight",
+          "font-heading text-lg sm:text-xl lg:text-2xl italic tracking-tight",
           light ? "text-white" : "text-primary"
         )}
       >

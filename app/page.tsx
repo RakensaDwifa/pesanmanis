@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BadgeCheck,
   Eye,
+  Gamepad2,
   Heart,
   Images,
   Infinity as InfinityIcon,
@@ -19,10 +20,9 @@ import {
 } from "lucide-react";
 import Faq from "@/components/landing/Faq";
 import CourierGame from "@/components/landing/CourierGame";
-import TemplateRenderer from "@/components/templates/registry";
-import TemplateCarousel from "@/components/templates/TemplateCarousel";
+import HeroPreviewMockup from "@/components/landing/HeroPreviewMockup";
+import KoleksiSection from "@/components/landing/KoleksiSection";
 import { fillContentDefaults, getActiveTemplates } from "@/lib/templates";
-import { CATEGORY_META } from "@/lib/types";
 import { BRAND } from "@/lib/brand";
 
 const STEPS = [
@@ -60,13 +60,11 @@ const FEATURES_BIG = [
     icon: Images,
     title: "Galeri Kenangan",
     desc: "Kumpulkan foto-foto terbaik kalian dalam satu halaman. Otomatis dikompres, tampil rapi di galeri interaktif.",
-    emoji: "🖼️",
   },
   {
     icon: MessageSquareHeart,
     title: "Pesan yang Ditulis untuk Dia",
     desc: "Bukan template chat. Surat sungguhan dengan nama kamu berdua di dalamnya — dibuka perlahan, dibaca pelan.",
-    emoji: "💌",
   },
 ];
 
@@ -103,7 +101,7 @@ export default function HomePage() {
 
   return (
     <>
-      {/* HERO — teks tengah + live preview template asli */}
+      {/* HERO — split 2 kolom di desktop + live preview template asli */}
       <section className="w-full relative bg-surface overflow-hidden">
         <div
           aria-hidden
@@ -113,51 +111,49 @@ export default function HomePage() {
               "radial-gradient(600px 300px at 20% 10%, rgba(222,112,56,0.08), transparent), radial-gradient(500px 260px at 85% 20%, rgba(245,161,90,0.10), transparent)",
           }}
         />
-        <div className="relative z-[1] px-5 md:px-16 max-w-[1200px] mx-auto pt-[110px] pb-16 lg:pt-[150px] lg:pb-24 text-center">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-container text-on-primary-container text-label-md lg:text-label-lg font-semibold rounded-full mb-6 border border-primary-fixed-dim/30 shadow-sm">
-            <Sparkles className="h-4 w-4" />
-            Website ucapan personal, se-manis itu
-          </span>
-          <h1 className="font-heading text-display-md lg:text-display-lg text-primary mb-6 leading-tight max-w-4xl mx-auto">
-            Kirim rasa, <span className="italic">bukan sekadar kata.</span>
-          </h1>
-          <p className="text-body-lg font-medium text-on-surface-variant mb-9 max-w-xl mx-auto">
-            PesanManis mengubah perasaanmu jadi website ucapan yang interaktif —
-            lengkap dengan foto, musik, dan kejutan di baliknya. Untuk pacar,
-            sahabat, atau siapa pun yang spesial.
-          </p>
-          <div className="flex flex-col items-center gap-3">
-            <Link
-              href="/templates"
-              className="w-full sm:w-auto px-14 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.3)] hover:-translate-y-1 transition-all duration-300 inline-flex items-center justify-center gap-2"
-            >
-              Mulai Buat Kejutan <ArrowRight className="h-4 w-4" />
-            </Link>
-            <p className="text-[12px] font-medium text-on-surface-variant/80 italic">
-              * Link aktif selamanya, bisa diedit 7 hari
-            </p>
-          </div>
-
-          {/* Live preview — template asli, bisa diklik */}
-          <div className="mt-14 lg:mt-16 flex justify-center">
-            <div className="relative">
-              <div
-                aria-hidden
-                className="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-primary-fixed/60 to-surface-container-highest blur-2xl"
-              />
-              <div className="relative w-[300px] sm:w-[340px] h-[520px] rounded-[2.5rem] border-[10px] border-white shadow-[0_30px_80px_rgba(222,112,56,0.25)] overflow-hidden bg-surface">
-                <div data-lenis-prevent className="h-full w-full overflow-hidden flex items-center justify-center">
-                  <TemplateRenderer content={heroSample} preview interactive />
-                </div>
-              </div>
-              <span className="absolute -right-4 -top-3 rotate-6 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white rounded-full shadow-card text-label-md font-semibold text-on-surface">
-                👆 Coba klik suratnya
+        <div className="relative z-[1] px-5 md:px-16 max-w-[1200px] mx-auto pt-[104px] pb-14 lg:pt-[124px] lg:pb-20">
+          <div className="lg:grid lg:grid-cols-[1.12fr_0.88fr] lg:items-center lg:gap-12">
+            <div className="text-center lg:text-left">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-container text-on-primary-container text-label-md lg:text-label-lg font-semibold rounded-full mb-5 border border-primary-fixed-dim/30 shadow-sm">
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>Website ucapan personal, se-manis itu</span>
               </span>
+              <h1 className="font-heading text-display-md lg:text-display-lg text-primary mb-5 leading-tight max-w-2xl mx-auto lg:mx-0">
+                Kirim rasa, <span className="italic">bukan sekadar kata.</span>
+              </h1>
+              <p className="text-body-lg font-medium text-on-surface-variant mb-8 max-w-xl mx-auto lg:mx-0">
+                PesanManis mengubah perasaanmu jadi website ucapan yang interaktif —
+                lengkap dengan foto, musik, dan kejutan di baliknya. Untuk pacar,
+                sahabat, atau siapa pun yang spesial.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
+                <Link
+                  href="/templates"
+                  className="w-full sm:w-auto px-9 py-4 bg-primary hover:bg-[#E88048] text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.3)] hover:-translate-y-0.5 transition-all duration-300 inline-flex items-center justify-center gap-2"
+                >
+                  Mulai Buat Kejutan <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="#kurir"
+                  className="w-full sm:w-auto px-6 py-4 rounded-full border border-outline-variant/60 bg-surface-container-low/80 hover:border-primary/50 hover:text-primary text-on-surface text-label-lg font-semibold transition-all duration-200 inline-flex items-center justify-center gap-2"
+                >
+                  <Gamepad2 className="h-4 w-4 text-primary" />
+                  <span>Coba Mini-Game</span>
+                </Link>
+              </div>
+              <p className="mt-3.5 text-[12px] font-medium text-on-surface-variant/85 italic">
+                * Link aktif selamanya, bisa diedit 7 hari
+              </p>
+            </div>
+
+            {/* Live preview — template asli, bisa diklik */}
+            <div className="mt-12 lg:mt-0 flex justify-center lg:justify-end">
+              <HeroPreviewMockup content={heroSample} />
             </div>
           </div>
 
           {/* Stats faktual */}
-          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
+          <div className="mt-12 lg:mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto text-center">
             {STATS.map((s) => (
               <div
                 key={s.label}
@@ -194,9 +190,9 @@ export default function HomePage() {
             />
             {STEPS.map((step, i) => (
               <div key={i} className="relative flex md:flex-col items-start md:items-center gap-5 md:gap-4 md:text-center">
-                <div className="relative z-[1] w-16 h-16 shrink-0 bg-white rounded-2xl flex items-center justify-center shadow-[0_8px_24px_rgba(0,0,0,0.15)]">
+                <div className="relative z-[1] w-16 h-16 shrink-0 bg-on-primary rounded-2xl flex items-center justify-center shadow-[0_8px_24px_rgba(0,0,0,0.15)]">
                   <step.icon className="text-primary h-7 w-7" />
-                  <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-on-primary text-primary text-label-md font-bold flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-on-primary text-primary border border-primary/25 shadow-xs text-label-md font-bold flex items-center justify-center">
                     {i + 1}
                   </span>
                 </div>
@@ -228,12 +224,10 @@ export default function HomePage() {
                 key={feature.title}
                 className="group relative overflow-hidden bg-primary-fixed/30 border border-primary-fixed-dim/40 rounded-3xl p-7 md:p-8 shadow-card hover:-translate-y-1 hover:shadow-card-hover transition-all duration-300"
               >
-                <span
+                <feature.icon
                   aria-hidden
-                  className="absolute -right-4 -bottom-6 text-[110px] opacity-20 group-hover:scale-110 transition-transform duration-500 select-none"
-                >
-                  {feature.emoji}
-                </span>
+                  className="pointer-events-none absolute -right-5 -bottom-6 h-36 w-36 text-primary/10 group-hover:scale-110 transition-transform duration-500"
+                />
                 <div className="relative">
                   <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white mb-4 shadow-[0_6px_18px_rgba(222,112,56,0.35)]">
                     <feature.icon className="h-6 w-6" />
@@ -261,46 +255,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* KOLEKSI TEMPLATE - ring 3D diputar per kartu */}
-      <section className="w-full relative bg-surface-container-low overflow-hidden" id="koleksi">
-        <div className="relative z-[1] py-16 md:py-24">
-          <div className="px-5 md:px-16 max-w-[1200px] mx-auto">
-            <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
-              <div>
-                <h2 className="font-heading text-headline-md md:text-headline-lg text-primary mb-2">
-                  Pilih Vibes-nya, Sesuaikan Ceritanya
-                </h2>
-                <p className="text-body-md md:text-body-lg font-medium text-on-surface-variant max-w-xl">
-                  Setiap template punya karakter berbeda - putar untuk melihat semuanya.
-                </p>
-              </div>
-              <Link
-                href="/templates"
-                className="inline-flex items-center gap-1.5 text-label-lg font-semibold text-primary hover:gap-2.5 transition-all"
-              >
-                Lihat semua <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="flex gap-2.5 mb-7 flex-wrap">
-              {(Object.entries(CATEGORY_META) as [keyof typeof CATEGORY_META, (typeof CATEGORY_META)[keyof typeof CATEGORY_META]][])
-                .filter(([, c]) => c.active)
-                .map(([catKey, cat]) => (
-                  <Link
-                    key={catKey}
-                    href={`/templates?kategori=${catKey}`}
-                    className="inline-flex items-center gap-2 px-4.5 py-2 rounded-full text-label-md font-semibold transition-all bg-white text-on-surface border border-outline-variant/30 hover:border-primary/50 hover:text-primary"
-                  >
-                    <span>{cat.emoji}</span>
-                    <span>{cat.label}</span>
-                  </Link>
-                ))}
-            </div>
-          </div>
-
-          <TemplateCarousel templates={templates} />
-        </div>
-      </section>
+      {/* KOLEKSI TEMPLATE — ring 3D diputar per kartu & lompat kategori */}
+      <KoleksiSection templates={templates} />
 
       {/* FAQ */}
       <Faq />
@@ -329,12 +285,12 @@ export default function HomePage() {
               </p>
               <Link
                 href="/templates"
-                className="inline-flex items-center gap-2 px-12 py-5 bg-white text-primary text-body-lg font-semibold rounded-full shadow-xl hover:-translate-y-1 transition-all duration-300"
+                className="inline-flex items-center gap-2 px-12 py-5 bg-on-primary hover:bg-[#FFF9F5] text-primary text-body-lg font-semibold rounded-full shadow-xl hover:-translate-y-1 transition-all duration-300"
               >
                 Buat Kejutan Sekarang <ArrowRight className="h-5 w-5" />
               </Link>
               <p className="mt-6 text-label-md font-semibold text-white/85 flex items-center justify-center gap-2">
-                <BadgeCheck className="h-[18px] w-[18px]" /> Pembayaran aman & proses instan
+                <BadgeCheck className="h-[18px] w-[18px]" /> Pembayaran aman &amp; proses instan
               </p>
             </div>
           </div>
