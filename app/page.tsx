@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import Faq from "@/components/landing/Faq";
+import CourierGame from "@/components/landing/CourierGame";
 import TemplateRenderer from "@/components/templates/registry";
 import TemplateCarousel from "@/components/templates/TemplateCarousel";
 import { fillContentDefaults, getActiveTemplates } from "@/lib/templates";
@@ -170,6 +171,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* MINI-GAME — kurir kado, pembuktian interaktif sebelum penjelasan */}
+      <CourierGame />
 
       {/* CARA KERJA — timeline horizontal */}
       <section className="w-full relative bg-primary overflow-hidden" id="cara-kerja">

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts"
+    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts test/courier-game.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

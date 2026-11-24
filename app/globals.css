@@ -175,3 +175,9 @@ html:not([data-immersive]).dark .text-gray-500:not([data-light-card] *) {
 html[data-immersive] [data-site-chrome] {
   display: none;
 }
+
+/* Sembunyikan chat mengambang selama mini-game aktif agar tombol sentuh Lompat di mobile tidak tertutup */
+html[data-kurir-playing="1"] [data-floating-chat] {
+  opacity: 0;
+  pointer-events: none;
+}
