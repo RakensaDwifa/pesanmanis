@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "remote:on": "tailscale serve --bg http://localhost:3000",
+    "remote:status": "tailscale serve status",
+    "remote:off": "tailscale serve --https=443 off",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts test/courier-game.test.ts"
+    "music:build": "node scripts/build-music.mjs",
+    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts test/courier-game.test.ts test/music-library.test.ts test/media-sync.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

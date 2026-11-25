@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useId, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Share2, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UcapanContent } from "@/lib/types";
 import { AnalyticsEvents } from "@/lib/analytics";
+import { notifyVideoPlay, notifyVideoStop } from "@/lib/media-sync";
 import { getMood } from "@/lib/mood";
 import { playSfx } from "@/lib/sfx";
+import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
+import { useIsTouchOrMobile } from "@/lib/use-coarse-pointer";
 import ParallaxBackground from "@/components/ParallaxBackground";
 import CursorTrail from "@/components/CursorTrail";
 import CassettePlayer from "@/components/CassettePlayer";
@@ -26,27 +29,29 @@ const HEART_PRESETS = Array.from({ length: 14 }, (_, i) => ({
   emoji: HEART_EMOJIS[i % HEART_EMOJIS.length],
 }));
 
-function FloatingHearts({ count = 12 }: { count?: number }) {
-  const hearts = useMemo(() => HEART_PRESETS.slice(0, count), [count]);
+function FloatingHearts({ count = 12, preview = false }: { count?: number; preview?: boolean }) {
+  const reduced = usePrefersReducedMotion();
+  const isTouchOrMobile = useIsTouchOrMobile();
+  const effectiveCount = preview || isTouchOrMobile ? Math.min(count, 6) : count;
+  const hearts = useMemo(() => HEART_PRESETS.slice(0, effectiveCount), [effectiveCount]);
+
+  if (reduced) return null;
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
       {hearts.map((h) => (
-        <motion.span
+        <span
           key={h.id}
-          className="absolute top-full select-none"
-          style={{ left: `${h.left}%`, fontSize: h.size }}
-          initial={{ y: 0, opacity: 0 }}
-          animate={{ y: "-110vh", opacity: [0, 1, 1, 0], rotate: [0, 20, -20, 0] }}
-          transition={{
-            duration: h.duration,
-            delay: h.delay,
-            repeat: Infinity,
-            ease: "linear",
+          className="pm-floating-heart absolute top-full select-none"
+          style={{
+            left: `${h.left}%`,
+            fontSize: h.size,
+            animationDuration: `${h.duration}s`,
+            animationDelay: `${h.delay}s`,
           }}
         >
           {h.emoji}
-        </motion.span>
+        </span>
       ))}
     </div>
   );
@@ -117,10 +122,19 @@ interface ShellProps {
   className?: string;
   closeHref?: string;
   preview?: boolean;
+  hideAudioControls?: boolean;
 }
 
-export function TemplateShell({ content, children, className, closeHref, preview }: ShellProps) {
+export function TemplateShell({
+  content,
+  children,
+  className,
+  closeHref,
+  preview,
+  hideAudioControls,
+}: ShellProps) {
   const mood = getMood(content.mood);
+  const isBuilderPreview = Boolean(preview && !hideAudioControls);
   const moodStyle = {
     background: mood.gradient,
     "--color-primary": mood.primary,
@@ -137,38 +151,46 @@ export function TemplateShell({ content, children, className, closeHref, preview
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden flex flex-col items-center justify-center text-on-surface",
-        preview ? "h-full min-h-full" : "min-h-screen",
+        "relative w-full flex flex-col items-center text-on-surface",
+        isBuilderPreview
+          ? "min-h-full overflow-x-clip pb-3"
+          : preview
+            ? "h-full min-h-full overflow-hidden justify-center"
+            : "min-h-screen overflow-hidden justify-center",
         className
       )}
       style={moodStyle}
     >
       <ParallaxBackground mood={mood} />
-      <FloatingHearts />
+      <FloatingHearts preview={preview} />
       {!preview && <CursorTrail />}
-      <div
-        className={
-          preview
-            ? "absolute bottom-3 left-3 z-30 flex items-center gap-2 scale-90 origin-bottom-left"
-            : "fixed bottom-20 left-5 z-50 flex items-center gap-2"
-        }
-      >
-        <CassettePlayer content={content} />
-        <SfxToggle />
-      </div>
+      {!hideAudioControls && !isBuilderPreview && (
+        <div className="fixed bottom-20 left-5 z-50 flex items-center gap-2">
+          <CassettePlayer content={content} autoPlay />
+          <SfxToggle />
+        </div>
+      )}
       <CloseButton href={closeHref} />
       {!preview && <ShareCardButton />}
       <div
         className={cn(
           "relative z-10 w-full max-w-xl",
-          preview
-            ? "px-3 py-2 my-auto flex flex-col items-center justify-center"
-            : "px-5 py-16"
+          isBuilderPreview
+            ? "px-3.5 pt-8 pb-4 my-auto flex flex-col items-center justify-center"
+            : preview
+              ? "px-3 py-2 my-auto flex flex-col items-center justify-center"
+              : "px-5 py-16"
         )}
       >
         {content.videoUrl ? <VideoBlock url={content.videoUrl} /> : null}
         {children}
       </div>
+      {isBuilderPreview && (
+        <div className="sticky bottom-3 self-start ml-3 z-30 flex items-center gap-2 scale-90 origin-bottom-left">
+          <CassettePlayer content={content} autoPlay={false} />
+          <SfxToggle />
+        </div>
+      )}
     </div>
   );
 }
@@ -188,7 +210,7 @@ function parseYouTubeEmbedUrl(rawUrl: string): string | null {
       }
     }
     if (videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
-      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&enablejsapi=1`;
     }
   } catch {
     // bukan URL valid
@@ -197,9 +219,83 @@ function parseYouTubeEmbedUrl(rawUrl: string): string | null {
 }
 
 export function VideoBlock({ url }: { url: string }) {
+  const reactId = useId();
+  const sourceId = `video-block-${reactId}`;
+  const ytIframeRef = useRef<HTMLIFrameElement | null>(null);
   const ytEmbed = parseYouTubeEmbedUrl(url);
+
+  // Clear active state whenever url changes or the VideoBlock unmounts.
+  useEffect(() => {
+    return () => {
+      notifyVideoStop(sourceId);
+    };
+  }, [sourceId, url]);
+
+  // Listen to YouTube IFrame API state changes scoped strictly to this iframe instance.
+  useEffect(() => {
+    if (!ytEmbed) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== "https://www.youtube-nocookie.com" &&
+        event.origin !== "https://www.youtube.com"
+      ) {
+        return;
+      }
+      const win = ytIframeRef.current?.contentWindow;
+      if (!win || event.source !== win) return;
+
+      let payload: { event?: string; info?: unknown } | null = null;
+      if (typeof event.data === "string") {
+        try {
+          payload = JSON.parse(event.data) as { event?: string; info?: unknown };
+        } catch {
+          return;
+        }
+      } else if (typeof event.data === "object" && event.data !== null) {
+        payload = event.data as { event?: string; info?: unknown };
+      }
+      if (!payload) return;
+
+      let playerState: number | null = null;
+      if (payload.event === "onStateChange" && typeof payload.info === "number") {
+        playerState = payload.info;
+      } else if (
+        payload.event === "infoDelivery" &&
+        typeof payload.info === "object" &&
+        payload.info !== null &&
+        typeof (payload.info as { playerState?: unknown }).playerState === "number"
+      ) {
+        playerState = (payload.info as { playerState: number }).playerState;
+      }
+
+      if (playerState === 1 || playerState === 3) {
+        notifyVideoPlay(sourceId);
+      } else if (playerState === 0 || playerState === 2) {
+        notifyVideoStop(sourceId);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [ytEmbed, sourceId]);
+
+  const subscribeYouTubeEvents = () => {
+    const win = ytIframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(
+      JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+      "*"
+    );
+    win.postMessage(
+      JSON.stringify({ event: "command", func: "addEventListener", args: ["onStateChange"] }),
+      "*"
+    );
+  };
+
   return (
     <motion.div
+      data-video-block="true"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
@@ -208,6 +304,9 @@ export function VideoBlock({ url }: { url: string }) {
       {ytEmbed ? (
         <div className="relative w-full aspect-video bg-black">
           <iframe
+            key={ytEmbed}
+            ref={ytIframeRef}
+            onLoad={subscribeYouTubeEvents}
             src={ytEmbed}
             title="Video ucapan"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -220,6 +319,9 @@ export function VideoBlock({ url }: { url: string }) {
           src={url}
           controls
           playsInline
+          onPlay={() => notifyVideoPlay(sourceId)}
+          onPause={() => notifyVideoStop(sourceId)}
+          onEnded={() => notifyVideoStop(sourceId)}
           className="w-full max-h-[60vh] bg-black"
         />
       )}
