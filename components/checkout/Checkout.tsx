@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, Lock, QrCode, Wallet, Pencil,
@@ -207,7 +208,7 @@ export default function Checkout({ id }: { id: string }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
         <p className="text-headline-md text-on-surface mb-3">Data ucapan tidak ditemukan</p>
-        <a href="/templates" className="text-primary font-semibold">Mulai dari awal</a>
+        <Link href="/templates" className="text-primary font-semibold hover:underline">Mulai dari awal</Link>
       </div>
     );
   }
@@ -278,19 +279,19 @@ export default function Checkout({ id }: { id: string }) {
   const editHref = `/buat/${ucapan.templateSlug}?edit=${id}`;
 
   return (
-    <div className="min-h-screen bg-surface pt-20">
-      <div className="max-w-lg mx-auto px-5 py-10">
-        <a
+    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-12">
+      <div className="max-w-lg mx-auto px-5 py-4 sm:py-6">
+        <Link
           href={editHref}
-          className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-6"
+          className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-5"
         >
           <ArrowLeft className="h-4 w-4" /> Kembali edit
-        </a>
+        </Link>
 
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden">
           {/* Header gradient template */}
           <div
-            className={`bg-gradient-to-br ${templateMeta?.gradient ?? "from-primary-fixed to-surface-container-high"} px-6 py-7 flex items-center gap-4`}
+            className={`bg-gradient-to-br ${templateMeta?.gradient ?? "from-primary-fixed to-surface-container-high"} px-5 sm:px-6 py-6 sm:py-7 flex items-center gap-4`}
           >
             <span className="text-5xl drop-shadow-md">{templateEmoji(ucapan.templateSlug)}</span>
             <div className="min-w-0">
@@ -303,19 +304,19 @@ export default function Checkout({ id }: { id: string }) {
             </div>
           </div>
 
-          <div className="p-6 md:p-8 space-y-6">
+          <div className="p-5 sm:p-6 md:p-8 space-y-6">
             {/* ── Tambahan (read-only) ── */}
             <div>
               <div className="flex items-center justify-between gap-3 mb-3">
                 <p className="text-label-lg font-semibold text-on-surface">
                   ✨ Tambahan
                 </p>
-                <a
+                <Link
                   href={editHref}
                   className="inline-flex items-center gap-1 text-label-md font-semibold text-primary hover:underline"
                 >
                   <Pencil className="h-3.5 w-3.5" /> Ubah di editor
-                </a>
+                </Link>
               </div>
 
               {selected.length === 0 ? (
@@ -334,7 +335,7 @@ export default function Checkout({ id }: { id: string }) {
                           {ADDON_PRICING[key].label}
                         </p>
                         {key === "custom_slug" && saved.customSlug && (
-                          <p className="text-label-md text-green-600 truncate">
+                          <p className="text-label-md text-emerald-600 dark:text-emerald-400 truncate">
                             /u/{saved.customSlug}
                           </p>
                         )}
@@ -360,9 +361,9 @@ export default function Checkout({ id }: { id: string }) {
               )}
 
               {calculation.bundleApplied !== "none" && calculation.discount > 0 && (
-                <div className="mt-3 rounded-2xl bg-green-50 border border-green-200 px-4 py-2.5 flex items-center justify-between">
-                  <span className="text-label-md font-semibold text-green-700">🎉 Diskon Paket Aktif</span>
-                  <span className="text-label-md font-bold text-green-700">
+                <div className="mt-3 rounded-2xl bg-emerald-500/12 border border-emerald-500/30 px-4 py-2.5 flex items-center justify-between">
+                  <span className="text-label-md font-semibold text-emerald-700 dark:text-emerald-300">Diskon Paket Aktif</span>
+                  <span className="text-label-md font-bold text-emerald-700 dark:text-emerald-300">
                     −{formatPrice(calculation.discount)}
                   </span>
                 </div>
@@ -393,17 +394,17 @@ export default function Checkout({ id }: { id: string }) {
                 <span className="font-semibold text-on-surface">Rp 0</span>
               </div>
               {maxCreditDiscount > 0 && (
-                <label className="flex items-center justify-between gap-3 rounded-xl bg-green-50 border border-green-200 px-3.5 py-2.5 mb-3 cursor-pointer">
-                  <span className="flex items-center gap-2 text-label-md font-semibold text-green-800">
+                <label className="flex items-center justify-between gap-3 rounded-xl bg-emerald-500/12 border border-emerald-500/30 px-3.5 py-2.5 mb-3 cursor-pointer">
+                  <span className="flex items-center gap-2 text-label-md font-semibold text-emerald-800 dark:text-emerald-200">
                     <input
                       type="checkbox"
                       checked={useCredits}
                       onChange={(e) => setUseCredits(e.target.checked)}
-                      className="rounded border-green-400 text-primary focus:ring-primary"
+                      className="rounded border-emerald-500 text-primary focus:ring-primary"
                     />
                     Pakai saldo referral ({formatPrice(creditBalance)})
                   </span>
-                  <span className="text-label-md font-bold text-green-700">
+                  <span className="text-label-md font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
                     −{formatPrice(maxCreditDiscount)}
                   </span>
                 </label>
@@ -451,13 +452,14 @@ export default function Checkout({ id }: { id: string }) {
             )}
 
             {error && (
-              <p className="text-body-md text-red-600 text-center">{error}</p>
+              <p className="text-body-md text-red-600 dark:text-red-400 text-center">{error}</p>
             )}
 
             <button
+              type="button"
               onClick={() => void pay()}
               disabled={loading || pricing.loading}
-              className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0"
+              className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               {loading ? (
                 <><Loader2 className="h-5 w-5 animate-spin" /> Memproses…</>

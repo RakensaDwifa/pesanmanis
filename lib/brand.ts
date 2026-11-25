@@ -6,19 +6,22 @@ import {
 } from "./pricing";
 import { normalizeBaseUrl } from "./validation";
 
+const BRAND_DOMAIN = "pesanmanis.web.id";
+const CONTACT_EMAIL = `hello@${BRAND_DOMAIN}`;
+
 export const BRAND = {
   name: "PesanManis",
-  domain: "pesanmanis.com",
+  domain: BRAND_DOMAIN,
   baseUrl: normalizeBaseUrl(
     process.env.NEXT_PUBLIC_APP_URL,
-    "https://pesanmanis.vercel.app"
+    `https://${BRAND_DOMAIN}`
   ),
   tagline: "Kirim rasa, bukan sekadar kata.",
   description: `Buat website ucapan personal untuk orang spesial kamu. Birthday, anniversary, love letter — kirim kejutan manis yang bikin dia tersenyum. Promo perkenalan ${PROMO_AMOUNT_LABEL} (harga normal ${NORMAL_AMOUNT_LABEL}).`,
-  contactEmail: "hello@pesanmanis.com",
+  contactEmail: CONTACT_EMAIL,
   supportUrl: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
     ? `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/\D/g, "")}?text=${encodeURIComponent("Halo Admin PesanManis, saya butuh bantuan.")}`
-    : "mailto:hello@pesanmanis.com?subject=Bantuan%20PesanManis",
+    : `mailto:${CONTACT_EMAIL}?subject=Bantuan%20PesanManis`,
   price: PROMO_AMOUNT,
   priceLabel: PROMO_AMOUNT_LABEL,
   normalPriceLabel: NORMAL_AMOUNT_LABEL,

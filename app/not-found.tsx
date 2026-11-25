@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Home, Search, Mail } from "lucide-react";
+import { BRAND } from "@/lib/brand";
 
 export default function NotFound() {
   return (
@@ -60,7 +61,13 @@ export default function NotFound() {
           </div>
 
           <p className="text-label-md text-on-surface-variant mt-8">
-            Atau kirim email ke <a href="mailto:hello@pesanmanis.com" className="text-primary hover:underline">hello@pesanmanis.com</a>
+            Atau kirim email ke{" "}
+            <a
+              href={`mailto:${BRAND.contactEmail}`}
+              className="text-primary hover:underline"
+            >
+              {BRAND.contactEmail}
+            </a>
           </p>
         </div>
       </div>

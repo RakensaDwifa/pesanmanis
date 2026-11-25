@@ -64,7 +64,11 @@ type FloatingText = { text: string; x: number; y: number; life: number };
 
 export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
   const ctx = canvas.getContext("2d");
-  const dpr = Math.min(typeof window === "undefined" ? 1 : window.devicePixelRatio || 1, 2);
+  const isCompactViewport = typeof window !== "undefined" && window.innerWidth < 768;
+  const dpr = Math.min(
+    typeof window === "undefined" ? 1 : window.devicePixelRatio || 1,
+    isCompactViewport ? 1.5 : 2
+  );
   const VH = WORLD.viewH;
   let VW: number = WORLD.viewW;
 
@@ -72,7 +76,7 @@ export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
     const ratio = rect.width > 0 && rect.height > 0 ? rect.width / rect.height : VW / VH;
-    VW = Math.max(640, Math.min(WORLD.w, Math.round(VH * ratio)));
+    VW = Math.max(540, Math.min(WORLD.w, Math.round(VH * ratio)));
     canvas.width = Math.round(VW * dpr);
     canvas.height = Math.round(VH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -138,9 +142,34 @@ export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
     canvas.focus({ preventScroll: true });
   }
 
+  function stopLoop() {
+    if (raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+  }
+
+  function startLoop() {
+    if (raf) return;
+    last = performance.now();
+    acc = 0;
+    raf = requestAnimationFrame(frame);
+  }
+
   function setPhase(next: Phase) {
     if (phase === next) return;
+    const prev = phase;
     phase = next;
+    if (next === "playing") {
+      audio.fadeIn(140);
+      startLoop();
+    } else {
+      if (prev === "playing" && next === "paused") {
+        audio.fadeOut(320);
+      }
+      stopLoop();
+      draw();
+    }
     hooks.onPhase?.(next);
   }
 
@@ -201,11 +230,6 @@ export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
         squash.sx = 0.88;
         squash.sy = 1.12;
         spawnDust(state.x + PLAYER.w / 2, state.y, 6, 2.4);
-      }
-      if (ev === "doublejump") {
-        squash.sx = 0.86;
-        squash.sy = 1.14;
-        spawnDust(state.x + PLAYER.w / 2, state.y, 8, 3.0);
       }
       if (ev === "bounce") {
         squash.sx = 0.8;
@@ -471,11 +495,12 @@ export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
   }
 
   function frame(now: number) {
-    raf = requestAnimationFrame(frame);
     if (phase !== "playing") {
+      raf = 0;
       last = now;
       return;
     }
+    raf = requestAnimationFrame(frame);
     let dt = now - last;
     last = now;
     if (dt > 120) dt = 120;
@@ -608,7 +633,6 @@ export function mount(canvas: HTMLCanvasElement, hooks: Hooks = {}): Handle {
   const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => resize());
   ro?.observe(canvas);
   resize();
-  raf = requestAnimationFrame(frame);
   loadAssets();
   draw();
   progress();

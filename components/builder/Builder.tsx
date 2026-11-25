@@ -8,25 +8,38 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
+  CalendarHeart,
   Check,
+  CheckCircle2,
   ChevronDown,
   CloudUpload,
   CreditCard,
+  Eye,
+  Film,
+  Flame,
+  HelpCircle,
   ImagePlus,
+  KeyRound,
+  Keyboard,
   Loader2,
+  Lock,
   Mail,
   MessageSquareHeart,
-  Music,
+  Monitor,
   PartyPopper,
-  Pause,
-  Play,
+  PencilLine,
   Plus,
   Redo2,
+  RotateCcw,
+  Smartphone,
   Sparkles,
   Undo2,
   UserRound,
@@ -47,7 +60,12 @@ import { isRemote, supabaseUrl } from "@/lib/supabase/config";
 import { compressImage } from "@/lib/image";
 import TemplateRenderer from "@/components/templates/registry";
 import MoodSelector from "@/components/MoodSelector";
-import { MUSIC_LIBRARY } from "@/lib/music-library";
+import MusicPicker from "./MusicPicker";
+import {
+  formatSeconds,
+  getDefaultGalleryTrack,
+  getMusicDisplayInfo,
+} from "@/lib/music-library";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -73,6 +91,7 @@ import { validateSlugFormat } from "@/lib/slug";
 import ParticleTouch from "@/components/effects/ParticleTouch";
 import GateOverlay from "@/components/effects/GateOverlay";
 import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
+import { smoothScrollTo } from "@/components/ui/smooth-scroll";
 
 const SECTIONS = [
   { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
@@ -157,7 +176,7 @@ function mapServerSaveError(code?: string, fallbackMessage?: string): string {
     case "PHOTOS_INVALID":
       return "URL foto tidak valid (gunakan HTTPS dan maks. 10 foto).";
     case "MUSIC_URL_INVALID":
-      return "URL musik latar harus berupa tautan HTTPS yang valid.";
+      return "URL musik latar harus berupa tautan HTTPS/YouTube atau jalur galeri yang valid.";
     case "VIDEO_URL_INVALID":
       return "URL video harus berupa tautan HTTPS/YouTube yang valid.";
     case "EMAIL_INVALID":
@@ -175,16 +194,36 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const router = useRouter();
 
   // Deterministic SSR-safe initial state (hydrated asynchronously in useEffect below).
-  const [content, setContent] = useState<Partial<UcapanContent>>(() =>
-    fillContentDefaults({ templateSlug: slug })
-  );
+  // For new ucapan, pre-select the first gallery MP3 matching the template's occasion if available.
+  const [content, setContent] = useState<Partial<UcapanContent>>(() => {
+    const defaultTrack = !editId ? getDefaultGalleryTrack(template?.type) : undefined;
+    return fillContentDefaults({
+      templateSlug: slug,
+      ...(defaultTrack ? { musicUrl: defaultTrack.url } : {}),
+    });
+  });
   const [isPaid, setIsPaid] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const demoAudioBlobRef = useRef<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [openSection, setOpenSection] = useState<SectionId | null>("identitas");
+  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  const [previewInteractive, setPreviewInteractive] = useState(false);
+  const [previewReplayKey, setPreviewReplayKey] = useState(0);
+  const [videoPanelToggle, setVideoPanelToggle] = useState<boolean | null>(null);
+  const [timelinePanelToggle, setTimelinePanelToggle] = useState<boolean | null>(null);
+  const toNameInputRef = useRef<HTMLInputElement | null>(null);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorGridRef = useRef<HTMLDivElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const mobileTabBarRef = useRef<HTMLDivElement | null>(null);
+  const sectionHeaderRefs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
+  const sectionScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storedPreviewMode = useSyncExternalStore(
     emptySubscribe,
     readStoredPreviewMode,
@@ -208,46 +247,6 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [particleStyle, setParticleStyle] = useState<"hearts" | "roses" | "sparkles">("hearts");
   const [previewGateOpen, setPreviewGateOpen] = useState(false);
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (previewAudioRef.current) {
-        previewAudioRef.current.pause();
-        previewAudioRef.current.src = "";
-        previewAudioRef.current = null;
-      }
-    };
-  }, []);
-
-  const toggleTrackPreview = useCallback(
-    (track: (typeof MUSIC_LIBRARY)[number]) => {
-      if (playingTrackId === track.id) {
-        previewAudioRef.current?.pause();
-        setPlayingTrackId(null);
-        return;
-      }
-      if (previewAudioRef.current) {
-        previewAudioRef.current.pause();
-        previewAudioRef.current.src = "";
-      }
-      const audio = new Audio(track.url);
-      audio.volume = 0.65;
-      audio.onended = () => setPlayingTrackId(null);
-      audio.onerror = () => {
-        setPlayingTrackId(null);
-        toast.error("Gagal memutar pratinjau lagu.");
-      };
-      previewAudioRef.current = audio;
-      setPlayingTrackId(track.id);
-      void audio.play().catch(() => {
-        setPlayingTrackId(null);
-        toast.error("Gagal memutar pratinjau lagu.");
-      });
-    },
-    [playingTrackId]
-  );
 
   const applyContent = useCallback(
     (next: Partial<UcapanContent>) => setContent(next),
@@ -554,7 +553,6 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     content.toName?.trim() && content.email?.trim() && isValidEmail(content.email ?? "")
   );
   const pesanComplete = Boolean(content.message?.trim());
-  const mediaComplete = true; // galeri & musik opsional
   const canPay = identitasComplete && pesanComplete;
 
   const set = <K extends keyof UcapanContent>(key: K, value: UcapanContent[K]) =>
@@ -621,6 +619,68 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (demoAudioBlobRef.current) {
+        URL.revokeObjectURL(demoAudioBlobRef.current);
+        demoAudioBlobRef.current = null;
+      }
+    };
+  }, []);
+
+  const uploadAudio = async (
+    file: File
+  ): Promise<{ url: string; fileName: string } | null> => {
+    setUploadingAudio(true);
+    try {
+      if (isRemote()) {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          toast.info("Masuk dulu ya untuk mengunggah audio. Draft ucapanmu tetap tersimpan!");
+          router.push(
+            `/login?next=${encodeURIComponent(`/buat/${slug}${editId ? `?edit=${editId}` : ""}`)}`
+          );
+          return null;
+        }
+        const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "mp3";
+        const ext = ["mp3", "m4a", "wav", "ogg", "webm"].includes(rawExt) ? rawExt : "mp3";
+        const baseName = file.name
+          .replace(/\.[^/.]+$/, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || "lagu";
+        // Simpan di bawah folder milik user (<user.id>/<uuid>-<slug>.<ext>) untuk keamanan Storage RLS
+        const path = `${user.id}/${crypto.randomUUID()}-${baseName}.${ext}`;
+        const contentType = file.type || (ext === "m4a" ? "audio/mp4" : `audio/${ext === "mp3" ? "mpeg" : ext}`);
+        const { error } = await supabase.storage
+          .from("musik")
+          .upload(path, file, { contentType });
+        if (error) throw error;
+        const url = `${supabaseUrl()}/storage/v1/object/public/musik/${path}`;
+        toast.success("File audio berhasil diunggah");
+        return { url, fileName: file.name };
+      }
+
+      // Demo Mode lokal: gunakan Object URL dalam sesi browser (tidak membebani kuota localStorage)
+      if (demoAudioBlobRef.current) {
+        URL.revokeObjectURL(demoAudioBlobRef.current);
+      }
+      const blobUrl = URL.createObjectURL(file);
+      demoAudioBlobRef.current = blobUrl;
+      toast.success("Audio siap diputar (Mode Demo lokal)");
+      return { url: blobUrl, fileName: file.name };
+    } catch {
+      toast.error("Gagal mengunggah file audio. Pastikan format MP3/M4A/WAV maks. 15 MB.");
+      return null;
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
   const addonsInvalidReason = (): string | null => {
     if (isPaid) return null;
     if (selectedAddons.has("custom_slug")) {
@@ -679,19 +739,125 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (sectionScrollTimerRef.current) {
+        clearTimeout(sectionScrollTimerRef.current);
+        sectionScrollTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const getStickyTopOffset = useCallback(() => {
+    if (typeof window === "undefined") return 96;
+    const mobileBar = mobileTabBarRef.current;
+    // On mobile/tablet (< 1024px), the sticky Edit | Preview tab bar sits at top-20 (80px)
+    if (mobileBar && mobileBar.offsetParent !== null && mobileBar.offsetHeight > 0) {
+      return 80 + mobileBar.offsetHeight + 12;
+    }
+    // Desktop fixed navbar (~80px) + 16px breathing room
+    return 96;
+  }, []);
+
+  const scrollToSectionHeader = useCallback(
+    (targetId: SectionId) => {
+      if (typeof window === "undefined") return;
+      if (sectionScrollTimerRef.current) {
+        clearTimeout(sectionScrollTimerRef.current);
+        sectionScrollTimerRef.current = null;
+      }
+
+      const targetIdx = SECTIONS.findIndex((s) => s.id === targetId);
+      if (targetIdx < 0) return;
+
+      const stickyOffset = getStickyTopOffset();
+
+      // Compute the exact post-collapse document Y of the target section header upfront
+      // so the viewport glides directly to it while any taller section above collapses.
+      const gridEl = editorGridRef.current;
+      if (gridEl) {
+        const gridDocTop = gridEl.getBoundingClientRect().top + window.scrollY;
+        const progressHeight = progressBarRef.current?.offsetHeight ?? 0;
+        let precedingHeadersHeight = 0;
+        for (let i = 0; i < targetIdx; i++) {
+          const secId = SECTIONS[i].id;
+          precedingHeadersHeight += sectionHeaderRefs.current[secId]?.offsetHeight ?? 76;
+        }
+        const estimatedHeaderY =
+          gridDocTop + 1 + progressHeight + precedingHeadersHeight + targetIdx;
+        const targetScrollY = Math.max(0, Math.round(estimatedHeaderY - stickyOffset));
+        smoothScrollTo(targetScrollY, { duration: 0.42 });
+      }
+
+      // Fine-tune once Framer Motion's 280ms accordion transition finishes if off by > 12px.
+      sectionScrollTimerRef.current = setTimeout(() => {
+        sectionScrollTimerRef.current = null;
+        const headerBtn = sectionHeaderRefs.current[targetId];
+        if (!headerBtn || headerBtn.offsetParent === null) return;
+        const rect = headerBtn.getBoundingClientRect();
+        const desiredTop = getStickyTopOffset();
+        const delta = rect.top - desiredTop;
+        if (Math.abs(delta) > 12) {
+          const maxDocScroll = Math.max(
+            0,
+            document.documentElement.scrollHeight - window.innerHeight
+          );
+          const exactTargetY = Math.min(
+            Math.max(0, Math.round(window.scrollY + delta)),
+            maxDocScroll
+          );
+          if (Math.abs(window.scrollY - exactTargetY) > 12) {
+            smoothScrollTo(exactTargetY, { duration: 0.28 });
+          }
+        }
+      }, 320);
+    },
+    [getStickyTopOffset]
+  );
+
+  const openSectionAndScroll = useCallback(
+    (targetId: SectionId) => {
+      setOpenSection(targetId);
+      scrollToSectionHeader(targetId);
+    },
+    [scrollToSectionHeader]
+  );
+
+  const focusFieldSoon = (
+    ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>
+  ) => {
+    setTimeout(() => {
+      ref.current?.focus();
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 320);
+  };
+
   const goToPayment = async () => {
     if (!canPay) {
-      setOpenSection(!identitasComplete ? "identitas" : "pesan");
-      toast.error(
-        !identitasComplete
-          ? "Lengkapi dulu nama & email di bagian Identitas"
-          : "Tulis dulu pesanmu di bagian Pesan"
-      );
+      setMobileView("edit");
+      if (!identitasComplete) {
+        setOpenSection("identitas");
+        if (!content.toName?.trim()) {
+          toast.error("Isi dulu Nama Penerima di bagian Identitas");
+          focusFieldSoon(toNameInputRef);
+        } else if (!content.email?.trim()) {
+          toast.error("Isi dulu Email Kamu untuk notifikasi di bagian Identitas");
+          focusFieldSoon(emailInputRef);
+        } else {
+          toast.error("Format email di bagian Identitas belum valid");
+          focusFieldSoon(emailInputRef);
+        }
+      } else {
+        setOpenSection("pesan");
+        toast.error("Tulis dulu isi pesanmu di bagian Pesan");
+        focusFieldSoon(messageInputRef);
+      }
       return;
     }
     const addonError = addonsInvalidReason();
     if (addonError) {
-      setOpenSection("tambahan");
+      setMobileView("edit");
+      openSectionAndScroll("tambahan");
       toast.error(addonError);
       return;
     }
@@ -806,7 +972,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     };
     actionsRef.current.gotoSection = (i: number) => {
       const section = SECTIONS[i];
-      if (section) setOpenSection(section.id);
+      if (section) openSectionAndScroll(section.id);
     };
   });
 
@@ -820,6 +986,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     "alt+2": () => actionsRef.current.gotoSection(1),
     "alt+3": () => actionsRef.current.gotoSection(2),
     "alt+4": () => actionsRef.current.gotoSection(3),
+    "alt+5": () => actionsRef.current.gotoSection(4),
     "?": () => setShowShortcuts(true),
     "shift+?": () => setShowShortcuts(true),
   });
@@ -828,9 +995,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
         <p className="text-headline-md text-on-surface mb-3">Template tidak ditemukan</p>
-        <a href="/templates" className="text-primary font-semibold">
+        <Link href="/templates" className="text-primary font-semibold hover:underline">
           Kembali ke daftar template
-        </a>
+        </Link>
       </div>
     );
   }
@@ -838,32 +1005,102 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const openSectionIndex = SECTIONS.findIndex((s) => s.id === openSection);
 
   const switchSection = (id: SectionId) => {
-    if (id !== openSection && openSectionIndex >= 0) {
+    if (id === openSection) {
+      setOpenSection(null);
+      return;
+    }
+    if (openSectionIndex >= 0) {
       AnalyticsEvents.builderStepCompleted(openSectionIndex, slug);
     }
-    setOpenSection((prev) => (prev === id ? null : id));
+    openSectionAndScroll(id);
   };
 
-  const sectionComplete: Record<SectionId, boolean> = {
-    identitas: identitasComplete,
-    pesan: pesanComplete,
-    media: mediaComplete,
-    tambahan: addonsInvalidReason() === null,
-    selesai: canPay,
-  };
+  const photoCount = (content.photos ?? []).filter(Boolean).length;
+  const activeMusicInfo = getMusicDisplayInfo(content.musicUrl);
+  const hasVideo = Boolean(content.videoUrl?.trim());
+  const timelineCount = (content.timeline ?? []).filter(
+    (t) => t.date.trim() || t.title.trim()
+  ).length;
+  const isVideoPanelOpen = videoPanelToggle ?? hasVideo;
+  const isTimelinePanelOpen =
+    timelinePanelToggle ?? (content.timeline?.length ?? 0) > 0;
+  const mediaSummaryParts = [
+    photoCount > 0 ? `${photoCount} foto` : null,
+    activeMusicInfo ? "1 lagu" : null,
+    hasVideo ? "1 video" : null,
+    timelineCount > 0 ? `${timelineCount} momen` : null,
+  ].filter(Boolean) as string[];
+  const mediaHasContent = mediaSummaryParts.length > 0;
+  const addonInvalid = addonsInvalidReason() !== null;
+  const requiredDoneCount = (identitasComplete ? 1 : 0) + (pesanComplete ? 1 : 0);
+  const progressWidth = requiredDoneCount === 0 ? 12 : requiredDoneCount === 1 ? 56 : 100;
 
   const inputClass =
-    "w-full rounded-2xl border border-outline-variant bg-white px-4 py-3 text-body-md text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow";
+    "w-full rounded-2xl border border-outline-variant/80 bg-surface px-4 py-3 text-body-md text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/30 transition-all";
 
   const sectionHeader = (section: (typeof SECTIONS)[number]) => {
     const Icon = section.icon;
     const active = openSection === section.id;
-    const complete = sectionComplete[section.id];
+    const isRequiredDone =
+      (section.id === "identitas" && identitasComplete) ||
+      (section.id === "pesan" && pesanComplete);
+    const isOptionalPopulated =
+      (section.id === "media" && mediaHasContent) ||
+      (section.id === "tambahan" && selectedAddons.size > 0 && !addonInvalid) ||
+      (section.id === "selesai" && canPay);
+
+    let badge: React.ReactNode = null;
+    if (section.id === "identitas" || section.id === "pesan") {
+      badge = isRequiredDone ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 border border-emerald-500/25 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
+          <Check className="h-3 w-3" /> Lengkap
+        </span>
+      ) : (
+        <span className="inline-flex items-center rounded-full bg-amber-500/12 border border-amber-500/25 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300 shrink-0">
+          Wajib
+        </span>
+      );
+    } else if (section.id === "media") {
+      badge = mediaHasContent ? (
+        <span className="inline-flex items-center rounded-full bg-primary-fixed/40 px-2.5 py-0.5 text-[11px] font-semibold text-primary max-w-[116px] truncate shrink-0">
+          {mediaSummaryParts.slice(0, 2).join(" · ")}
+        </span>
+      ) : (
+        <span className="inline-flex items-center rounded-full bg-surface-container px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant shrink-0">
+          Opsional
+        </span>
+      );
+    } else if (section.id === "tambahan") {
+      badge = addonInvalid ? (
+        <span className="inline-flex items-center rounded-full bg-red-500/12 border border-red-500/25 px-2.5 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-400 shrink-0">
+          Perlu dicek
+        </span>
+      ) : selectedAddons.size > 0 ? (
+        <span className="inline-flex items-center rounded-full bg-primary-fixed/40 px-2.5 py-0.5 text-[11px] font-semibold text-primary shrink-0">
+          {selectedAddons.size} dipilih
+        </span>
+      ) : (
+        <span className="inline-flex items-center rounded-full bg-surface-container px-2.5 py-0.5 text-[11px] font-medium text-on-surface-variant shrink-0">
+          Opsional
+        </span>
+      );
+    } else if (section.id === "selesai" && canPay) {
+      badge = (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 border border-emerald-500/25 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
+          Siap
+        </span>
+      );
+    }
+
     return (
       <button
+        ref={(el) => {
+          sectionHeaderRefs.current[section.id] = el;
+        }}
+        type="button"
         onClick={() => switchSection(section.id)}
         aria-expanded={active}
-        className={`w-full flex items-center gap-3.5 px-5 md:px-7 py-4.5 text-left transition-colors ${
+        className={`w-full flex items-center gap-3 px-5 md:px-7 py-4.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${
           active ? "bg-primary-fixed/20" : "hover:bg-surface-container-low/60"
         }`}
       >
@@ -871,9 +1108,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           className={`flex items-center justify-center h-10 w-10 rounded-2xl shrink-0 transition-colors ${
             active
               ? "bg-primary text-white shadow-[0_4px_14px_rgba(222,112,56,0.35)]"
-              : complete
-                ? "bg-primary-fixed text-on-primary-fixed-variant"
-                : "bg-surface-container-high text-on-surface-variant"
+              : isRequiredDone
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                : isOptionalPopulated
+                  ? "bg-primary-fixed text-on-primary-fixed-variant"
+                  : "bg-surface-container-high text-on-surface-variant"
           }`}
         >
           <Icon className="h-5 w-5" />
@@ -886,6 +1125,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             {section.hint}
           </span>
         </span>
+        {badge}
         <ChevronDown
           className={`h-4.5 w-4.5 shrink-0 text-on-surface-variant transition-transform duration-300 ${
             active ? "rotate-180" : ""
@@ -898,15 +1138,15 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   return (
     <div className="min-h-screen bg-surface pt-24 pb-28 lg:pb-10">
       <div className="max-w-[1400px] mx-auto px-5 md:px-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 lg:mb-6">
           <div className="flex items-center gap-4 min-w-0">
-            <a
+            <Link
               href="/templates"
               aria-label="Kembali ke daftar template"
               className="p-2.5 rounded-full bg-white border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shrink-0"
             >
               <ArrowLeft className="h-4.5 w-4.5" />
-            </a>
+            </Link>
             <div className="min-w-0">
               <h1 className="font-heading text-title-lg text-on-surface truncate">
                 Buat Ucapan — {template.name}
@@ -923,9 +1163,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                   syncStatus === "saving"
                     ? "text-on-surface-variant bg-surface-container-low"
                     : syncStatus === "saved"
-                      ? "text-green-700 bg-green-50"
+                      ? "text-emerald-700 bg-emerald-500/12 dark:text-emerald-400"
                       : syncStatus === "error"
-                        ? "text-red-600 bg-red-50"
+                        ? "text-red-700 bg-red-500/12 dark:text-red-400"
                         : ""
                 }`}
                 role="status"
@@ -941,35 +1181,42 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                     <CloudUpload className="h-3.5 w-3.5" /> Tersimpan
                   </>
                 )}
-                {syncStatus === "error" && <>⚠️ Sinkron gagal</>}
+                {syncStatus === "error" && (
+                  <>
+                    <AlertTriangle className="h-3.5 w-3.5" /> Sinkron gagal
+                  </>
+                )}
               </span>
             )}
             <div className="flex items-center rounded-full bg-white border border-outline-variant/30 p-1">
               <button
+                type="button"
                 onClick={undo}
                 disabled={!canUndo}
                 aria-label="Undo"
                 title="Undo (Ctrl+Z)"
-                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40"
+                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
                 <Undo2 className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={redo}
                 disabled={!canRedo}
                 aria-label="Redo"
                 title="Redo (Ctrl+Shift+Z)"
-                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40"
+                className="p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               >
                 <Redo2 className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setShowShortcuts(true)}
                 aria-label="Keyboard shortcuts"
                 title="Keyboard shortcuts (?)"
-                className="px-3 py-2 rounded-full text-label-md font-semibold text-on-surface hover:bg-surface-container-low transition-colors"
+                className="hidden md:inline-flex items-center justify-center p-2 rounded-full text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer"
               >
-                ⌨️
+                <Keyboard className="h-4 w-4" />
               </button>
             </div>
             <span className="text-label-lg font-bold text-primary bg-primary-fixed/40 px-4 py-1.5 rounded-full">
@@ -978,9 +1225,91 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(360px,440px)_1fr] gap-6 lg:gap-8 items-start">
+        {/* Sticky Segmented Tab Mobile: Edit | Preview */}
+        <div
+          ref={mobileTabBarRef}
+          className="sticky top-20 z-30 lg:hidden -mx-5 px-5 py-2.5 mb-4 bg-surface/95 backdrop-blur-md border-b border-outline-variant/25"
+        >
+          <div
+            role="tablist"
+            aria-label="Mode tampilan builder"
+            className="grid grid-cols-2 gap-1.5 p-1 rounded-full bg-surface-container-low border border-outline-variant/35"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileView === "edit"}
+              onClick={() => setMobileView("edit")}
+              className={cn(
+                "inline-flex items-center justify-center gap-2 py-2 px-4 rounded-full text-label-lg font-semibold transition-all cursor-pointer",
+                mobileView === "edit"
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <PencilLine className="h-4 w-4" />
+              <span>Edit</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileView === "preview"}
+              onClick={() => setMobileView("preview")}
+              className={cn(
+                "inline-flex items-center justify-center gap-2 py-2 px-4 rounded-full text-label-lg font-semibold transition-all cursor-pointer",
+                mobileView === "preview"
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <Eye className="h-4 w-4" />
+              <span>Preview</span>
+              {mobileView !== "preview" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" aria-hidden />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={editorGridRef}
+          className="grid lg:grid-cols-[minmax(360px,440px)_1fr] gap-6 lg:gap-8 items-start"
+        >
           {/* PANEL KIRI — accordion editor */}
-          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden lg:sticky lg:top-24">
+          <div
+            className={cn(
+              "bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden lg:sticky lg:top-24",
+              mobileView === "preview" ? "hidden lg:block" : "block"
+            )}
+          >
+            {/* Indikator progres kelengkapan */}
+            <div
+              ref={progressBarRef}
+              className="px-5 md:px-7 py-3.5 bg-surface-container-low/60 border-b border-outline-variant/25"
+            >
+              <div className="flex items-center justify-between gap-2 text-label-md mb-2">
+                <span className="font-semibold text-on-surface">
+                  {canPay
+                    ? "Siap dikirim · 2/2 wajib lengkap"
+                    : `${requiredDoneCount}/2 langkah wajib lengkap`}
+                </span>
+                <span className="text-on-surface-variant">
+                  {mediaHasContent || selectedAddons.size > 0
+                    ? `${[mediaHasContent ? "Media" : null, selectedAddons.size > 0 ? `${selectedAddons.size} add-on` : null].filter(Boolean).join(" · ")}`
+                    : "Identitas & Pesan"}
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-surface-container-high overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    canPay ? "bg-emerald-500" : "bg-primary"
+                  )}
+                  style={{ width: `${progressWidth}%` }}
+                />
+              </div>
+            </div>
+
             <div className="divide-y divide-outline-variant/25">
               {SECTIONS.map((section) => (
                 <div key={section.id}>
@@ -998,22 +1327,31 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                           {section.id === "identitas" && (
                             <div className="space-y-4">
                               <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                  Nama Pacar Kamu *
+                                <label
+                                  htmlFor="builder-to-name"
+                                  className="block text-label-lg font-semibold text-on-surface mb-1.5"
+                                >
+                                  Nama Penerima *
                                 </label>
                                 <input
+                                  ref={toNameInputRef}
+                                  id="builder-to-name"
                                   className={inputClass}
-                                  placeholder="cth: Nabila"
+                                  placeholder="cth: Nabila / Sahabatku"
                                   maxLength={80}
                                   value={content.toName ?? ""}
                                   onChange={(e) => set("toName", e.target.value)}
                                 />
                               </div>
                               <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                  Nama Kamu
+                                <label
+                                  htmlFor="builder-from-name"
+                                  className="block text-label-lg font-semibold text-on-surface mb-1.5"
+                                >
+                                  Nama Pengirim
                                 </label>
                                 <input
+                                  id="builder-from-name"
                                   className={inputClass}
                                   placeholder="cth: Raka"
                                   maxLength={80}
@@ -1022,10 +1360,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 />
                               </div>
                               <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                <label
+                                  htmlFor="builder-title"
+                                  className="block text-label-lg font-semibold text-on-surface mb-1.5"
+                                >
                                   Judul Surat
                                 </label>
                                 <input
+                                  id="builder-title"
                                   className={inputClass}
                                   placeholder="cth: Untuk Kamu"
                                   maxLength={120}
@@ -1034,11 +1376,16 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 />
                               </div>
                               <div>
-                                <label className="flex items-center gap-1.5 block text-label-lg font-semibold text-on-surface mb-1.5">
+                                <label
+                                  htmlFor="builder-email"
+                                  className="flex items-center gap-1.5 text-label-lg font-semibold text-on-surface mb-1.5"
+                                >
                                   <Mail className="h-3.5 w-3.5 text-primary" />
                                   Email Kamu (untuk notifikasi) *
                                 </label>
                                 <input
+                                  ref={emailInputRef}
+                                  id="builder-email"
                                   type="email"
                                   className={inputClass}
                                   placeholder="cth: kamu@gmail.com"
@@ -1055,8 +1402,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                               </div>
                               {identitasComplete && (
                                 <button
+                                  type="button"
                                   onClick={() => switchSection("pesan")}
-                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                                 >
                                   Lanjut tulis pesan <ArrowRight className="h-4 w-4" />
                                 </button>
@@ -1067,10 +1415,15 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                           {section.id === "pesan" && (
                             <div className="space-y-4">
                               <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                                <label
+                                  htmlFor="builder-message"
+                                  className="block text-label-lg font-semibold text-on-surface mb-1.5"
+                                >
                                   Isi Pesan *
                                 </label>
                                 <textarea
+                                  ref={messageInputRef}
+                                  id="builder-message"
                                   className={`${inputClass} min-h-56 resize-y`}
                                   placeholder="Ceritakan perasaanmu…"
                                   maxLength={5000}
@@ -1083,8 +1436,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                               </div>
                               {pesanComplete && (
                                 <button
+                                  type="button"
                                   onClick={() => switchSection("media")}
-                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                                 >
                                   Tambah foto & musik <ArrowRight className="h-4 w-4" />
                                 </button>
@@ -1093,18 +1447,32 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                           )}
 
                           {section.id === "media" && (
-                            <div className="space-y-5">
-                              <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                  Foto Kenangan
-                                </label>
-                                <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/50 px-4 py-8 cursor-pointer hover:border-primary/50 hover:bg-primary-fixed/10 transition-colors">
-                                  <ImagePlus className="h-8 w-8 text-primary" />
-                                  <span className="text-body-md font-semibold text-on-surface">
+                            <div className="space-y-4">
+                              {/* Kartu Foto Kenangan */}
+                              <div className="rounded-2xl bg-surface-container-low/50 border border-outline-variant/30 p-4">
+                                <div className="flex items-center justify-between gap-2 mb-2.5">
+                                  <span className="inline-flex items-center gap-2 text-label-lg font-semibold text-on-surface">
+                                    <ImagePlus className="h-4 w-4 text-primary shrink-0" />
+                                    Foto Kenangan
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                                      photoCount > 0
+                                        ? "bg-primary-fixed/40 text-primary"
+                                        : "bg-surface text-on-surface-variant border border-outline-variant/40"
+                                    )}
+                                  >
+                                    {photoCount}/10 foto
+                                  </span>
+                                </div>
+                                <label className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-outline-variant bg-surface/70 px-4 py-6 cursor-pointer hover:border-primary/50 hover:bg-primary-fixed/10 transition-colors">
+                                  <ImagePlus className="h-7 w-7 text-primary" />
+                                  <span className="text-body-md font-semibold text-on-surface text-center">
                                     {uploading ? "Mengunggah…" : "Pilih Foto dari Galeri / Kamera"}
                                   </span>
-                                  <span className="text-label-md text-on-surface-variant">
-                                    Otomatis dikompres & diunggah · maks 10MB/foto
+                                  <span className="text-label-md text-on-surface-variant text-center">
+                                    Otomatis dikompres &amp; diunggah · maks 10MB/foto
                                   </span>
                                   <input
                                     type="file"
@@ -1119,11 +1487,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   />
                                 </label>
                                 {(content.photos ?? []).length > 0 && (
-                                  <div className="grid grid-cols-3 gap-3 mt-4">
+                                  <div className="grid grid-cols-3 gap-2.5 mt-3">
                                     {(content.photos ?? []).map((photo, i) => (
                                       <div
                                         key={`${photo}-${i}`}
-                                        className="relative aspect-square rounded-2xl overflow-hidden border border-outline-variant/30 bg-surface-container-low"
+                                        className="relative aspect-square rounded-xl overflow-hidden border border-outline-variant/30 bg-surface"
                                       >
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
@@ -1132,11 +1500,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                           className="w-full h-full object-cover"
                                         />
                                         <button
+                                          type="button"
                                           onClick={() =>
                                             set("photos", (content.photos ?? []).filter((_, j) => j !== i))
                                           }
                                           aria-label="Hapus foto"
-                                          className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors cursor-pointer"
                                         >
                                           <X className="h-3.5 w-3.5" />
                                         </button>
@@ -1144,7 +1513,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                     ))}
                                   </div>
                                 )}
-                                <details className="mt-3">
+                                <details className="mt-2.5">
                                   <summary className="cursor-pointer text-label-md font-semibold text-primary">
                                     atau tempel URL gambar
                                   </summary>
@@ -1161,201 +1530,236 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                           }}
                                         />
                                         <button
+                                          type="button"
                                           onClick={() =>
                                             set("photos", (content.photos ?? []).filter((_, j) => j !== i))
                                           }
                                           aria-label="Hapus foto"
-                                          className="p-2.5 rounded-full text-on-surface-variant hover:text-primary transition-colors shrink-0"
+                                          className="p-2 rounded-full text-on-surface-variant hover:text-primary transition-colors shrink-0 cursor-pointer"
                                         >
-                                          <X className="h-5 w-5" />
+                                          <X className="h-4.5 w-4.5" />
                                         </button>
                                       </div>
                                     ))}
                                     <button
+                                      type="button"
                                       onClick={() => set("photos", [...(content.photos ?? []), ""])}
-                                      className="inline-flex items-center gap-2 self-start text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
+                                      className="inline-flex items-center gap-1.5 self-start text-label-md font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-3.5 py-1.5 transition-colors cursor-pointer"
                                     >
                                       <Plus className="h-4 w-4" /> Tambah URL
                                     </button>
                                   </div>
                                 </details>
                               </div>
-                              <div>
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                  Musik Latar
-                                </label>
-                                <p className="text-label-md text-on-surface-variant mb-3">
-                                  Pilih dari galeri royalty-free, atau tempel URL audio MP3 sendiri (HTTPS).
-                                </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {MUSIC_LIBRARY.map((t) => {
-                                    const active = content.musicUrl === t.url;
-                                    const isPlaying = playingTrackId === t.id;
-                                    return (
-                                      <div
-                                        key={t.id}
-                                        className={cn(
-                                          "flex items-center gap-1.5 rounded-xl border transition-all",
-                                          active
-                                            ? "border-transparent text-white shadow-md"
-                                            : "border-outline-variant bg-white text-on-surface-variant hover:border-primary/40"
-                                        )}
-                                        style={active ? { background: "var(--color-primary)" } : undefined}
-                                      >
-                                        <button
-                                          type="button"
-                                          onClick={() => set("musicUrl", t.url)}
-                                          className="flex-1 min-w-0 text-left px-3 py-2"
-                                        >
-                                          <span className="block text-label-md font-semibold truncate">
-                                            {t.title}
-                                          </span>
-                                          <span className="block text-label-sm opacity-80 truncate">
-                                            {t.artist} · {t.license}
-                                          </span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleTrackPreview(t)}
-                                          aria-label={
-                                            isPlaying
-                                              ? `Hentikan pratinjau ${t.title}`
-                                              : `Putar pratinjau ${t.title}`
-                                          }
-                                          title={
-                                            isPlaying
-                                              ? "Hentikan pratinjau"
-                                              : "Dengarkan pratinjau"
-                                          }
-                                          className={cn(
-                                            "mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
-                                            active
-                                              ? "bg-white/20 text-white hover:bg-white/30"
-                                              : isPlaying
-                                                ? "bg-primary text-white"
-                                                : "bg-primary-fixed/40 text-primary hover:bg-primary hover:text-white"
-                                          )}
-                                        >
-                                          {isPlaying ? (
-                                            <Pause className="h-3.5 w-3.5" />
-                                          ) : (
-                                            <Play className="h-3.5 w-3.5 ml-0.5" />
-                                          )}
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="relative mt-3">
-                                  <Music className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
-                                  <input
-                                    className={`${inputClass} pl-11`}
-                                    placeholder="https://…/lagu.mp3"
-                                    maxLength={500}
-                                    value={content.musicUrl ?? ""}
-                                    onChange={(e) => set("musicUrl", e.target.value)}
-                                  />
-                                </div>
 
-                                <div className="mt-4">
-                                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
-                                    Video Ucapan (URL)
-                                  </label>
-                                  <input
-                                    className={inputClass}
-                                    placeholder="https://…/video.mp4 atau link YouTube"
-                                    maxLength={500}
-                                    value={content.videoUrl ?? ""}
-                                    onChange={(e) => set("videoUrl", e.target.value)}
-                                  />
-                                  <p className="text-label-md text-on-surface-variant mt-1.5">
-                                    Mendukung tautan YouTube / Shorts atau URL video MP4 publik (HTTPS).
-                                  </p>
-                                </div>
+                              {/* Kartu Musik Latar & Range Trimmer */}
+                              <div className="rounded-2xl bg-surface-container-low/50 border border-outline-variant/30 p-4">
+                                <MusicPicker
+                                  musicUrl={content.musicUrl}
+                                  templateCategory={template?.type}
+                                  onChange={(url) => set("musicUrl", url)}
+                                  onUploadAudio={uploadAudio}
+                                  uploadingAudio={uploadingAudio}
+                                  inputClass={inputClass}
+                                />
                               </div>
 
-                              <div className="rounded-2xl bg-surface-container-low p-4 border border-outline-variant/30">
+                              {/* Kartu Gaya & Mood */}
+                              <div className="rounded-2xl bg-surface-container-low/50 border border-outline-variant/30 p-4">
                                 <MoodSelector
                                   value={content.mood}
                                   onChange={(m) => set("mood", m)}
                                 />
                               </div>
 
-                              <div className="border-t border-outline-variant/30 pt-5">
-                                <label className="block text-label-lg font-semibold text-on-surface mb-1">
-                                  Timeline / Momen Penting (Opsional)
-                                </label>
-                                <p className="text-body-md text-on-surface-variant mb-4">
-                                  Tambahkan tanggal dan momen spesial kalian (misal: Kencan Pertama, Jadian).
-                                </p>
-                                <div className="space-y-3">
-                                  {(content.timeline ?? []).map((item, i) => (
-                                    <div key={i} className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-label-md font-bold text-primary">Momen #{i + 1}</span>
-                                        <button
-                                          onClick={() => {
-                                            const t = [...(content.timeline ?? [])];
-                                            t.splice(i, 1);
-                                            set("timeline", t);
-                                          }}
-                                          className="text-red-500 hover:text-red-700 text-label-md font-semibold"
+                              {/* Panel Opsional Ringkas: Video Ucapan */}
+                              <div className="rounded-2xl bg-surface-container-low/50 border border-outline-variant/30 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setVideoPanelToggle(!isVideoPanelOpen)}
+                                  aria-expanded={isVideoPanelOpen}
+                                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-container-low transition-colors cursor-pointer"
+                                >
+                                  <span className="inline-flex items-center gap-2 text-label-lg font-semibold text-on-surface min-w-0">
+                                    <Film className="h-4 w-4 text-primary shrink-0" />
+                                    <span className="truncate">Video Ucapan</span>
+                                  </span>
+                                  <span className="flex items-center gap-2 shrink-0">
+                                    <span
+                                      className={cn(
+                                        "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                                        hasVideo
+                                          ? "bg-primary-fixed/40 text-primary"
+                                          : "bg-surface text-on-surface-variant border border-outline-variant/40"
+                                      )}
+                                    >
+                                      {hasVideo ? "Terpasang" : "Opsional"}
+                                    </span>
+                                    <ChevronDown
+                                      className={cn(
+                                        "h-4 w-4 text-on-surface-variant transition-transform duration-200",
+                                        isVideoPanelOpen && "rotate-180"
+                                      )}
+                                    />
+                                  </span>
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {isVideoPanelOpen && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.22, ease: "easeInOut" }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="px-4 pb-4 pt-1 border-t border-outline-variant/25">
+                                        <label
+                                          htmlFor="builder-video-url"
+                                          className="block text-label-md font-semibold text-on-surface-variant mb-1.5 mt-2"
                                         >
-                                          Hapus
+                                          Tautan Video (YouTube / MP4 HTTPS)
+                                        </label>
+                                        <input
+                                          id="builder-video-url"
+                                          className={inputClass}
+                                          placeholder="https://…/video.mp4 atau link YouTube"
+                                          maxLength={500}
+                                          value={content.videoUrl ?? ""}
+                                          onChange={(e) => set("videoUrl", e.target.value)}
+                                        />
+                                        <p className="text-[11px] text-on-surface-variant mt-1.5">
+                                          Mendukung tautan YouTube / Shorts atau URL video MP4 publik (HTTPS).
+                                        </p>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+
+                              {/* Panel Opsional Ringkas: Timeline Momen Penting */}
+                              <div className="rounded-2xl bg-surface-container-low/50 border border-outline-variant/30 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setTimelinePanelToggle(!isTimelinePanelOpen)}
+                                  aria-expanded={isTimelinePanelOpen}
+                                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-container-low transition-colors cursor-pointer"
+                                >
+                                  <span className="inline-flex items-center gap-2 text-label-lg font-semibold text-on-surface min-w-0">
+                                    <CalendarHeart className="h-4 w-4 text-primary shrink-0" />
+                                    <span className="truncate">Timeline / Momen Penting</span>
+                                  </span>
+                                  <span className="flex items-center gap-2 shrink-0">
+                                    <span
+                                      className={cn(
+                                        "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                                        timelineCount > 0
+                                          ? "bg-primary-fixed/40 text-primary"
+                                          : "bg-surface text-on-surface-variant border border-outline-variant/40"
+                                      )}
+                                    >
+                                      {timelineCount > 0 ? `${timelineCount} momen` : "Opsional"}
+                                    </span>
+                                    <ChevronDown
+                                      className={cn(
+                                        "h-4 w-4 text-on-surface-variant transition-transform duration-200",
+                                        isTimelinePanelOpen && "rotate-180"
+                                      )}
+                                    />
+                                  </span>
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {isTimelinePanelOpen && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.22, ease: "easeInOut" }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="px-4 pb-4 pt-2 border-t border-outline-variant/25 space-y-3">
+                                        <p className="text-label-md text-on-surface-variant">
+                                          Tambahkan tanggal dan momen spesial kalian (misal: Kencan Pertama, Jadian).
+                                        </p>
+                                        {(content.timeline ?? []).map((item, i) => (
+                                          <div
+                                            key={i}
+                                            className="p-3.5 rounded-xl bg-surface border border-outline-variant/40 space-y-2.5"
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-label-md font-bold text-primary">
+                                                Momen #{i + 1}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const t = [...(content.timeline ?? [])];
+                                                  t.splice(i, 1);
+                                                  set("timeline", t);
+                                                }}
+                                                className="text-red-600 dark:text-red-400 hover:underline text-label-md font-semibold cursor-pointer"
+                                              >
+                                                Hapus
+                                              </button>
+                                            </div>
+                                            <div className="grid sm:grid-cols-2 gap-2.5">
+                                              <input
+                                                className={inputClass}
+                                                placeholder="Tanggal (cth: 14 Feb 2024)"
+                                                value={item.date}
+                                                onChange={(e) => {
+                                                  const t = [...(content.timeline ?? [])];
+                                                  t[i] = { ...t[i], date: e.target.value };
+                                                  set("timeline", t);
+                                                }}
+                                              />
+                                              <input
+                                                className={inputClass}
+                                                placeholder="Judul Momen (cth: Kencan Pertama)"
+                                                value={item.title}
+                                                onChange={(e) => {
+                                                  const t = [...(content.timeline ?? [])];
+                                                  t[i] = { ...t[i], title: e.target.value };
+                                                  set("timeline", t);
+                                                }}
+                                              />
+                                            </div>
+                                            <input
+                                              className={inputClass}
+                                              placeholder="Deskripsi singkat (opsional)"
+                                              value={item.description ?? ""}
+                                              onChange={(e) => {
+                                                const t = [...(content.timeline ?? [])];
+                                                t[i] = { ...t[i], description: e.target.value };
+                                                set("timeline", t);
+                                              }}
+                                            />
+                                          </div>
+                                        ))}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setTimelinePanelToggle(true);
+                                            set("timeline", [
+                                              ...(content.timeline ?? []),
+                                              { date: "", title: "", description: "" },
+                                            ]);
+                                          }}
+                                          className="inline-flex items-center gap-1.5 text-label-md font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-3.5 py-2 transition-colors cursor-pointer"
+                                        >
+                                          <Plus className="h-4 w-4" /> Tambah Momen Timeline
                                         </button>
                                       </div>
-                                      <div className="grid sm:grid-cols-2 gap-3">
-                                        <input
-                                          className={inputClass}
-                                          placeholder="Tanggal (cth: 14 Feb 2024)"
-                                          value={item.date}
-                                          onChange={(e) => {
-                                            const t = [...(content.timeline ?? [])];
-                                            t[i] = { ...t[i], date: e.target.value };
-                                            set("timeline", t);
-                                          }}
-                                        />
-                                        <input
-                                          className={inputClass}
-                                          placeholder="Judul Momen (cth: Kencan Pertama)"
-                                          value={item.title}
-                                          onChange={(e) => {
-                                            const t = [...(content.timeline ?? [])];
-                                            t[i] = { ...t[i], title: e.target.value };
-                                            set("timeline", t);
-                                          }}
-                                        />
-                                      </div>
-                                      <input
-                                        className={inputClass}
-                                        placeholder="Deskripsi singkat (opsional)"
-                                        value={item.description ?? ""}
-                                        onChange={(e) => {
-                                          const t = [...(content.timeline ?? [])];
-                                          t[i] = { ...t[i], description: e.target.value };
-                                          set("timeline", t);
-                                        }}
-                                      />
-                                    </div>
-                                  ))}
-                                  <button
-                                    onClick={() =>
-                                      set("timeline", [
-                                        ...(content.timeline ?? []),
-                                        { date: "", title: "", description: "" },
-                                      ])
-                                    }
-                                    className="inline-flex items-center gap-2 text-label-lg font-semibold text-primary hover:bg-primary-fixed/30 rounded-full px-4 py-2 transition-colors"
-                                  >
-                                    <Plus className="h-4 w-4" /> Tambah Momen Timeline
-                                  </button>
-                                </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
                               </div>
+
                               <button
-                                onClick={() => switchSection("selesai")}
-                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                type="button"
+                                onClick={() => switchSection("tambahan")}
+                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                               >
-                                Siap kirim kejutan <ArrowRight className="h-4 w-4" />
+                                Lanjut ke Tambahan <ArrowRight className="h-4 w-4" />
                               </button>
                             </div>
                           )}
@@ -1363,9 +1767,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                           {section.id === "tambahan" && (
                             <div className="space-y-5">
                               {isPaid ? (
-                                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-label-md text-amber-800">
-                                  🔒 Pengaturan add-on terkunci setelah ucapan aktif. Kamu tetap
-                                  bisa mengedit isi surat, foto, musik, video, dan timeline.
+                                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/12 px-4 py-3 text-label-md text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                                  <Lock className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
+                                  <span>
+                                    Pengaturan add-on terkunci setelah ucapan aktif. Kamu tetap
+                                    bisa mengedit isi surat, foto, musik, video, dan timeline.
+                                  </span>
                                 </div>
                               ) : (
                                 <p className="text-label-md text-on-surface-variant leading-relaxed">
@@ -1388,10 +1795,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                         aria-pressed={active}
                                         aria-expanded={active}
                                         className={cn(
-                                          "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3 disabled:opacity-70 disabled:cursor-not-allowed",
+                                          "w-full text-left rounded-2xl border px-4 py-3 transition-all flex items-start gap-3 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed",
                                           active
                                             ? "border-primary bg-primary-fixed/20 ring-1 ring-primary/20"
-                                            : "border-outline-variant/50 bg-white hover:border-primary/40"
+                                            : "border-outline-variant/60 bg-surface hover:border-primary/40"
                                         )}
                                       >
                                         <span
@@ -1423,10 +1830,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                         <div className="mt-2 rounded-2xl border border-outline-variant/40 bg-surface-container-low/60 p-3">
                                           {key === "custom_slug" && (
                                             <div>
-                                              <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                              <label
+                                                htmlFor="builder-custom-slug"
+                                                className="block text-label-md font-semibold text-on-surface mb-1.5"
+                                              >
                                                 Alamat Link Cantik
                                               </label>
                                               <input
+                                                id="builder-custom-slug"
                                                 className={inputClass}
                                                 disabled={isPaid}
                                                 placeholder="cth: ari-nadia"
@@ -1439,12 +1850,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                   !slugInput.trim()
                                                     ? "text-on-surface-variant"
                                                     : !slugCheck.valid
-                                                      ? "text-red-500"
+                                                      ? "text-red-600 dark:text-red-400"
                                                       : !isPaid && slugLiveMatches && slugAvailability.status === "checking"
                                                         ? "text-on-surface-variant"
                                                         : !isPaid && slugLiveMatches && (slugAvailability.status === "taken" || slugAvailability.status === "error")
-                                                          ? "text-red-500"
-                                                          : "text-green-600"
+                                                          ? "text-red-600 dark:text-red-400"
+                                                          : "text-emerald-600 dark:text-emerald-400"
                                                 }`}
                                               >
                                                 {!slugInput.trim() ? (
@@ -1461,7 +1872,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                 ) : slugLiveMatches && (slugAvailability.status === "taken" || slugAvailability.status === "error") ? (
                                                   slugAvailability.reason
                                                 ) : slugLiveMatches && slugAvailability.status === "available" ? (
-                                                  `✓ Tersedia — Link jadi: /u/${slugCheck.normalized}`
+                                                  <>
+                                                    <Check className="h-3.5 w-3.5 shrink-0" />
+                                                    Tersedia — Link jadi: /u/{slugCheck.normalized}
+                                                  </>
                                                 ) : (
                                                   `Link jadi: /u/${slugCheck.normalized}`
                                                 )}
@@ -1478,27 +1892,28 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                 <div className="grid grid-cols-2 gap-2" role="group" aria-label="Jenis kunci pesan">
                                                   {(
                                                     [
-                                                      { id: "pin" as const, label: "🔢 Kode PIN" },
-                                                      { id: "trivia" as const, label: "💌 Kuis Nostalgia" },
+                                                      { id: "pin" as const, label: "Kode PIN", Icon: KeyRound },
+                                                      { id: "trivia" as const, label: "Kuis Nostalgia", Icon: HelpCircle },
                                                     ]
-                                                  ).map((opt) => (
+                                                  ).map(({ id, label, Icon }) => (
                                                     <button
-                                                      key={opt.id}
+                                                      key={id}
                                                       type="button"
                                                       disabled={isPaid}
-                                                      aria-pressed={gateMode === opt.id}
+                                                      aria-pressed={gateMode === id}
                                                       onClick={() => {
-                                                        setGateMode(opt.id);
+                                                        setGateMode(id);
                                                         setPreviewGateOpen(true);
                                                       }}
                                                       className={cn(
-                                                        "rounded-2xl border px-3 py-2 text-label-md font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed",
-                                                        gateMode === opt.id
+                                                        "inline-flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2 text-label-md font-semibold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed",
+                                                        gateMode === id
                                                           ? "border-primary bg-primary-fixed/25 text-primary ring-1 ring-primary/20"
-                                                          : "border-outline-variant/50 bg-white text-on-surface-variant hover:border-primary/40"
+                                                          : "border-outline-variant/60 bg-surface text-on-surface-variant hover:border-primary/40"
                                                       )}
                                                     >
-                                                      {opt.label}
+                                                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                                                      <span>{label}</span>
                                                     </button>
                                                   ))}
                                                 </div>
@@ -1506,10 +1921,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
                                               {gateMode === "pin" ? (
                                                 <div>
-                                                  <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                  <label
+                                                    htmlFor="builder-gate-pin"
+                                                    className="block text-label-md font-semibold text-on-surface mb-1.5"
+                                                  >
                                                     PIN Rahasia (4–6 angka)
                                                   </label>
                                                   <input
+                                                    id="builder-gate-pin"
                                                     type="password"
                                                     inputMode="numeric"
                                                     disabled={isPaid}
@@ -1531,10 +1950,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                               ) : (
                                                 <div className="space-y-3">
                                                   <div>
-                                                    <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                    <label
+                                                      htmlFor="builder-trivia-question"
+                                                      className="block text-label-md font-semibold text-on-surface mb-1.5"
+                                                    >
                                                       Pertanyaan Kuis Nostalgia
                                                     </label>
                                                     <input
+                                                      id="builder-trivia-question"
                                                       type="text"
                                                       disabled={isPaid}
                                                       maxLength={160}
@@ -1552,7 +1975,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                             key={prompt}
                                                             type="button"
                                                             onClick={() => setTriviaQuestion(prompt)}
-                                                            className="rounded-full border border-outline-variant/60 bg-white px-2.5 py-1 text-[11px] font-medium text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors"
+                                                            className="rounded-full border border-outline-variant/60 bg-surface px-2.5 py-1 text-[11px] font-medium text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors cursor-pointer"
                                                           >
                                                             {prompt}
                                                           </button>
@@ -1562,10 +1985,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                   </div>
 
                                                   <div>
-                                                    <label className="block text-label-md font-semibold text-on-surface mb-1.5">
+                                                    <label
+                                                      htmlFor="builder-trivia-answer"
+                                                      className="block text-label-md font-semibold text-on-surface mb-1.5"
+                                                    >
                                                       Jawaban Rahasia
                                                     </label>
                                                     <input
+                                                      id="builder-trivia-answer"
                                                       type="text"
                                                       disabled={isPaid}
                                                       maxLength={80}
@@ -1600,10 +2027,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                                     onClick={() => setParticleStyle(p.key)}
                                                     aria-pressed={particleStyle === p.key}
                                                     className={cn(
-                                                      "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed",
+                                                      "rounded-2xl border px-2 py-2.5 text-label-md font-semibold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed",
                                                       particleStyle === p.key
                                                         ? "border-primary bg-primary-fixed/20 text-primary ring-1 ring-primary/20"
-                                                        : "border-outline-variant/50 bg-white text-on-surface-variant"
+                                                        : "border-outline-variant/60 bg-surface text-on-surface-variant hover:border-primary/40"
                                                     )}
                                                   >
                                                     <span className="block text-lg mb-0.5">
@@ -1653,7 +2080,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                     </span>
                                   </div>
                                   {checkoutCalc.discount > 0 && (
-                                    <div className="flex justify-between text-label-md text-green-700">
+                                    <div className="flex justify-between text-label-md text-emerald-700 dark:text-emerald-400">
                                       <span>Diskon paket</span>
                                       <span className="font-bold">
                                         −{formatPrice(checkoutCalc.discount)}
@@ -1672,10 +2099,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                               )}
 
                               <button
+                                type="button"
                                 onClick={() => switchSection("selesai")}
-                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                               >
-                                Siap kirim kejutan <ArrowRight className="h-4 w-4" />
+                                Lanjut ke Selesaikan <ArrowRight className="h-4 w-4" />
                               </button>
                             </div>
                           )}
@@ -1683,9 +2111,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                           {section.id === "selesai" && (
                             <div className="space-y-5">
                               {pricing.isPromo && (
-                                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-amber-900 text-xs flex items-center justify-between">
-                                  <span>🔥 Promo perkenalan (sisa {pricing.remainingQuota} kuota)</span>
-                                  <span className="font-bold">{formatPrice(checkoutCalc.baseAmount)}</span>
+                                <div className="rounded-2xl bg-amber-500/12 border border-amber-500/30 p-3 text-amber-950 dark:text-amber-200 text-xs flex items-center justify-between gap-2">
+                                  <span className="inline-flex items-center gap-1.5 font-medium">
+                                    <Flame className="h-4 w-4 text-primary shrink-0" />
+                                    Promo perkenalan (sisa {pricing.remainingQuota} kuota)
+                                  </span>
+                                  <span className="font-bold shrink-0">
+                                    {formatPrice(checkoutCalc.baseAmount)}
+                                  </span>
                                 </div>
                               )}
                               <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
@@ -1695,7 +2128,25 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   ["Dari", content.fromName || "—"],
                                   ["Judul", content.title || "—"],
                                   ["Pesan", `${content.message?.length ?? 0} karakter`],
-                                  ["Foto", `${content.photos?.filter(Boolean).length ?? 0} foto`],
+                                  ["Foto", `${photoCount} foto`],
+                                  [
+                                    "Musik Latar",
+                                    activeMusicInfo
+                                      ? (() => {
+                                          const baseLabel = activeMusicInfo.artist
+                                            ? `${activeMusicInfo.title} — ${activeMusicInfo.artist}`
+                                            : activeMusicInfo.title;
+                                          if (activeMusicInfo.endSeconds !== undefined) {
+                                            return `${baseLabel} (${formatSeconds(activeMusicInfo.startSeconds)}–${formatSeconds(activeMusicInfo.endSeconds)})`;
+                                          }
+                                          if (activeMusicInfo.startSeconds > 0) {
+                                            return `${baseLabel} (mulai ${formatSeconds(activeMusicInfo.startSeconds)})`;
+                                          }
+                                          return baseLabel;
+                                        })()
+                                      : "Tanpa musik",
+                                  ],
+                                  ...(hasVideo ? [["Video", "Terpasang"]] : []),
                                   [
                                     "Tambahan",
                                     selectedAddons.size > 0
@@ -1708,22 +2159,37 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   ["Total", `${formatPrice(checkoutCalc.totalAmount)} (sekali bayar)`],
                                 ].map(([label, value]) => (
                                   <div key={label} className="flex justify-between gap-4">
-                                    <span className="text-body-md text-on-surface-variant">{label}</span>
-                                    <span className="text-body-md font-semibold text-on-surface text-right">
+                                    <span className="text-body-md text-on-surface-variant shrink-0">
+                                      {label}
+                                    </span>
+                                    <span className="text-body-md font-semibold text-on-surface text-right truncate">
                                       {value}
                                     </span>
                                   </div>
                                 ))}
                               </div>
-                              <p className="text-label-md text-on-surface-variant leading-relaxed">
-                                ✅ Link aktif selamanya · ✅ Edit 7 hari setelah bayar · ✅ Bisa dibagikan via
-                                link & QR · ✅ Jejak kunjungan real-time
-                              </p>
+                              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-label-md text-on-surface-variant">
+                                {[
+                                  "Link aktif selamanya",
+                                  "Edit 7 hari setelah bayar",
+                                  "Bagikan via link & QR",
+                                  "Jejak kunjungan real-time",
+                                ].map((perk) => (
+                                  <li key={perk} className="inline-flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span>{perk}</span>
+                                  </li>
+                                ))}
+                              </ul>
                               <button
+                                type="button"
                                 onClick={() => void goToPayment()}
-                                disabled={saving || !canPay}
-                                title={!canPay ? "Lengkapi Identitas & Pesan dulu" : undefined}
-                                className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0"
+                                disabled={saving}
+                                title={!canPay ? "Klik untuk melengkapi bagian yang kurang" : undefined}
+                                className={cn(
+                                  "w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0",
+                                  !canPay && "opacity-90"
+                                )}
                               >
                                 {saving ? (
                                   <>
@@ -1744,7 +2210,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                               {!canPay && (
                                 <p className="text-label-md text-on-surface-variant text-center">
                                   Lengkapi bagian{" "}
-                                  <button onClick={() => switchSection(!identitasComplete ? "identitas" : "pesan")} className="text-primary font-semibold underline underline-offset-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => switchSection(!identitasComplete ? "identitas" : "pesan")}
+                                    className="text-primary font-semibold underline underline-offset-2 cursor-pointer"
+                                  >
                                     {!identitasComplete ? "Identitas" : "Pesan"}
                                   </button>{" "}
                                   dulu ya
@@ -1761,48 +2231,110 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             </div>
           </div>
 
-          {/* PANEL KANAN — live preview permanen */}
-          <div className="lg:sticky lg:top-24 self-start">
-            <div className="flex items-center justify-between mb-3">
+          {/* PANEL KANAN — live preview permanen (desktop) / tab Preview (mobile) */}
+          <div
+            className={cn(
+              "lg:sticky lg:top-24 self-start",
+              mobileView === "edit" ? "hidden lg:block" : "block"
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <p className="text-label-lg font-semibold text-on-surface-variant flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" /> Live Preview
               </p>
-              <div className="flex items-center rounded-full bg-white border border-outline-variant/30 p-1" role="group" aria-label="Mode preview">
-                {(
-                  [
-                    { mode: "mobile" as const, icon: "📱", label: "Mobile" },
-                    { mode: "desktop" as const, icon: "🖥️", label: "Desktop" },
-                  ]
-                ).map(({ mode, icon, label }) => (
-                  <button
-                    key={mode}
-                    onClick={() => switchPreviewMode(mode)}
-                    aria-pressed={previewMode === mode}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-label-md font-semibold transition-all ${
-                      previewMode === mode
-                        ? "bg-primary-fixed/50 text-primary"
-                        : "text-on-surface-variant hover:text-on-surface"
-                    }`}
-                  >
-                    <span aria-hidden>{icon}</span>
-                    <span className="hidden sm:inline">{label}</span>
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (template.hasNarrative) {
+                      setPreviewReplayKey((k) => k + 1);
+                      return;
+                    }
+                    setPreviewInteractive((prev) => !prev);
+                    setPreviewReplayKey((k) => k + 1);
+                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-label-md font-semibold transition-all cursor-pointer",
+                    previewInteractive
+                      ? "bg-primary-fixed/40 border-primary/40 text-primary"
+                      : "bg-white border-outline-variant/40 text-on-surface-variant hover:text-primary hover:border-primary/40"
+                  )}
+                  title={
+                    template.hasNarrative
+                      ? "Putar ulang animasi dari awal"
+                      : previewInteractive
+                        ? "Kembali tampilkan isi surat langsung"
+                        : "Coba animasi pembuka seperti yang dilihat penerima"
+                  }
+                >
+                  {template.hasNarrative ? (
+                    <>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Ulangi</span>
+                    </>
+                  ) : previewInteractive ? (
+                    <>
+                      <BookOpen className="h-3.5 w-3.5" />
+                      <span>Lihat Isi</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Putar Intro</span>
+                    </>
+                  )}
+                </button>
+                <div
+                  className="flex items-center rounded-full bg-white border border-outline-variant/30 p-1"
+                  role="group"
+                  aria-label="Mode preview"
+                >
+                  {(
+                    [
+                      { mode: "mobile" as const, Icon: Smartphone, label: "Mobile" },
+                      { mode: "desktop" as const, Icon: Monitor, label: "Desktop" },
+                    ]
+                  ).map(({ mode, Icon, label }) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => switchPreviewMode(mode)}
+                      aria-pressed={previewMode === mode}
+                      aria-label={`Tampilan ${label}`}
+                      title={`Tampilan ${label}`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-label-md font-semibold transition-all cursor-pointer ${
+                        previewMode === mode
+                          ? "bg-primary-fixed/50 text-primary"
+                          : "text-on-surface-variant hover:text-on-surface"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <motion.div
               ref={previewFrameRef}
               data-light-card
-              data-lenis-prevent
               initial={{ opacity: 0.6, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
-              className={`relative rounded-3xl overflow-hidden border-4 border-white shadow-[0_20px_60px_rgba(222,112,56,0.2)] transition-[max-width] duration-300 ${
+              className={`relative rounded-3xl overflow-hidden border-4 border-surface-container-highest dark:border-outline-variant/40 shadow-[0_20px_60px_rgba(222,112,56,0.2)] transition-[max-width] duration-300 ${
                 previewMode === "mobile" ? "max-w-[375px] mx-auto" : "max-w-full"
               }`}
             >
-              <div data-lenis-prevent className="h-[560px] overflow-y-auto bg-surface">
-                <TemplateRenderer content={previewContent} preview />
+              <div
+                data-scroll-chain
+                className="h-[560px] overflow-y-auto overscroll-y-auto bg-surface"
+              >
+                <TemplateRenderer
+                  key={`${slug}-${previewInteractive ? "intro" : "open"}-${previewReplayKey}`}
+                  content={previewContent}
+                  preview
+                  interactive={previewInteractive}
+                />
               </div>
 
               {/* Efek add-on — dirender di dalam frame, tanpa menyentuh template */}
@@ -1828,10 +2360,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
               {selectedAddons.has("intimate_gate") && !previewGateOpen && (
                 <button
+                  type="button"
                   onClick={() => setPreviewGateOpen(true)}
-                  className="absolute top-3 left-3 z-20 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-gray-800 shadow-lg border border-rose-200/60 backdrop-blur hover:text-rose-600 transition-all"
+                  className="absolute top-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-gray-800 shadow-lg border border-rose-200/60 backdrop-blur hover:text-rose-600 transition-all cursor-pointer"
                 >
-                  🔒 Tampilkan Gerbang
+                  <Lock className="h-3 w-3" />
+                  <span>Tampilkan Gerbang</span>
                 </button>
               )}
 
@@ -1848,16 +2382,24 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       </div>
 
       {/* CTA mobile mengambang */}
-      <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 backdrop-blur border-t border-outline-variant/30 px-5 py-3.5 flex items-center justify-between gap-4">
+      <div className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-surface/95 backdrop-blur-md border-t border-outline-variant/35 px-5 py-3.5 flex items-center justify-between gap-4 shadow-[0_-8px_24px_rgba(36,25,20,0.08)]">
         <div className="min-w-0">
           {isPaid ? (
             <>
               <p className="text-label-md text-on-surface-variant">Mode edit</p>
-              <p className="text-title-md font-bold text-green-700">Ucapan Aktif</p>
+              <p className="text-title-md font-bold text-emerald-700 dark:text-emerald-400">
+                Ucapan Aktif
+              </p>
             </>
           ) : (
             <>
-              <p className="text-label-md text-on-surface-variant">Total sekali bayar</p>
+              <p className="text-label-md text-on-surface-variant truncate">
+                {!identitasComplete
+                  ? "Lengkapi Identitas dulu"
+                  : !pesanComplete
+                    ? "Tulis isi pesan dulu"
+                    : "Total sekali bayar"}
+              </p>
               <p className="text-title-md font-bold text-primary">
                 {formatPrice(checkoutCalc.totalAmount)}
               </p>
@@ -1865,9 +2407,13 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           )}
         </div>
         <button
+          type="button"
           onClick={() => void goToPayment()}
-          disabled={saving || !canPay}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] disabled:opacity-50 transition-all"
+          disabled={saving}
+          className={cn(
+            "inline-flex items-center gap-2 px-6 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_8px_30px_rgba(222,112,56,0.35)] transition-all cursor-pointer disabled:opacity-50 shrink-0",
+            !canPay && "opacity-90"
+          )}
         >
           {saving ? (
             <Loader2 className="h-4.5 w-4.5 animate-spin" />

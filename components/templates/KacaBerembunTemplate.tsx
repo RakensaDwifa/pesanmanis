@@ -222,7 +222,7 @@ export default function KacaBerembunTemplate({
                 : "fixed bottom-20 left-5 z-50 flex items-center gap-2"
             }
           >
-            <CassettePlayer content={content} />
+            <CassettePlayer content={content} autoPlay={!preview} />
             <SfxToggle />
           </div>
         </main>

@@ -8,7 +8,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Ctrl + Z", action: "Undo (batalkan perubahan)" },
   { keys: "Ctrl + Shift + Z", action: "Redo (ulangi perubahan)" },
   { keys: "Ctrl + Enter", action: "Lanjut ke pembayaran" },
-  { keys: "Alt + 1…4", action: "Buka bagian editor tertentu" },
+  { keys: "Alt + 1…5", action: "Buka bagian editor tertentu" },
 ];
 
 export default function ShortcutsHelpModal({

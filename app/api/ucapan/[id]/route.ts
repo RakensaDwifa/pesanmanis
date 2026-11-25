@@ -15,6 +15,7 @@ import type { UcapanContent } from "@/lib/types";
 import { hasValidGateCookie } from "@/lib/gate-cookie";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
+  extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
   isRecord,
   isValidUuid,
@@ -240,32 +241,49 @@ export async function DELETE(
   const configuredUrl = supabaseUrl();
 
   // Only consider Storage paths strictly belonging to this user's own folder (<user.id>/...)
-  // and skip any photo still referenced by another ucapan owned by the same user (e.g. cloned).
-  const candidatePaths = (ucapan.photos ?? [])
+  // and skip any photo/audio still referenced by another ucapan owned by the same user (e.g. cloned).
+  const candidatePhotoPaths = (ucapan.photos ?? [])
     .map((url) => extractOwnedFotoStoragePath(url, configuredUrl, user.id))
     .filter((p): p is string => Boolean(p));
+  const candidateAudioPath = extractOwnedAudioStoragePath(
+    ucapan.musicUrl,
+    configuredUrl,
+    user.id
+  );
 
-  if (candidatePaths.length > 0) {
+  if (candidatePhotoPaths.length > 0 || candidateAudioPath) {
     try {
       const { data: siblingRows } = await supabase
         .from("ucapan")
-        .select("photos")
+        .select("photos, music_url")
         .eq("owner_id", user.id)
         .neq("id", id);
 
-      const usedBySiblings = new Set<string>();
+      const usedPhotosBySiblings = new Set<string>();
+      const usedAudioBySiblings = new Set<string>();
       for (const row of siblingRows ?? []) {
-        const photos = (row as { photos?: string[] | null }).photos ?? [];
-        for (const p of photos) {
+        const typedRow = row as { photos?: string[] | null; music_url?: string | null };
+        for (const p of typedRow.photos ?? []) {
           const sp = extractOwnedFotoStoragePath(p, configuredUrl, user.id);
-          if (sp) usedBySiblings.add(sp);
+          if (sp) usedPhotosBySiblings.add(sp);
         }
+        const ap = extractOwnedAudioStoragePath(
+          typedRow.music_url,
+          configuredUrl,
+          user.id
+        );
+        if (ap) usedAudioBySiblings.add(ap);
       }
 
-      const safeToRemove = candidatePaths.filter((p) => !usedBySiblings.has(p));
-      if (safeToRemove.length > 0) {
+      const safePhotosToRemove = candidatePhotoPaths.filter(
+        (p) => !usedPhotosBySiblings.has(p)
+      );
+      if (safePhotosToRemove.length > 0) {
         // Delete via user-scoped client so Storage RLS enforces ownership as defense-in-depth.
-        await supabase.storage.from("foto").remove(safeToRemove);
+        await supabase.storage.from("foto").remove(safePhotosToRemove);
+      }
+      if (candidateAudioPath && !usedAudioBySiblings.has(candidateAudioPath)) {
+        await supabase.storage.from("musik").remove([candidateAudioPath]);
       }
     } catch {
       // non-blocking: still delete the ucapan row

@@ -358,10 +358,10 @@ export default function Dashboard() {
         <p className="text-label-md text-on-surface-variant">Hai 👋</p>
         {realtimeLive && !demo && (
           <span
-            className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-[11px] font-semibold text-green-700"
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
             title="Statistik view, reaksi, dan balasan diperbarui otomatis secara langsung"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Live
           </span>
         )}
@@ -387,9 +387,9 @@ export default function Dashboard() {
         <Plus className="h-4 w-4" /> Buat Ucapan Baru
       </Link>
       {demo && (
-        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
-          <p className="text-label-md text-amber-800 leading-relaxed">
-            🧪 Mode demo — data hanya di browser ini. Sambungkan Supabase untuk
+        <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/12 p-3.5">
+          <p className="text-label-md text-amber-900 dark:text-amber-200 leading-relaxed">
+            Mode demo — data hanya di browser ini. Sambungkan Supabase untuk
             sinkron antar perangkat.
           </p>
         </div>
@@ -398,22 +398,60 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-16">
+    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
       <div className="max-w-[1200px] mx-auto px-5 md:px-10">
-        {/* Sidebar — di atas untuk mobile */}
-        <div className="lg:hidden mb-6">{sidebar}</div>
+        {/* Header ringkas khusus mobile (< lg) agar daftar ucapan langsung terlihat */}
+        <div className="lg:hidden mb-5 bg-white rounded-2xl border border-outline-variant/30 shadow-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="font-heading text-title-lg text-on-surface truncate">
+                  Dashboard Kamu
+                </h1>
+                {realtimeLive && !demo && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live
+                  </span>
+                )}
+              </div>
+            </div>
+            <Link
+              href="/templates"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-label-md font-semibold rounded-full shadow-xs shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" /> Buat
+            </Link>
+          </div>
+          <nav className="grid grid-cols-2 gap-1.5 p-1 rounded-full bg-surface-container-low border border-outline-variant/30">
+            <span className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-full bg-primary text-white text-label-md font-semibold">
+              <LayoutGrid className="h-3.5 w-3.5" /> Ucapan Saya
+            </span>
+            <Link
+              href="/dashboard/referral"
+              className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-full text-on-surface-variant hover:text-primary text-label-md font-semibold transition-colors"
+            >
+              <Gift className="h-3.5 w-3.5" /> Referral
+            </Link>
+          </nav>
+          {demo && (
+            <p className="rounded-xl border border-amber-500/30 bg-amber-500/12 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+              Mode demo aktif — data tersimpan lokal di browser ini.
+            </p>
+          )}
+        </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-8 items-start">
           <div className="hidden lg:block">{sidebar}</div>
 
           <div>
             {loadError && (
-              <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-body-md text-red-700">{loadError}</p>
+              <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/12 px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-body-md text-red-700 dark:text-red-300">{loadError}</p>
                 <button
                   type="button"
                   onClick={() => void loadUcapans()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-600 text-white text-label-md font-semibold hover:bg-red-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-600 text-white text-label-md font-semibold hover:bg-red-700 transition-colors cursor-pointer"
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Muat Ulang
                 </button>
@@ -422,7 +460,7 @@ export default function Dashboard() {
 
             {/* Ringkasan */}
             {ucapans.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-6">
                 {[
                   { label: "Total ucapan", value: String(ucapans.length) },
                   { label: "Aktif", value: String(activeCount) },
@@ -430,17 +468,17 @@ export default function Dashboard() {
                 ].map((s) => (
                   <div
                     key={s.label}
-                    className="bg-white rounded-2xl border border-outline-variant/25 shadow-card px-4 py-4 text-center"
+                    className="bg-white rounded-2xl border border-outline-variant/25 shadow-card px-2.5 sm:px-4 py-3.5 sm:py-4 text-center"
                   >
                     <p className="font-heading text-title-lg text-primary">{s.value}</p>
-                    <p className="text-label-md text-on-surface-variant mt-0.5">{s.label}</p>
+                    <p className="text-[11px] sm:text-label-md text-on-surface-variant mt-0.5 truncate">{s.label}</p>
                   </div>
                 ))}
               </div>
             )}
 
             {ucapans.length === 0 && !loadError ? (
-              <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-14 text-center">
+              <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-7 sm:p-14 text-center">
                 <div className="w-16 h-16 rounded-full bg-primary-fixed/30 flex items-center justify-center mx-auto mb-4">
                   <Wallet className="h-8 w-8 text-primary" />
                 </div>
@@ -492,8 +530,8 @@ export default function Dashboard() {
                                 <span
                                   className={`text-label-md font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
                                     u.paid
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-amber-100 text-amber-700"
+                                      ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400"
+                                      : "bg-amber-500/12 text-amber-800 dark:text-amber-300"
                                   }`}
                                 >
                                   {u.paid ? "Aktif" : "Menunggu bayar"}
@@ -629,9 +667,10 @@ export default function Dashboard() {
                               <Pencil className="h-4 w-4" />
                             </Link>
                             <button
+                              type="button"
                               onClick={() => void remove(u.id)}
                               aria-label="Hapus ucapan"
-                              className="p-2 rounded-full bg-surface-container-low text-red-500 hover:bg-red-50 transition-colors"
+                              className="p-2 rounded-full bg-surface-container-low text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

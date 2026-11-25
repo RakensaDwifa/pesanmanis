@@ -5,7 +5,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TemplateShell, Signature, PhotoGrid, TimelineSection } from "./shared";
 import type { TemplateRenderProps } from "@/lib/types";
 
-export default function SuratCinta({ content, preview, interactive, onOpenChange }: TemplateRenderProps) {
+export default function SuratCinta({
+  content,
+  preview,
+  interactive,
+  onOpenChange,
+  hideAudioControls,
+}: TemplateRenderProps) {
   const [opened, setOpened] = useState(interactive ? false : Boolean(preview));
 
   const openLetter = () => {
@@ -14,7 +20,12 @@ export default function SuratCinta({ content, preview, interactive, onOpenChange
   };
 
   return (
-    <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FDF6EC] via-[#F9EEDC] to-[#F3E3C8]">
+    <TemplateShell
+      content={content}
+      preview={preview}
+      hideAudioControls={hideAudioControls}
+      className="bg-gradient-to-b from-[#FDF6EC] via-[#F9EEDC] to-[#F3E3C8]"
+    >
       <AnimatePresence mode="wait">
         {!opened ? (
           <motion.div
@@ -75,7 +86,11 @@ export default function SuratCinta({ content, preview, interactive, onOpenChange
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className={`bg-[#FFFDF7] rounded-2xl shadow-[0_12px_35px_rgba(139,109,63,0.22)] border border-[#EAD9B8] w-full mx-auto my-auto ${
-              preview ? "p-5 pb-6 max-w-[270px]" : "p-8"
+              preview && hideAudioControls
+                ? "p-5 pb-6 max-w-[270px]"
+                : preview
+                  ? "p-6 pb-7"
+                  : "p-8"
             }`}
             style={{
               backgroundImage:
@@ -84,39 +99,49 @@ export default function SuratCinta({ content, preview, interactive, onOpenChange
           >
             <div
               className={`rounded-full bg-primary-fixed flex items-center justify-center mx-auto ${
-                preview ? "w-9 h-9 mb-2" : "w-12 h-12 mb-4"
+                preview && hideAudioControls ? "w-9 h-9 mb-2" : "w-12 h-12 mb-4"
               }`}
             >
-              <span className={preview ? "text-lg" : "text-2xl"}>✉️</span>
+              <span className={preview && hideAudioControls ? "text-lg" : "text-2xl"}>
+                ✉️
+              </span>
             </div>
             <p
               className={`font-heading italic text-primary text-center mb-0.5 ${
-                preview ? "text-xl font-bold" : "text-3xl"
+                preview && hideAudioControls ? "text-xl font-bold" : "text-3xl"
               }`}
             >
               {content.title}
             </p>
             <p
               className={`text-center font-semibold text-on-surface-variant ${
-                preview ? "text-xs mb-3" : "text-label-lg mb-6"
+                preview && hideAudioControls ? "text-xs mb-3" : "text-label-lg mb-6"
               }`}
             >
               Untuk: {content.toName}
             </p>
-            <div className={preview ? "pt-2" : "pt-5"}>
+            <div className={preview && hideAudioControls ? "pt-2" : "pt-5"}>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.6 }}
                 className={`text-on-surface whitespace-pre-line text-center ${
-                  preview
+                  preview && hideAudioControls
                     ? "text-xs leading-[22px] line-clamp-6"
-                    : "text-body-lg leading-[32px]"
+                    : preview
+                      ? "text-sm leading-[32px]"
+                      : "text-body-lg leading-[32px]"
                 }`}
               >
                 {content.message}
               </motion.p>
-              <div className={preview ? "[&_p]:!text-lg [&_p]:!mt-4" : ""}>
+              <div
+                className={
+                  preview && hideAudioControls
+                    ? "[&_p]:!text-lg [&_p]:!mt-4"
+                    : ""
+                }
+              >
                 <Signature fromName={content.fromName} />
               </div>
             </div>

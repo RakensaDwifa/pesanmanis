@@ -7,12 +7,12 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-surface pt-32 pb-20">
+    <div className="min-h-screen bg-surface pt-24 sm:pt-32 pb-24 sm:pb-20">
       <div className="max-w-3xl mx-auto px-5 md:px-16">
-        <h1 className="font-heading text-headline-lg text-primary mb-6">
-          Syarat & Ketentuan Layanan
+        <h1 className="font-heading text-headline-md sm:text-headline-lg text-primary mb-5 sm:mb-6">
+          Syarat &amp; Ketentuan Layanan
         </h1>
-        <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-8 space-y-5 text-body-md leading-relaxed text-on-surface">
+        <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-8 space-y-4 sm:space-y-5 text-body-md leading-relaxed text-on-surface">
           <p>
             <strong>1. Layanan Produk Digital.</strong> {BRAND.name} menyediakan platform
             pembuatan website ucapan personal interaktif. Setiap transaksi merupakan

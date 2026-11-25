@@ -10,8 +10,8 @@ const SPLASH_PARTICLES = Array.from({ length: 14 }, (_, i) => ({
   y: -80 - ((i * 37 + 13) % 120),
 }));
 
-export default function BotolKenangan({ content, preview }: TemplateRenderProps) {
-  const [broken, setBroken] = useState(Boolean(preview));
+export default function BotolKenangan({ content, preview, interactive }: TemplateRenderProps) {
+  const [broken, setBroken] = useState(interactive ? false : Boolean(preview));
   const [shaking, setShaking] = useState(false);
   const splashParticles = SPLASH_PARTICLES;
 

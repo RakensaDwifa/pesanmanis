@@ -1,6 +1,7 @@
 import {
   CHASMS,
   CHECKPOINTS,
+  CRUMBLE_FALL_FRAMES,
   CRUMBLE_PLATFORMS,
   DOOR,
   MOVING_PLATFORMS,
@@ -441,12 +442,15 @@ export function drawCrumblePlatforms(ctx: CanvasRenderingContext2D, crumbleTimer
   for (let idx = 0; idx < CRUMBLE_PLATFORMS.length; idx++) {
     const cp = CRUMBLE_PLATFORMS[idx];
     const crumbleTimer = crumbleTimers[idx] ?? 0;
-    if (crumbleTimer >= 35) continue;
+    if (crumbleTimer >= CRUMBLE_FALL_FRAMES) continue;
     let shakeX = 0;
     let shakeY = 0;
     if (crumbleTimer > 0) {
-      shakeX = Math.round((Math.random() - 0.5) * 4);
-      shakeY = Math.round((Math.random() - 0.5) * 3);
+      const urgent = crumbleTimer > CRUMBLE_FALL_FRAMES - 20;
+      const ampX = urgent ? 6 : 3.5;
+      const ampY = urgent ? 4 : 2.5;
+      shakeX = Math.round((Math.random() - 0.5) * ampX);
+      shakeY = Math.round((Math.random() - 0.5) * ampY);
     }
     const px = Math.round(cp.x + shakeX);
     const py = Math.round(cp.y + shakeY);
@@ -831,14 +835,10 @@ export function drawFinishRecipient(
     ctx.restore();
   }
 
-  // 6. Contextual speech pills before cutscene begins
-  if (!delivery) {
+  // 6. Contextual speech pill welcoming courier anytime
+  if (!delivery && ready) {
     const bob = Math.sin(state.t / 10) * 3;
-    if (ready) {
-      drawSpeechPill(ctx, cx, ground - 108 + bob, "Antar ke Aku!", PALETTE.terracotta);
-    } else if (Math.abs(state.x + PLAYER.w / 2 - cx) < 190) {
-      drawSpeechPill(ctx, cx, ground - 108 + bob, "Kumpulkan 3 kado dulu!", PALETTE.woodBase);
-    }
+    drawSpeechPill(ctx, cx, ground - 108 + bob, "Antar ke Aku!", PALETTE.terracotta);
   }
 }
 

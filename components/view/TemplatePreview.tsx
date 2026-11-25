@@ -8,6 +8,7 @@ import StoryFlow from "@/components/story/StoryFlow";
 import TemplateRenderer from "@/components/templates/registry";
 import FlowerTransition, { type FlowerTransitionRef } from "@/components/effects/FlowerTransition";
 import { fillContentDefaults, getTemplate } from "@/lib/templates";
+import { getDefaultGalleryTrack } from "@/lib/music-library";
 import { CATEGORY_META, MOCK_CONTENT } from "@/lib/types";
 import { trackEvent } from "@/lib/analytics";
 
@@ -54,8 +55,13 @@ export default function TemplatePreview({ slug }: { slug: string }) {
     }
   };
 
-  // Isi demo: nama & pesan contoh supaya user melihat tampilan akhirnya.
-  const content = fillContentDefaults({ ...MOCK_CONTENT, templateSlug: slug });
+  // Isi demo: nama, pesan contoh, & lagu galeri sesuai momen (bila file MP3 sudah tersedia).
+  const defaultTrack = getDefaultGalleryTrack(t.type);
+  const content = fillContentDefaults({
+    ...MOCK_CONTENT,
+    templateSlug: slug,
+    ...(defaultTrack ? { musicUrl: defaultTrack.url } : {}),
+  });
 
   return (
     <div className="relative min-h-screen bg-surface">

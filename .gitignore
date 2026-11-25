@@ -46,6 +46,11 @@ next-env.d.ts
 # local documentation (jangan di-commit)
 /docs/
 
-# local helper scripts
-/scripts/
+# local helper scripts (kecuali skrip build musik resmi)
+/scripts/*
+!/scripts/build-music.mjs
+
+# raw unoptimized audio source files (hanya simpan panduan README di repo)
+/raw-music/*
+!/raw-music/README.md
 

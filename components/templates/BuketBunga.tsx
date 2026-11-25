@@ -20,9 +20,10 @@ const FLOWERS = [
   { emoji: "💐", x: 0, y: -60, delay: 0.85, size: 34 },
 ];
 
-export default function BuketBunga({ content, preview }: TemplateRenderProps) {
-  const [assembled, setAssembled] = useState(Boolean(preview));
-  const [revealed, setRevealed] = useState(Boolean(preview));
+export default function BuketBunga({ content, preview, interactive }: TemplateRenderProps) {
+  const startOpen = interactive ? false : Boolean(preview);
+  const [assembled, setAssembled] = useState(startOpen);
+  const [revealed, setRevealed] = useState(startOpen);
   const confetti = CONFETTI_PARTICLES;
 
   const start = () => {

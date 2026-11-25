@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
+import { useIsCoarsePointer } from "@/lib/use-coarse-pointer";
 import type { Mood } from "@/lib/mood";
 
 interface Blob {
@@ -14,25 +15,48 @@ interface Blob {
 
 export default function ParallaxBackground({ mood }: { mood: Mood }) {
   const reduced = usePrefersReducedMotion();
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const isCoarse = useIsCoarsePointer();
+  const blobRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
-    if (reduced) return;
-    const onMove = (e: PointerEvent) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 2;
-      const y = (e.clientY / window.innerHeight - 0.5) * 2;
-      setOffset({ x, y });
+    if (reduced || isCoarse) return;
+    let frameId = 0;
+    let targetX = 0;
+    let targetY = 0;
+    const depths = [22, -16, 26];
+
+    const flush = () => {
+      frameId = 0;
+      for (let i = 0; i < depths.length; i++) {
+        const el = blobRefs.current[i];
+        if (el) {
+          el.style.transform = `translate3d(${targetX * depths[i]}px, ${targetY * depths[i]}px, 0)`;
+        }
+      }
     };
-    window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
-  }, [reduced]);
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      targetX = (e.clientX / window.innerWidth - 0.5) * 2;
+      targetY = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!frameId) {
+        frameId = requestAnimationFrame(flush);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [reduced, isCoarse]);
 
   if (reduced) return null;
 
   const blobs: Blob[] = [
-    { color: mood.primaryContainer, size: 300, top: "8%", left: "6%", depth: 22 },
-    { color: mood.primaryFixed, size: 240, top: "64%", left: "16%", depth: -16 },
-    { color: mood.surfaceContainerLow, size: 280, top: "38%", left: "68%", depth: 26 },
+    { color: mood.primaryContainer, size: 340, top: "4%", left: "2%", depth: 22 },
+    { color: mood.primaryFixed, size: 280, top: "60%", left: "12%", depth: -16 },
+    { color: mood.surfaceContainerLow, size: 320, top: "34%", left: "62%", depth: 26 },
   ];
 
   return (
@@ -40,15 +64,16 @@ export default function ParallaxBackground({ mood }: { mood: Mood }) {
       {blobs.map((b, i) => (
         <div
           key={i}
-          className="absolute rounded-full blur-3xl opacity-40"
+          ref={(el) => {
+            blobRefs.current[i] = el;
+          }}
+          className="absolute rounded-full opacity-55 transition-transform duration-300 ease-out"
           style={{
-            background: b.color,
+            background: `radial-gradient(circle, ${b.color} 0%, transparent 70%)`,
             width: b.size,
             height: b.size,
             top: b.top,
             left: b.left,
-            transform: `translate(${offset.x * b.depth}px, ${offset.y * b.depth}px)`,
-            transition: "transform 0.35s ease-out",
           }}
         />
       ))}

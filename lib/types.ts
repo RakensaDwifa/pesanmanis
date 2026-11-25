@@ -105,6 +105,8 @@ export interface TemplateRenderProps {
   preview?: boolean;
   interactive?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Hide built-in CassettePlayer & SfxToggle when a parent container manages audio UI (e.g. Hero preview card). */
+  hideAudioControls?: boolean;
 }
 
 export const MOCK_CONTENT: UcapanContent = {

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { EASE_WARM, SPRING_TACTILE } from "./MotionPrimitives";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,35 +45,53 @@ export default function NewsletterSignup() {
         <Mail className="h-4 w-4 text-primary shrink-0" />
         <span>Dapatkan tips &amp; template spesial</span>
       </p>
-      {status === "done" ? (
-        <p className="text-body-md text-green-700 dark:text-emerald-400 font-semibold flex items-center justify-center gap-1.5">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>Berhasil terdaftar! Cek inbox kamu nanti ya.</span>
-        </p>
-      ) : (
-        <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email kamu…"
-            aria-label="Email newsletter"
-            className="flex-1 min-w-0 rounded-full border border-outline-variant/60 bg-surface px-4 py-2.5 text-body-md text-on-surface placeholder:text-on-surface-variant/65 focus:outline-none focus:ring-2 focus:ring-primary/35 transition-shadow"
-          />
-          <button
-            type="submit"
-            disabled={status === "loading"}
-            className="shrink-0 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-primary hover:bg-[#E88048] text-white text-label-md font-semibold shadow-sm hover:-translate-y-0.5 transition-all disabled:opacity-60 cursor-pointer"
+      <AnimatePresence mode="wait">
+        {status === "done" ? (
+          <motion.p
+            key="done"
+            initial={{ opacity: 0, scale: 0.94, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: EASE_WARM }}
+            className="text-body-md text-green-700 dark:text-emerald-400 font-semibold flex items-center justify-center gap-1.5"
           >
-            {status === "loading" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              "Daftar"
-            )}
-          </button>
-        </form>
-      )}
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>Berhasil terdaftar! Cek inbox kamu nanti ya.</span>
+          </motion.p>
+        ) : (
+          <motion.form
+            key="form"
+            onSubmit={submit}
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="flex flex-col sm:flex-row gap-2"
+          >
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email kamu…"
+              aria-label="Email newsletter"
+              className="flex-1 min-w-0 rounded-full border border-outline-variant/60 bg-surface px-4 py-2.5 text-body-md text-on-surface placeholder:text-on-surface-variant/65 focus:outline-none focus:ring-2 focus:ring-primary/35 transition-shadow"
+            />
+            <motion.button
+              type="submit"
+              disabled={status === "loading"}
+              whileHover={{ y: -1, scale: 1.02 }}
+              whileTap={{ scale: 0.96 }}
+              transition={SPRING_TACTILE}
+              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-primary hover:bg-[#E88048] text-white text-label-md font-semibold shadow-sm transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              {status === "loading" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Daftar"
+              )}
+            </motion.button>
+          </motion.form>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

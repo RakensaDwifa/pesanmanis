@@ -26,10 +26,10 @@ export default function MoodSelector({
               onClick={() => onChange(m.key)}
               aria-pressed={active}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-label-md font-semibold transition-all",
+                "inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-label-md font-semibold transition-all cursor-pointer",
                 active
                   ? "border-transparent text-white shadow-md"
-                  : "border-outline-variant bg-white text-on-surface-variant hover:border-primary/40",
+                  : "border-outline-variant/60 bg-surface text-on-surface-variant hover:border-primary/40",
               )}
               style={active ? { background: m.primary } : undefined}
             >

@@ -482,3 +482,40 @@ create policy "pemilik hapus foto" on storage.objects
       or (storage.foldername(name))[1] = (select auth.uid())::text
     )
   );
+
+-- 12b. Storage Bucket 'musik' (upload audio pengguna maks 15 MB)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'musik',
+  'musik',
+  true,
+  15728640,
+  array['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/m4a','audio/wav','audio/x-wav','audio/ogg','audio/webm']
+)
+on conflict (id) do update set
+  public = true,
+  file_size_limit = 15728640,
+  allowed_mime_types = array['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/m4a','audio/wav','audio/x-wav','audio/ogg','audio/webm'];
+
+drop policy if exists "publik baca musik" on storage.objects;
+create policy "publik baca musik" on storage.objects
+  for select using (bucket_id = 'musik');
+
+drop policy if exists "pemilik upload musik" on storage.objects;
+create policy "pemilik upload musik" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'musik'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "pemilik hapus musik" on storage.objects;
+create policy "pemilik hapus musik" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'musik'
+    and (
+      owner_id = (select auth.uid())::text
+      or (storage.foldername(name))[1] = (select auth.uid())::text
+    )
+  );

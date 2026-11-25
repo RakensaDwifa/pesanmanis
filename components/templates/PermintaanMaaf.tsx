@@ -13,9 +13,10 @@ const PLEAD_TEXTS = [
   "Aku janji nggak akan ngulangin 🙏",
 ];
 
-export default function PermintaanMaaf({ content, preview }: TemplateRenderProps) {
-  const [opened, setOpened] = useState(Boolean(preview));
-  const [forgiven, setForgiven] = useState(Boolean(preview));
+export default function PermintaanMaaf({ content, preview, interactive }: TemplateRenderProps) {
+  const startOpen = interactive ? false : Boolean(preview);
+  const [opened, setOpened] = useState(startOpen);
+  const [forgiven, setForgiven] = useState(startOpen);
   const [attempts, setAttempts] = useState(0);
   const [runawayPos, setRunawayPos] = useState({ x: 0, y: 0 });
 

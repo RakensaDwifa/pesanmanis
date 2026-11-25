@@ -1,4 +1,5 @@
 import "server-only";
+import { BRAND } from "./brand";
 import { verifyMidtransSignature } from "./midtrans-signature";
 import { normalizeBaseUrl } from "./validation";
 
@@ -48,7 +49,7 @@ export async function createSnapTransaction(input: {
     `${baseUrl}/api/payment/webhook`;
   const returnUrl = `${baseUrl}/checkout/${encodeURIComponent(input.ucapanId)}/selesai?ref=${encodeURIComponent(input.merchantRef)}`;
   const safeName = String(input.customerName ?? "Pelanggan").trim().slice(0, 50) || "Pelanggan";
-  const safeEmail = input.customerEmail?.trim() || "pelanggan@pesanmanis.com";
+  const safeEmail = input.customerEmail?.trim() || `pelanggan@${BRAND.domain}`;
 
   try {
     const res = await fetch(SNAP_URL(), {

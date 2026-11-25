@@ -1,6 +1,6 @@
 ﻿import { Metadata } from "next";
 import { getActiveTemplates } from "@/lib/templates";
-import { PROMO_AMOUNT_LABEL } from "@/lib/pricing";
+import TemplatesHero from "./TemplatesHero";
 import TemplatesClient from "./TemplatesClient";
 
 export const metadata: Metadata = {
@@ -18,44 +18,26 @@ export default async function TemplatesPage({
   const templates = getActiveTemplates();
 
   return (
-    <section className="w-full relative bg-surface min-h-screen text-on-surface">
-      <div className="relative z-[1] px-5 sm:px-8 md:px-14 max-w-[1440px] mx-auto pt-[116px] md:pt-[130px] pb-24">
-        {/* Editorial Hero Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 mb-10 md:mb-12">
-          <div className="max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-[11px] tracking-[0.1em] uppercase">
-              ✨ KOLEKSI TEMPLATE DIGITAL
-            </div>
-            <h1 className="font-heading text-4xl sm:text-5xl lg:text-[50px] leading-[1.15] text-on-surface tracking-tight">
-              Pilih Template untuk{" "}
-              <span className="font-semibold italic text-primary">
-                Momen Kalian
-              </span>
-            </h1>
-            <p className="text-body-lg sm:text-[17px] text-on-surface-variant leading-relaxed">
-              Setiap template punya cerita dan interaksi berbeda. Coba preview gratis
-              sepuasnya, lalu sesuaikan dengan cerita kalian dalam 3 menit.
-            </p>
-          </div>
+    <section className="w-full relative bg-surface min-h-screen text-on-surface overflow-x-clip">
+      {/* Subtle Ambient Peach Radial Glow (0 GPU blur pass, light & dark safe) */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[440px] pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(620px 300px at 16% 8%, rgba(222,112,56,0.08), transparent), radial-gradient(520px 260px at 86% 18%, rgba(245,161,90,0.09), transparent)",
+        }}
+      />
 
-          {/* Value Reassurance Card */}
-          <div className="w-full sm:w-auto bg-surface-container-low border border-outline-variant/30 rounded-2xl p-5 sm:p-6 shadow-sm shrink-0">
-            <div className="flex items-center gap-3 mb-1.5">
-              <span className="text-body-md font-medium text-on-surface-variant">
-                Semua template
-              </span>
-              <span className="font-heading font-bold text-2xl text-primary">
-                {PROMO_AMOUNT_LABEL}
-              </span>
-            </div>
-            <p className="text-[12px] sm:text-xs text-on-surface-variant/80">
-              Sekali bayar · Aktif selamanya · Gratis edit 7 hari
-            </p>
-          </div>
-        </div>
+      <div className="relative z-[1] px-5 sm:px-8 md:px-14 max-w-[1440px] mx-auto pt-24 sm:pt-[116px] md:pt-[130px] pb-28 sm:pb-24">
+        {/* Choreographed Editorial Hero Header */}
+        <TemplatesHero />
 
-        {/* Toolbar & Grid */}
-        <TemplatesClient templates={templates} initialCategory={kategori || null} />
+        {/* Animated Toolbar, Custom Sort Dropdown & FLIP 3D Grid */}
+        <TemplatesClient
+          templates={templates}
+          initialCategory={kategori || null}
+        />
       </div>
     </section>
   );

@@ -15,6 +15,8 @@ const cspHeader = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Allow Tailscale MagicDNS origins (<device>.<tailnet>.ts.net) for dev HMR/assets only
+  allowedDevOrigins: ["**.ts.net"],
   experimental: {
     cpus: 2,
   },

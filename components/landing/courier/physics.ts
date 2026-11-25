@@ -48,6 +48,8 @@ export type Input = { left: boolean; right: boolean; jump: boolean };
 export const MAX_HP = 3;
 export const INVULN_FRAMES = 90;
 export const KNOCKBACK_FRAMES = 12;
+export const CRUMBLE_FALL_FRAMES = 55;
+export const CRUMBLE_RESPAWN_FRAMES = 175;
 
 export type State = {
   /** sudut kiri atas kotak pemain */
@@ -61,8 +63,8 @@ export type State = {
   coyote: number;
   buffer: number;
   jumpHeld: boolean;
-  hasJumped: boolean;
-  jumpsLeft: number;
+  /** true only during a regular ground/coyote jump so variable jump cut never dampens bounces/stomps */
+  jumpFromGround: boolean;
   collected: MomentId[];
   t: number;
   won: boolean;
@@ -89,48 +91,49 @@ export const WORLD = {
 export const START_POS = { x: 120, y: WORLD.groundY } as const;
 export const PLAYER = { w: 56, h: 88 } as const;
 
-/** Apex lompat = 11² / (2 × 0.62) ≈ 97px, cukup untuk tanjakan 90px. */
+/** Single-jump physics: full-hold apex ≈ 125.8px, short-tap apex ≈ 55px (variable jump height). */
 export const PHYS = {
   gravity: 0.62,
-  jump: -11,
+  jump: -12.8,
+  jumpCutVy: -7.6,
   speed: 4,
   maxFall: 14,
-  /** ~100ms @60fps */
-  coyote: 6,
-  /** ~120ms @60fps */
-  buffer: 7,
+  /** ~117ms @60fps */
+  coyote: 7,
+  /** ~133ms @60fps */
+  buffer: 8,
   frameMs: 1000 / 60,
 } as const;
 
 export const CHASMS: Chasm[] = [
-  { x: 940, w: 160 },
-  { x: 2100, w: 560 },
-  { x: 3600, w: 460 },
+  { x: 960, w: 130 },
+  { x: 2120, w: 540 },
+  { x: 3620, w: 420 },
 ];
 
 export const PLATFORMS: Platform[] = [
-  // 4 segmen daratan utama dipisahkan 3 jurang
-  { x: 0, y: WORLD.groundY, w: 940, h: 160 },
-  { x: 1100, y: WORLD.groundY, w: 1000, h: 160 },
-  { x: 2660, y: WORLD.groundY, w: 940, h: 160 },
-  { x: 4060, y: WORLD.groundY, w: 740, h: 160 },
+  // 4 main ground segments separated by 3 chasms
+  { x: 0, y: WORLD.groundY, w: 960, h: 160 },
+  { x: 1090, y: WORLD.groundY, w: 1030, h: 160 },
+  { x: 2660, y: WORLD.groundY, w: 960, h: 160 },
+  { x: 4040, y: WORLD.groundY, w: 760, h: 160 },
 
-  // Rangkaian platform melayang lintas 3 zona
-  { x: 980, y: 470, w: 320, h: 24 },
-  { x: 1920, y: 470, w: 220, h: 24 },
-  { x: 2180, y: 450, w: 240, h: 24 },
-  { x: 2700, y: 450, w: 260, h: 24 },
-  { x: 3560, y: 450, w: 190, h: 24 },
-  { x: 4010, y: 440, w: 240, h: 24 },
+  // Single-jump calibrated floating platforms across 3 zones (all <= 100px above ground)
+  { x: 990, y: 465, w: 320, h: 24 },
+  { x: 1940, y: 475, w: 220, h: 24 },
+  { x: 2210, y: 460, w: 270, h: 24 },
+  { x: 2730, y: 460, w: 260, h: 24 },
+  { x: 3570, y: 465, w: 190, h: 24 },
+  { x: 4035, y: 465, w: 240, h: 24 },
 ];
 
 export const SPRINGBOARDS: Springboard[] = [
-  { x: 820, y: WORLD.groundY - 14, w: 48, h: 14 },
-  { x: 3500, y: WORLD.groundY - 14, w: 48, h: 14 },
+  { x: 840, y: WORLD.groundY - 14, w: 48, h: 14 },
+  { x: 3470, y: WORLD.groundY - 14, w: 48, h: 14 },
 ];
 
 export const MOVING_PLATFORMS: MovingPlatform[] = [
-  { id: "move-1", baseX: 2510, y: 400, w: 140, h: 20, rangeX: 65, speed: 0.032 },
+  { id: "move-1", baseX: 2545, y: 435, w: 150, h: 20, rangeX: 45, speed: 0.026 },
 ];
 
 export function getMovingPlatformPos(mp: MovingPlatform, t: number): Platform {
@@ -139,7 +142,7 @@ export function getMovingPlatformPos(mp: MovingPlatform, t: number): Platform {
 }
 
 export const CRUMBLE_PLATFORMS: CrumblePlatform[] = [
-  { id: "crumble-1", x: 3820, y: 440, w: 130, h: 20 },
+  { id: "crumble-1", x: 3825, y: 460, w: 150, h: 20 },
 ];
 
 export const CHECKPOINTS: Checkpoint[] = [
@@ -162,53 +165,53 @@ export const ENEMIES: Enemy[] = [
   {
     id: "pkg-2",
     variant: "normal",
-    x: 1480,
+    x: 1500,
     y: WORLD.groundY,
     w: 36,
     h: 36,
-    minX: 1320,
-    maxX: 1680,
-    speed: 1.35,
+    minX: 1360,
+    maxX: 1700,
+    speed: 1.3,
   },
   {
     id: "pkg-3",
     variant: "normal",
-    x: 2300,
-    y: 450,
+    x: 2330,
+    y: 460,
     w: 36,
     h: 36,
-    minX: 2225,
-    maxX: 2395,
-    speed: 1.05,
+    minX: 2285,
+    maxX: 2415,
+    speed: 0.85,
   },
   {
     id: "pkg-4",
     variant: "normal",
-    x: 2960,
+    x: 2980,
     y: WORLD.groundY,
     w: 36,
     h: 36,
-    minX: 2800,
-    maxX: 3140,
-    speed: 1.4,
+    minX: 2840,
+    maxX: 3150,
+    speed: 1.35,
   },
   {
     id: "pkg-5",
     variant: "fast",
-    x: 4340,
+    x: 4350,
     y: WORLD.groundY,
     w: 36,
     h: 36,
-    minX: 4200,
-    maxX: 4500,
-    speed: 2.15,
+    minX: 4220,
+    maxX: 4490,
+    speed: 1.95,
   },
 ];
 
 export const MOMENTS: Moment[] = [
-  { id: "foto", label: "Foto", x: 1140, y: 440 },
-  { id: "lagu", label: "Lagu", x: 2830, y: 420 },
-  { id: "surat", label: "Surat", x: 4130, y: 410 },
+  { id: "foto", label: "Foto", x: 1150, y: 435 },
+  { id: "lagu", label: "Lagu", x: 2860, y: 430 },
+  { id: "surat", label: "Surat", x: 4155, y: 435 },
 ];
 
 export const MOMENT_SIZE = 32;
@@ -228,8 +231,7 @@ export function createState(): State {
     coyote: PHYS.coyote,
     buffer: 0,
     jumpHeld: false,
-    hasJumped: false,
-    jumpsLeft: 1,
+    jumpFromGround: false,
     collected: [],
     t: 0,
     won: false,
@@ -255,8 +257,10 @@ export function playerBox(s: State): Platform {
   return { x: s.x, y: s.y - PLAYER.h, w: PLAYER.w, h: PLAYER.h };
 }
 
-export function canDeliver(s: State): boolean {
-  return s.collected.length === MOMENTS.length;
+/** Courier can deliver to the recipient anytime regardless of optional gifts collected. */
+export function canDeliver(_s: State): boolean {
+  void _s;
+  return true;
 }
 
 export function cameraX(s: State, viewW: number = WORLD.viewW): number {
@@ -321,7 +325,7 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
   for (let i = 0; i < s.crumbleTimers.length; i++) {
     if (s.crumbleTimers[i] > 0) {
       s.crumbleTimers[i]++;
-      if (s.crumbleTimers[i] >= 160) {
+      if (s.crumbleTimers[i] >= CRUMBLE_RESPAWN_FRAMES) {
         s.crumbleTimers[i] = 0;
       }
     }
@@ -348,20 +352,19 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
     s.grounded = false;
     s.coyote = 0;
     s.buffer = 0;
-    s.hasJumped = true;
-    s.jumpsLeft = 1;
+    s.jumpFromGround = true;
     events.push("jump");
-  } else if (pressed && !s.grounded && s.hasJumped && s.jumpsLeft > 0) {
-    s.vy = PHYS.jump * 0.95;
-    s.jumpsLeft = 0;
-    s.buffer = 0;
-    events.push("doublejump");
+  } else if (!input.jump && s.jumpFromGround && s.vy < PHYS.jumpCutVy) {
+    // Variable jump height: releasing early caps upward velocity without cutting spring/stomp bounces
+    s.vy = PHYS.jumpCutVy;
+    s.jumpFromGround = false;
   }
 
   s.x = Math.max(0, Math.min(WORLD.w - PLAYER.w, s.x + s.vx));
 
   const prevFeet = s.y;
   s.vy = Math.min(s.vy + PHYS.gravity, PHYS.maxFall);
+  if (s.vy >= 0) s.jumpFromGround = false;
   s.y += s.vy;
 
   const wasGrounded = s.grounded;
@@ -377,8 +380,7 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
         s.vy = -16.5;
         s.grounded = false;
         s.coyote = 0;
-        s.hasJumped = true;
-        s.jumpsLeft = 1;
+        s.jumpFromGround = false;
         s.bounceSpringIndex = i;
         events.push("bounce");
         break;
@@ -408,7 +410,7 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
 
     for (let i = 0; i < CRUMBLE_PLATFORMS.length; i++) {
       const cp = CRUMBLE_PLATFORMS[i];
-      if ((s.crumbleTimers[i] ?? 0) >= 35) continue;
+      if ((s.crumbleTimers[i] ?? 0) >= CRUMBLE_FALL_FRAMES) continue;
       if (box.x + box.w <= cp.x || box.x >= cp.x + cp.w) continue;
       if (s.vy >= 0 && prevFeet <= cp.y && s.y >= cp.y) {
         s.y = cp.y;
@@ -421,8 +423,7 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
 
   if (s.grounded) {
     s.coyote = PHYS.coyote;
-    s.hasJumped = false;
-    s.jumpsLeft = 1;
+    s.jumpFromGround = false;
     if (!wasGrounded) {
       events.push("land");
     }
@@ -458,8 +459,7 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
       s.y = s.checkpointY;
       s.grounded = true;
       s.coyote = PHYS.coyote;
-      s.hasJumped = false;
-      s.jumpsLeft = 1;
+      s.jumpFromGround = false;
       events.push("fall");
     }
     return events;
@@ -477,10 +477,9 @@ export function step(s: State, input: Input, options?: StepOptions): string[] {
       e.alive = false;
       e.squashTimer = 20;
       s.y = eBox.y;
-      s.vy = -10;
+      s.vy = -10.5;
       s.grounded = false;
-      s.hasJumped = true;
-      s.jumpsLeft = 1;
+      s.jumpFromGround = false;
       events.push(`stomp:${e.id}`);
       break;
     } else if (s.invuln === 0) {

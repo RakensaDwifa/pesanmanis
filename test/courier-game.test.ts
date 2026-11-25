@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CHASMS,
   CHECKPOINTS,
+  CRUMBLE_FALL_FRAMES,
   CRUMBLE_PLATFORMS,
   DOOR,
   MAX_HP,
@@ -40,17 +41,36 @@ test("pemain mulai di tanah, tidak menembus lantai", () => {
   assert.equal(s.grounded, true);
 });
 
-test("apex lompat cukup untuk tanjakan 90px", () => {
-  const s = createState();
-  run(s, HOLD, 1);
-  assert.ok(s.vy < 0, "frame pertama harus naik");
-  let top = s.y;
-  for (let i = 0; i < 60 && s.vy < 0; i++) {
-    step(s, HOLD);
-    top = Math.min(top, s.y);
+test("apex lompat penuh ~125px dan variable jump height memendekkan tap cepat", () => {
+  // Full hold jump
+  const full = createState();
+  run(full, HOLD, 1);
+  assert.ok(full.vy < 0, "frame pertama harus naik");
+  let fullTop = full.y;
+  for (let i = 0; i < 60 && full.vy < 0; i++) {
+    step(full, HOLD);
+    fullTop = Math.min(fullTop, full.y);
   }
-  const apex = WORLD.groundY - top;
-  assert.ok(apex > 90 && apex < 105, `apex ${apex.toFixed(1)}px di luar 90–105`);
+  const fullApex = WORLD.groundY - fullTop;
+  assert.ok(
+    fullApex > 118 && fullApex < 134,
+    `full apex ${fullApex.toFixed(1)}px di luar 118–134`
+  );
+
+  // Short 1-frame tap jump
+  const tap = createState();
+  step(tap, HOLD);
+  let tapTop = tap.y;
+  for (let i = 0; i < 60 && tap.vy < 0; i++) {
+    step(tap, NONE);
+    tapTop = Math.min(tapTop, tap.y);
+  }
+  const tapApex = WORLD.groundY - tapTop;
+  assert.ok(
+    tapApex > 44 && tapApex < 75,
+    `short tap apex ${tapApex.toFixed(1)}px di luar 44–75`
+  );
+  assert.ok(tapApex < fullApex - 40, "tap cepat harus jauh lebih rendah daripada tahan penuh");
 });
 
 test("kecepatan horizontal konsisten", () => {
@@ -91,7 +111,7 @@ test("mendarat di ledge, bukan tembus", () => {
   s.vy = 10;
   s.grounded = false;
   run(s, NONE, 40);
-  assert.equal(s.y, 470);
+  assert.equal(s.y, 465);
   assert.equal(s.grounded, true);
 });
 
@@ -99,7 +119,7 @@ test("foto diambil saat pemain menyentuhnya", () => {
   const s = createState();
   const foto = MOMENTS[0];
   s.x = foto.x - PLAYER.w / 2;
-  s.y = 470;
+  s.y = 465;
   const events = run(s, NONE, 1);
   assert.deepEqual(s.collected, ["foto"]);
   assert.ok(events.includes("collect:foto"));
@@ -109,25 +129,40 @@ test("kejutan tidak bisa diambil dua kali", () => {
   const s = createState();
   const foto = MOMENTS[0];
   s.x = foto.x - PLAYER.w / 2;
-  s.y = 470;
+  s.y = 465;
   const events = run(s, NONE, 30);
   assert.equal(s.collected.filter((id) => id === "foto").length, 1);
   assert.equal(events.filter((e) => e === "collect:foto").length, 1);
 });
 
-test("pintu terkunci sampai tiga kejutan terkumpul", () => {
-  const s = createState();
-  s.x = DOOR.x + 20;
-  s.y = WORLD.groundY;
-  s.collected = ["foto", "lagu"];
-  run(s, NONE, 1);
-  assert.equal(canDeliver(s), false);
-  assert.equal(s.won, false);
+test("kurir bisa langsung mengantar ke penerima walau belum mengumpulkan kado (0/3, sebagian, maupun 3/3)", () => {
+  // 0/3 gifts -> can deliver immediately
+  const zero = createState();
+  zero.x = DOOR.x + 20;
+  zero.y = WORLD.groundY;
+  assert.equal(canDeliver(zero), true);
+  const zeroEvents = run(zero, NONE, 1);
+  assert.equal(zero.won, true);
+  assert.ok(zeroEvents.includes("win"));
 
-  s.collected = ["foto", "lagu", "surat"];
-  const events = run(s, NONE, 1);
-  assert.equal(s.won, true);
-  assert.ok(events.includes("win"));
+  // Partial 1/3 gifts -> can deliver
+  const partial = createState();
+  partial.x = DOOR.x + 20;
+  partial.y = WORLD.groundY;
+  partial.collected = ["foto"];
+  assert.equal(canDeliver(partial), true);
+  const partialEvents = run(partial, NONE, 1);
+  assert.equal(partial.won, true);
+  assert.ok(partialEvents.includes("win"));
+
+  // Full 3/3 gifts -> can deliver
+  const full = createState();
+  full.x = DOOR.x + 20;
+  full.y = WORLD.groundY;
+  full.collected = ["foto", "lagu", "surat"];
+  const fullEvents = run(full, NONE, 1);
+  assert.equal(full.won, true);
+  assert.ok(fullEvents.includes("win"));
 });
 
 test("kamera mengikuti pemain dan berhenti di ujung dunia", () => {
@@ -149,50 +184,60 @@ test("kotak pemain sejajar dengan titik kaki", () => {
   assert.equal(box.w, PLAYER.w);
 });
 
-test("double jump memberi dorongan lompatan kedua di udara", () => {
+test("double jump sudah dihapus: tekan lompat lagi di udara tidak memberi dorongan kedua", () => {
   const s = createState();
-  // Lompat pertama
-  step(s, { left: false, right: false, jump: true });
-  assert.equal(s.hasJumped, true);
-  assert.equal(s.jumpsLeft, 1);
+  // Lompat pertama dari tanah
+  step(s, HOLD);
+  assert.equal(s.grounded, false);
 
-  // Tunggu beberapa frame sampai kecepatan ke atas melambat
-  for (let i = 0; i < 8; i++) {
-    step(s, { left: false, right: false, jump: false });
+  // Lepas tombol dan tunggu sampai mulai melambat / turun di udara
+  for (let i = 0; i < 12; i++) {
+    step(s, NONE);
   }
+  const vyBefore = s.vy;
 
-  // Lompat kedua (double jump)
-  const events = step(s, { left: false, right: false, jump: true });
-  assert.ok(events.includes("doublejump"));
-  assert.equal(s.jumpsLeft, 0);
-  assert.ok(s.vy < -9, "lompatan kedua harus memberikan dorongan ke atas");
+  // Coba tekan lompat kedua di udara
+  const events = step(s, HOLD);
+  assert.equal(events.includes("doublejump"), false, "tidak boleh ada event doublejump");
+  assert.equal(events.includes("jump"), false, "tidak boleh lompat lagi di udara");
+  assert.ok(s.vy > vyBefore, "kecepatan vertikal harus tetap ditarik gravitasi tanpa dorongan kedua");
 });
 
-test("papan loncat (trampolin) melontarkan kurir tinggi ke udara", () => {
+test("papan loncat (trampolin) melontarkan kurir penuh tanpa terpotong variable jump", () => {
   const s = createState();
   s.x = SPRINGBOARDS[0].x;
   s.y = 540;
   s.vy = 5;
-  const events = step(s, { left: false, right: false, jump: false });
+  const events = step(s, NONE);
   assert.ok(events.includes("bounce"));
   assert.ok(s.vy < -15, "lontaran trampolin harus sangat tinggi");
-  assert.equal(s.jumpsLeft, 1, "masih bisa double jump setelah membal");
+
+  // Frame berikutnya tanpa menahan tombol lompat — tidak boleh dipotong ke jumpCutVy
+  step(s, NONE);
+  assert.ok(s.vy < -14, "pantulan trampolin tidak boleh terpotong variable jump height");
 });
 
-test("platform runtuh goyang lalu jatuh setelah diinjak", () => {
+test("platform runtuh goyang lalu jatuh setelah CRUMBLE_FALL_FRAMES", () => {
   const s = createState();
   s.x = CRUMBLE_PLATFORMS[0].x + 10;
   s.y = CRUMBLE_PLATFORMS[0].y;
   s.vy = 2;
-  step(s, { left: false, right: false, jump: false });
+  step(s, NONE);
   assert.equal(s.grounded, true);
   assert.ok(s.crumbleTimers[0] > 0, "timer runtuh harus aktif saat diinjak");
 
-  // Tunggu 40 frame sampai platform runtuh
-  for (let i = 0; i < 40; i++) {
-    step(s, { left: false, right: false, jump: false });
+  // Sebelum batas CRUMBLE_FALL_FRAMES masih menopang kurir
+  for (let i = 0; i < CRUMBLE_FALL_FRAMES - 10; i++) {
+    step(s, NONE);
   }
-  assert.ok(s.crumbleTimers[0] >= 35, "platform sudah runtuh");
+  assert.equal(s.grounded, true, "platform harus tetap kokoh sebelum durasi runtuh habis");
+
+  // Setelah melewati batas CRUMBLE_FALL_FRAMES platform runtuh
+  for (let i = 0; i < 15; i++) {
+    step(s, NONE);
+  }
+  assert.ok(s.crumbleTimers[0] >= CRUMBLE_FALL_FRAMES, "platform sudah runtuh");
+  assert.equal(s.grounded, false, "kurir mulai jatuh setelah platform runtuh");
 });
 
 test("musuh Paket Bandel berpatroli bolak-balik di dalam rentang minX..maxX", () => {
@@ -277,40 +322,44 @@ test("kehabisan 3 hati memicu state lost dan event gameover", () => {
   assert.equal(s.t, tFrozen);
 });
 
-test("level 4800px dengan jurang dan platform bisa diselesaikan", () => {
+test("level 4800px dapat ditamatkan 100% hanya dengan lompat tunggal (tanpa double jump)", () => {
   const s = createState();
   let frames = 0;
+  let holdJumpFrames = 0;
+
   while (!s.won && !s.lost && frames < 5000) {
     const px = s.x + PLAYER.w / 2;
     const mp = getMovingPlatformPos(MOVING_PLATFORMS[0], s.t);
 
-    // Tunggu di tepi kanan Platform 3 (x~2380..2420) hingga platform bergerak mendekat
+    // Tunggu di tepi kanan Platform 3 (x~2445..2480) hingga platform bergerak mendekat
     const waitMoving =
       s.grounded &&
-      s.y === 450 &&
-      s.x + PLAYER.w >= 2385 &&
-      s.x <= 2420 &&
-      mp.x > 2475;
+      s.y === 460 &&
+      s.x + PLAYER.w >= 2445 &&
+      s.x <= 2480 &&
+      mp.x > 2535;
 
-    // Tunggu di tepi kanan Platform bergerak hingga dekat Platform 4
-    const onMoving = s.grounded && s.y === 400;
-    const waitExitMoving = onMoving && mp.x + mp.w < 2610;
+    // Tunggu di platform bergerak hingga cukup dekat dengan Platform 4
+    const onMoving = s.grounded && s.y === 435;
+    const waitExitMoving = onMoving && mp.x + mp.w < 2690;
 
-    const overChasm = CHASMS.some((c) => s.x + PLAYER.w > c.x && s.x < c.x + c.w);
     const nearChasmEdge =
       s.grounded &&
-      CHASMS.some((c) => s.x + PLAYER.w >= c.x - 18 && s.x + PLAYER.w <= c.x + 12);
+      CHASMS.some((c) => s.x + PLAYER.w >= c.x - 16 && s.x + PLAYER.w <= c.x + 12);
+
     const nearPlatformEdge =
       s.grounded &&
       s.y < WORLD.groundY &&
-      ((s.x + PLAYER.w >= 2115 && s.x <= 2140) ||
-        (s.x + PLAYER.w >= 2395 && s.x <= 2420) ||
-        (s.x + PLAYER.w >= 3725 && s.x <= 3750) ||
-        (s.x + PLAYER.w >= 3925 && s.x <= 3950));
+      ((s.x + PLAYER.w >= 2135 && s.x <= 2160) || // P2 -> P3
+        (s.x + PLAYER.w >= 2450 && s.x <= 2480) || // P3 -> move-1
+        (s.x + PLAYER.w >= 3735 && s.x <= 3760) || // P5 -> crumble-1
+        (s.x + PLAYER.w >= 3950 && s.x <= 3975)); // crumble-1 -> P6
+
     const nearStepUp =
       s.grounded &&
       s.y === WORLD.groundY &&
-      ((px >= 890 && px <= 930) || (px >= 1860 && px <= 1905) || (px >= 3460 && px <= 3495));
+      ((px >= 905 && px <= 945) || (px >= 1880 && px <= 1925) || (px >= 3510 && px <= 3555));
+
     const enemyAhead =
       s.grounded &&
       s.enemies.some(
@@ -320,29 +369,33 @@ test("level 4800px dengan jurang dan platform bisa diselesaikan", () => {
           e.x - (s.x + PLAYER.w) > 0 &&
           e.x - (s.x + PLAYER.w) < 62
       );
-    const needDoubleJump =
-      !s.grounded &&
-      s.jumpsLeft > 0 &&
-      s.vy > 0 &&
-      (overChasm || s.y > 460);
 
-    const wantJump =
+    const startJump =
       !waitMoving &&
       !waitExitMoving &&
-      (nearChasmEdge ||
-        nearPlatformEdge ||
-        nearStepUp ||
-        enemyAhead ||
-        needDoubleJump ||
-        (onMoving && !waitExitMoving));
+      s.grounded &&
+      (nearChasmEdge || nearPlatformEdge || nearStepUp || enemyAhead || (onMoving && !waitExitMoving));
 
-    const jump = wantJump && !s.jumpHeld;
+    if (startJump) {
+      holdJumpFrames = 18;
+    } else if (s.grounded) {
+      holdJumpFrames = 0;
+    }
+
+    const jump = holdJumpFrames > 0;
+    if (holdJumpFrames > 0) holdJumpFrames--;
+
     step(s, { left: false, right: !waitMoving && !waitExitMoving, jump });
     frames++;
   }
-  assert.equal(s.lost, false, `bot tidak boleh kehabisan nyawa (x=${s.x.toFixed(1)}, y=${s.y.toFixed(1)}, hp=${s.hp})`);
+
+  assert.equal(
+    s.lost,
+    false,
+    `bot tidak boleh kehabisan nyawa (x=${s.x.toFixed(1)}, y=${s.y.toFixed(1)}, hp=${s.hp})`
+  );
   assert.deepEqual([...s.collected].sort(), ["foto", "lagu", "surat"]);
-  assert.equal(s.won, true, "level 4800px harus bisa ditamatkan");
+  assert.equal(s.won, true, "level 4800px harus bisa ditamatkan murni dengan lompat tunggal");
   assert.ok(s.checkpointsReached.includes("cp-1"));
   assert.ok(s.checkpointsReached.includes("cp-2"));
   assert.ok(s.x >= START_POS.x);

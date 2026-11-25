@@ -179,9 +179,9 @@ function SuccessInner({ id }: { id: string }) {
 
   if (state === "failed") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 text-center">
-        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
-          <AlertCircle className="h-8 w-8 text-red-600" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-5 pt-24 pb-24 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-500/15 flex items-center justify-center mb-4">
+          <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
         </div>
         <p className="text-headline-md text-on-surface mb-2">
           Pembayaran Belum Selesai / Kedaluwarsa
@@ -260,10 +260,10 @@ function SuccessInner({ id }: { id: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-16">
+    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
       <div className="max-w-lg mx-auto px-5 text-center">
-        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
-          <CheckCircle2 className="h-10 w-10 text-green-600" />
+        <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-5">
+          <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
         </div>
         <h1 className="font-heading text-headline-lg text-primary mb-2">
           Pembayaran Berhasil! 🎉
@@ -314,12 +314,12 @@ function SuccessInner({ id }: { id: string }) {
           >
             <ExternalLink className="h-4 w-4" /> Buka Ucapan
           </a>
-          <a
+          <Link
             href="/dashboard"
             className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-primary text-white text-label-lg font-semibold rounded-full shadow-md hover:-translate-y-0.5 transition-all duration-200"
           >
             <LayoutDashboard className="h-4 w-4" /> Buka Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>

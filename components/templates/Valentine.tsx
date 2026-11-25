@@ -13,8 +13,8 @@ function HeartEmoji({ className }: { className?: string }) {
   );
 }
 
-export default function Valentine({ content, preview }: TemplateRenderProps) {
-  const [opened, setOpened] = useState(Boolean(preview));
+export default function Valentine({ content, preview, interactive }: TemplateRenderProps) {
+  const [opened, setOpened] = useState(interactive ? false : Boolean(preview));
 
   return (
     <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FFF3EA] via-[#FFDCC8] to-[#FFB98F]">

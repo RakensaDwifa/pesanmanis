@@ -1,6 +1,7 @@
 /** Chiptune WebAudio. AudioContext dibuat hanya setelah gesture pertama (syarat autoplay). */
 
 const STORE_KEY = "pm.courier.muted";
+const MASTER_GAIN = 0.5;
 const BGM_NOTES = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.0, 698.46];
 const BGM_STEP_FRAMES = 14;
 
@@ -9,6 +10,10 @@ export type GameAudio = {
   play: (event: string) => void;
   /** dipanggil tiap frame; memajukan sequencer musik */
   tick: () => void;
+  /** turunkan volume master secara halus saat jeda / keluar layar */
+  fadeOut: (durationMs?: number) => void;
+  /** kembalikan volume master secara halus saat game dilanjutkan */
+  fadeIn: (durationMs?: number) => void;
   setMuted: (value: boolean) => void;
   isMuted: () => boolean;
   dispose: () => void;
@@ -39,11 +44,20 @@ export function createAudio(): GameAudio {
       if (!Ctor) return null;
       ctx = new Ctor();
       master = ctx.createGain();
-      master.gain.value = 0.5;
+      master.gain.value = muted ? 0 : MASTER_GAIN;
       master.connect(ctx.destination);
     }
     if (ctx.state === "suspended") void ctx.resume();
     return ctx;
+  }
+
+  function rampMaster(target: number, durationMs: number) {
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    const durSec = Math.max(0.02, durationMs / 1000);
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(master.gain.value, now);
+    master.gain.linearRampToValueAtTime(target, now + durSec);
   }
 
   function blip(
@@ -76,9 +90,6 @@ export function createAudio(): GameAudio {
     if (event === "jump") {
       // Classic 8-bit platformer jump sweep (160Hz -> 680Hz)
       blip(160, 0.14, "square", 0.34, 0, 680);
-    } else if (event === "doublejump") {
-      // Crisper higher double jump sweep (320Hz -> 880Hz)
-      blip(320, 0.12, "square", 0.32, 0, 880);
     } else if (event === "bounce") {
       // Springboard bouncy boing (140Hz -> 620Hz)
       blip(140, 0.22, "sine", 0.42, 0, 620);
@@ -122,6 +133,7 @@ export function createAudio(): GameAudio {
   return {
     unlock() {
       ensure();
+      if (!muted) rampMaster(MASTER_GAIN, 120);
     },
     play,
     tick() {
@@ -130,8 +142,16 @@ export function createAudio(): GameAudio {
       if (frame % BGM_STEP_FRAMES !== 0) return;
       const note = BGM_NOTES[step % BGM_NOTES.length];
       step++;
-      blip(note, 0.16, "triangle", 0.045);
-      if (step % 4 === 1) blip(note / 2, 0.24, "triangle", 0.035);
+      blip(note, 0.24, "triangle", 0.045);
+      if (step % 4 === 1) blip(note / 2, 0.3, "triangle", 0.035);
+    },
+    fadeOut(durationMs = 320) {
+      rampMaster(0, durationMs);
+    },
+    fadeIn(durationMs = 140) {
+      if (muted) return;
+      ensure();
+      rampMaster(MASTER_GAIN, durationMs);
     },
     setMuted(value: boolean) {
       muted = value;
@@ -140,7 +160,12 @@ export function createAudio(): GameAudio {
       } catch {
         /* storage diblokir — abaikan */
       }
-      if (master) master.gain.value = value ? 0 : 0.5;
+      if (value) {
+        rampMaster(0, 200);
+      } else {
+        ensure();
+        rampMaster(MASTER_GAIN, 140);
+      }
     },
     isMuted() {
       return muted;

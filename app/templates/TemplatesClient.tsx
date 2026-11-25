@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
-import { ArrowRight, Eye, Search, X } from "lucide-react";
-import { CATEGORY_ORDER, getActiveTemplates, templateEmoji } from "@/lib/templates";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { RotateCcw, Search, Sparkles, X } from "lucide-react";
+import { CATEGORY_ORDER, getActiveTemplates } from "@/lib/templates";
 import { CATEGORY_META, type TemplateCategory } from "@/lib/types";
-import { AnalyticsEvents } from "@/lib/analytics";
 import { usePricing } from "@/lib/use-pricing";
+import { useIsTouchOrMobile } from "@/lib/use-coarse-pointer";
+import { EASE_WARM, SPRING_TACTILE } from "@/components/landing/MotionPrimitives";
+import SortDropdown, { type SortOptionValue } from "./SortDropdown";
+import TemplateCard from "./TemplateCard";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface TemplatesClientProps {
   templates: ReturnType<typeof getActiveTemplates>;
@@ -18,22 +31,106 @@ export default function TemplatesClient({
   initialCategory = null,
 }: TemplatesClientProps) {
   const pricing = usePricing();
+  const reduced = Boolean(useReducedMotion());
+  const isTouchOrMobile = useIsTouchOrMobile();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasInteractedRef = useRef(false);
+  const gsapCtxRef = useRef<gsap.Context | null>(null);
 
   // Active Category Filter
-  const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | "all">(
-    () => {
-      if (initialCategory && CATEGORY_ORDER.includes(initialCategory as TemplateCategory)) {
-        return initialCategory as TemplateCategory;
-      }
-      return "all";
+  const [selectedCategory, setSelectedCategory] = useState<
+    TemplateCategory | "all"
+  >(() => {
+    if (
+      initialCategory &&
+      CATEGORY_ORDER.includes(initialCategory as TemplateCategory)
+    ) {
+      return initialCategory as TemplateCategory;
     }
-  );
+    return "all";
+  });
 
-  // Live Search Query
+  // Live Search Query & Focus State
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Sort Order
-  const [sortBy, setSortBy] = useState<"popular" | "newest" | "name">("popular");
+  const [sortBy, setSortBy] = useState<SortOptionValue>("popular");
+
+  // Release initial GSAP scroll triggers cleanly once the user starts filtering/searching/sorting
+  // so Framer Motion FLIP layout transitions own 100% of dynamic grid motion without invisible cards
+  const markInteracted = () => {
+    if (hasInteractedRef.current) return;
+    hasInteractedRef.current = true;
+    if (gsapCtxRef.current) {
+      gsapCtxRef.current.revert();
+      gsapCtxRef.current = null;
+    }
+    if (containerRef.current) {
+      const nodes = containerRef.current.querySelectorAll(
+        "[data-template-card-reveal], [data-templates-toolbar]"
+      );
+      if (nodes.length > 0) {
+        gsap.set(nodes, { clearProps: "transform,opacity" });
+      }
+    }
+  };
+
+  // GSAP toolbar entrance + cinematic ScrollTrigger.batch card reveal on initial load
+  useIsomorphicLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || reduced || hasInteractedRef.current) return;
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    const ctx = gsap.context(() => {
+      gsap.from("[data-templates-toolbar]", {
+        y: 16,
+        opacity: 0,
+        duration: 0.5,
+        delay: 0.24,
+        ease: "power3.out",
+        clearProps: "transform,opacity",
+      });
+
+      const cards = gsap.utils.toArray<HTMLElement>(
+        "[data-template-card-reveal]"
+      );
+      if (cards.length > 0) {
+        gsap.set(cards, { opacity: 0, y: 26, scale: 0.97 });
+
+        const revealBatch = (batch: Element[]) => {
+          gsap.to(batch, {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.58,
+            stagger: 0.075,
+            ease: "power3.out",
+            overwrite: true,
+            clearProps: "transform,opacity",
+          });
+        };
+
+        ScrollTrigger.batch(cards, {
+          start: "top 92%",
+          once: true,
+          onEnter: revealBatch,
+          onEnterBack: revealBatch,
+        });
+      }
+    }, container);
+
+    gsapCtxRef.current = ctx;
+
+    return () => {
+      ctx.revert();
+      if (gsapCtxRef.current === ctx) {
+        gsapCtxRef.current = null;
+      }
+    };
+  }, [reduced]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -90,293 +187,302 @@ export default function TemplatesClient({
     (k: TemplateCategory) => CATEGORY_META[k].active
   );
 
+  const handleCategoryChange = (cat: TemplateCategory | "all") => {
+    markInteracted();
+    setSelectedCategory(cat);
+  };
+
+  const handleSearchChange = (nextQuery: string) => {
+    markInteracted();
+    setSearchQuery(nextQuery);
+  };
+
+  const handleSortChange = (nextSort: SortOptionValue) => {
+    markInteracted();
+    setSortBy(nextSort);
+  };
+
+  const handleResetFilters = () => {
+    markInteracted();
+    setSelectedCategory("all");
+    setSearchQuery("");
+  };
+
   return (
-    <div className="space-y-8">
+    <div ref={containerRef} className="space-y-8">
       {/* Horizontal Filter & Search Toolbar */}
-      <div className="bg-surface-container-low border border-outline-variant/30 rounded-2xl p-3 md:p-3.5 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-        {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("all")}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs sm:text-[13px] font-semibold shrink-0 transition-all ${
-              selectedCategory === "all"
-                ? "bg-primary text-white shadow-xs"
-                : "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border border-outline-variant/20"
-            }`}
+      <div
+        data-templates-toolbar
+        className="relative z-30 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-3 md:p-3.5 shadow-sm flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3.5 xl:gap-4"
+      >
+        {/* Category Pills with Framer Motion layoutId sliding active pill */}
+        <LayoutGroup id="templates-categories">
+          <div
+            role="tablist"
+            aria-label="Filter kategori template"
+            className="flex items-center gap-1.5 2xl:gap-2 overflow-x-auto no-scrollbar py-0.5"
           >
-            <span>✨ Semua</span>
-            <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+            <motion.button
+              type="button"
+              role="tab"
+              aria-selected={selectedCategory === "all"}
+              onClick={() => handleCategoryChange("all")}
+              whileHover={reduced ? undefined : { y: -1.5 }}
+              whileTap={reduced ? undefined : { scale: 0.95 }}
+              transition={SPRING_TACTILE}
+              className={`group/pill relative inline-flex items-center gap-1.5 px-3 2xl:px-3.5 py-2 rounded-full text-xs sm:text-[13px] font-semibold shrink-0 cursor-pointer border transition-colors ${
                 selectedCategory === "all"
-                  ? "bg-white/25 text-white"
-                  : "bg-surface-container-high text-on-surface-variant/80"
+                  ? "text-white border-primary"
+                  : "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border-outline-variant/20"
               }`}
             >
-              {categoryCounts.all ?? 0}
-            </span>
-          </button>
-
-          {activeCategories.map((catKey) => {
-            const cat = CATEGORY_META[catKey];
-            const isSelected = selectedCategory === catKey;
-            const count = categoryCounts[catKey] ?? 0;
-
-            return (
-              <button
-                key={catKey}
-                type="button"
-                onClick={() => setSelectedCategory(catKey)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs sm:text-[13px] font-semibold shrink-0 transition-all ${
-                  isSelected
-                    ? "bg-primary text-white shadow-xs"
-                    : "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border border-outline-variant/20"
+              {selectedCategory === "all" && (
+                <motion.span
+                  layoutId="templates-category-pill"
+                  transition={SPRING_TACTILE}
+                  className="absolute inset-0 rounded-full bg-primary shadow-xs"
+                />
+              )}
+              <span className="relative z-[1] inline-flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 transition-transform duration-200 group-hover/pill:rotate-12" />
+                <span>Semua</span>
+              </span>
+              <motion.span
+                key={`count-all-${selectedCategory === "all"}`}
+                initial={reduced ? false : { scale: 0.85 }}
+                animate={{ scale: 1 }}
+                transition={SPRING_TACTILE}
+                className={`relative z-[1] text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  selectedCategory === "all"
+                    ? "bg-white/25 text-white"
+                    : "bg-surface-container-high text-on-surface-variant/80"
                 }`}
               >
-                <span>
-                  {cat.emoji} {cat.label}
-                </span>
-                <span
-                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                {categoryCounts.all ?? 0}
+              </motion.span>
+            </motion.button>
+
+            {activeCategories.map((catKey) => {
+              const cat = CATEGORY_META[catKey];
+              const isSelected = selectedCategory === catKey;
+              const count = categoryCounts[catKey] ?? 0;
+
+              return (
+                <motion.button
+                  key={catKey}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => handleCategoryChange(catKey)}
+                  whileHover={reduced ? undefined : { y: -1.5 }}
+                  whileTap={reduced ? undefined : { scale: 0.95 }}
+                  transition={SPRING_TACTILE}
+                  className={`relative inline-flex items-center gap-1.5 px-3 2xl:px-3.5 py-2 rounded-full text-xs sm:text-[13px] font-semibold shrink-0 cursor-pointer border transition-colors ${
                     isSelected
-                      ? "bg-white/25 text-white"
-                      : "bg-surface-container-high text-on-surface-variant/80"
+                      ? "text-white border-primary"
+                      : "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high border-outline-variant/20"
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  {isSelected && (
+                    <motion.span
+                      layoutId="templates-category-pill"
+                      transition={SPRING_TACTILE}
+                      className="absolute inset-0 rounded-full bg-primary shadow-xs"
+                    />
+                  )}
+                  <span className="relative z-[1]">
+                    {cat.emoji} {cat.label}
+                  </span>
+                  <motion.span
+                    key={`count-${catKey}-${isSelected}`}
+                    initial={reduced ? false : { scale: 0.85 }}
+                    animate={{ scale: 1 }}
+                    transition={SPRING_TACTILE}
+                    className={`relative z-[1] text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                      isSelected
+                        ? "bg-white/25 text-white"
+                        : "bg-surface-container-high text-on-surface-variant/80"
+                    }`}
+                  >
+                    {count}
+                  </motion.span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </LayoutGroup>
 
         {/* Search & Sort Controls */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
           {/* Live Search */}
-          <div className="relative flex-1 sm:w-[220px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant/70 pointer-events-none" />
+          <div className="relative flex-1 sm:w-[184px] 2xl:w-[224px]">
+            <motion.span
+              aria-hidden
+              animate={
+                reduced
+                  ? undefined
+                  : {
+                      scale: searchFocused ? 1.1 : 1,
+                    }
+              }
+              transition={SPRING_TACTILE}
+              className={`absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-200 ${
+                searchFocused ? "text-primary" : "text-on-surface-variant/70"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+            </motion.span>
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Cari template..."
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-[13px] rounded-full bg-surface-container border border-outline-variant/30 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary transition"
+              className="w-full pl-9 pr-8 py-2.5 sm:py-2 text-xs sm:text-[13px] rounded-full bg-surface border border-outline-variant/40 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-0.5"
-                aria-label="Hapus pencarian"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <AnimatePresence>
+              {searchQuery && (
+                <motion.button
+                  key="clear-search"
+                  type="button"
+                  onClick={() => handleSearchChange("")}
+                  initial={
+                    reduced
+                      ? { opacity: 0 }
+                      : { opacity: 0, scale: 0.6, rotate: -45 }
+                  }
+                  animate={
+                    reduced
+                      ? { opacity: 1 }
+                      : { opacity: 1, scale: 1, rotate: 0 }
+                  }
+                  exit={
+                    reduced
+                      ? { opacity: 0 }
+                      : { opacity: 0, scale: 0.6, rotate: 45 }
+                  }
+                  whileHover={reduced ? undefined : { scale: 1.14 }}
+                  whileTap={reduced ? undefined : { scale: 0.88 }}
+                  transition={SPRING_TACTILE}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-0.5 rounded-full hover:bg-surface-container cursor-pointer"
+                  aria-label="Hapus pencarian"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Sort Dropdown */}
-          <div className="relative shrink-0">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as "popular" | "newest" | "name")}
-              aria-label="Urutkan template"
-              className="appearance-none pl-3.5 pr-8 py-2 text-xs sm:text-[13px] font-medium rounded-full bg-surface-container border border-outline-variant/30 text-on-surface hover:border-primary focus:outline-none focus:border-primary cursor-pointer transition"
-            >
-              <option value="popular">Urutkan: Terpopuler</option>
-              <option value="newest">Urutkan: Terbaru</option>
-              <option value="name">Urutkan: Nama (A-Z)</option>
-            </select>
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant/70 text-[10px]">
-              ▼
-            </span>
-          </div>
+          {/* Custom Animated Sort Dropdown */}
+          <SortDropdown value={sortBy} onChange={handleSortChange} />
         </div>
       </div>
 
-      {/* Templates Grid */}
+      {/* Templates Grid or Animated Empty State */}
       {filteredTemplates.length === 0 ? (
-        <div className="text-center py-24 bg-surface-container-low rounded-3xl border border-outline-variant/20 p-8">
-          <p className="text-4xl mb-3">🔍</p>
+        <motion.div
+          key="empty-state"
+          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
+          animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.35, ease: EASE_WARM }}
+          className="text-center py-16 sm:py-24 bg-surface-container-low rounded-3xl border border-outline-variant/20 p-6 sm:p-8"
+        >
+          <motion.div
+            initial={reduced ? false : { scale: 0.75, rotate: -10 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={SPRING_TACTILE}
+            className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3"
+          >
+            <Search className="h-5 w-5" />
+          </motion.div>
           <h3 className="font-heading text-xl text-on-surface mb-2">
             Tidak ada template yang cocok
           </h3>
           <p className="text-body-md text-on-surface-variant max-w-md mx-auto mb-6">
-            Coba ubah kata kunci pencarian atau pilih kategori lain untuk melihat koleksi lainnya.
+            Coba ubah kata kunci pencarian atau pilih kategori lain untuk melihat
+            koleksi lainnya.
           </p>
-          <button
+          <motion.button
             type="button"
-            onClick={() => {
-              setSelectedCategory("all");
-              setSearchQuery("");
-            }}
-            className="px-5 py-2.5 rounded-full bg-primary text-white font-semibold text-xs sm:text-sm hover:bg-primary/90 transition shadow-sm"
+            onClick={handleResetFilters}
+            whileHover={reduced ? undefined : { y: -2, scale: 1.02 }}
+            whileTap={reduced ? undefined : { scale: 0.96 }}
+            transition={SPRING_TACTILE}
+            className="group/reset relative overflow-hidden inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-white font-semibold text-xs sm:text-sm hover:bg-primary/95 shadow-sm hover:shadow-[0_8px_22px_rgba(222,112,56,0.3)] transition-all cursor-pointer"
           >
-            Reset Semua Filter
-          </button>
-        </div>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/reset:translate-x-[420%] transition-transform duration-700 ease-out motion-reduce:hidden"
+            />
+            <RotateCcw className="relative z-[1] h-3.5 w-3.5 transition-transform duration-300 group-hover/reset:-rotate-90" />
+            <span className="relative z-[1]">Reset Semua Filter</span>
+          </motion.button>
+        </motion.div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-7">
-          {filteredTemplates.map((t) => {
-            const catMeta = CATEGORY_META[t.type];
-            const isDarkMockup = t.phoneDark ?? false;
-
-            return (
-              <div
+        <motion.div
+          layout
+          transition={{ duration: 0.35, ease: EASE_WARM }}
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 md:gap-7"
+        >
+          <AnimatePresence mode="popLayout" initial={false}>
+            {filteredTemplates.map((t) => (
+              <motion.div
                 key={t.slug}
-                className="group bg-surface-container-low rounded-3xl border border-outline-variant/30 overflow-hidden shadow-card hover:shadow-card-hover hover:-translate-y-1.5 transition-all duration-300 flex flex-col"
+                layout={reduced ? false : "position"}
+                initial={
+                  reduced
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.94, y: 14 }
+                }
+                animate={
+                  reduced
+                    ? { opacity: 1 }
+                    : { opacity: 1, scale: 1, y: 0 }
+                }
+                exit={
+                  reduced
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.92, y: -8 }
+                }
+                transition={{
+                  layout: { type: "spring", stiffness: 360, damping: 32 },
+                  opacity: { duration: 0.24, ease: EASE_WARM },
+                  scale: { duration: 0.28, ease: EASE_WARM },
+                  y: { duration: 0.28, ease: EASE_WARM },
+                }}
+                className="h-full"
               >
-                {/* Stage Wrapper */}
-                <div className="p-3.5 pb-0">
-                  <div className="relative h-[290px] w-full rounded-2xl overflow-hidden flex items-center justify-center bg-surface-container-high/70">
-                    {/* Radial Stage Glow */}
-                    <div
-                      className="absolute w-52 h-52 rounded-full blur-2xl pointer-events-none opacity-80"
-                      style={{
-                        background:
-                          t.glowColor ?? "rgba(222, 112, 56, 0.22)",
-                      }}
-                    />
-
-                    {/* Top Badges Bar */}
-                    <div className="absolute top-3 inset-x-3 flex items-center justify-between z-20 pointer-events-none">
-                      {/* Left Badge */}
-                      <div>
-                        {t.badge === "popular" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs">
-                            ★ Terpopuler
-                          </span>
-                        )}
-                        {t.badge === "new" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs">
-                            ✨ Baru
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Right Category Badge */}
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-surface/90 backdrop-blur-xs text-on-surface border border-outline-variant/30 shadow-xs">
-                        {catMeta.emoji} {catMeta.label}
-                      </span>
-                    </div>
-
-                    {/* Phone Mockup Frame */}
-                    <div
-                      className="w-[156px] h-[260px] rounded-[18px] border-[1.5px] border-white/20 shadow-2xl overflow-hidden relative flex flex-col justify-between p-3.5 select-none transition-transform duration-300 group-hover:scale-[1.03]"
-                      style={{
-                        background:
-                          t.phoneGradient ??
-                          `linear-gradient(180deg, #fff 0%, #ffd4e1 100%)`,
-                        color: isDarkMockup ? "#F8EEE7" : "#241914",
-                      }}
-                    >
-                      {/* Top Notch */}
-                      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-11 h-1 rounded-full bg-black/20 z-10" />
-
-                      {/* Story Progress Bars */}
-                      <div className="flex items-center gap-1 w-full pt-1.5 z-10">
-                        <div
-                          className={`h-[2.5px] flex-1 rounded-full ${
-                            isDarkMockup ? "bg-white/75" : "bg-black/40"
-                          }`}
-                        />
-                        <div
-                          className={`h-[2.5px] flex-1 rounded-full ${
-                            isDarkMockup ? "bg-white/25" : "bg-black/15"
-                          }`}
-                        />
-                        <div
-                          className={`h-[2.5px] flex-1 rounded-full ${
-                            isDarkMockup ? "bg-white/25" : "bg-black/15"
-                          }`}
-                        />
-                      </div>
-
-                      {/* Phone Focal Content */}
-                      <div className="my-auto flex flex-col items-center text-center gap-1.5 z-10 px-1">
-                        <div className="w-12 h-12 rounded-full bg-white/75 backdrop-blur-xs flex items-center justify-center text-2xl shadow-sm mb-0.5">
-                          {templateEmoji(t.slug)}
-                        </div>
-                        <span
-                          className={`text-[8.5px] font-bold tracking-widest uppercase ${
-                            isDarkMockup ? "text-primary-fixed-dim" : "text-primary"
-                          }`}
-                        >
-                          {t.mockupSubtitle ?? "UNTUK KAMU"}
-                        </span>
-                        <p className="font-heading text-[13px] leading-tight font-semibold italic line-clamp-2">
-                          {t.mockupHeadline ?? t.name}
-                        </p>
-                      </div>
-
-                      {/* Phone Mini CTA */}
-                      <div className="w-full py-1.5 px-3 rounded-full text-center text-[9px] font-bold text-white shadow-sm bg-primary z-10">
-                        {t.mockupCta ?? "Buka pesan ✨"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card Body */}
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h2 className="font-heading text-xl md:text-[22px] font-semibold text-on-surface mb-1.5">
-                      {t.name}
-                    </h2>
-                    <p className="text-body-md text-on-surface-variant text-[13.5px] leading-relaxed line-clamp-2 mb-4">
-                      {t.description}
-                    </p>
-                  </div>
-
-                  {/* Actions & Footer */}
-                  <div className="mt-auto space-y-3.5">
-                    {/* Action Row */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <Link
-                        href={`/preview/${t.slug}`}
-                        onClick={() => AnalyticsEvents.templatePreviewed?.(t.slug)}
-                        className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full border border-outline-variant/40 bg-surface text-primary font-semibold text-xs sm:text-[13px] hover:bg-primary/10 hover:border-primary transition"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Preview
-                      </Link>
-                      <Link
-                        href={`/buat/${t.slug}`}
-                        onClick={() => AnalyticsEvents.templateSelected?.(t.slug)}
-                        className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full bg-primary text-white font-semibold text-xs sm:text-[13px] shadow-xs hover:bg-primary/90 transition"
-                      >
-                        Buat Sekarang
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="border-t border-outline-variant/20" />
-
-                    {/* Card Footer */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-on-surface-variant/80 font-medium text-[11.5px] sm:text-xs">
-                        Aktif selamanya · edit 7 hari
-                      </span>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-bold text-xs">
-                        {pricing.isPromo && (
-                          <span className="line-through text-[11px] opacity-60 font-normal">
-                            {pricing.normalPriceLabel}
-                          </span>
-                        )}
-                        <span>{pricing.formattedPrice}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                <TemplateCard
+                  template={t}
+                  pricing={pricing}
+                  isTouchOrMobile={isTouchOrMobile}
+                  reducedMotion={reduced}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
 
-      {/* Bottom Counter Bar */}
-      <div className="pt-2 text-center text-xs text-on-surface-variant/70">
-        Menampilkan {filteredTemplates.length} dari {templates.length} template
+      {/* Animated Bottom Counter Bar */}
+      <div className="pt-2 text-center text-xs text-on-surface-variant/75 flex items-center justify-center gap-1">
+        <span>Menampilkan</span>
+        <span className="inline-flex items-center justify-center min-w-[1.25rem] overflow-hidden align-middle font-semibold text-on-surface">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={filteredTemplates.length}
+              initial={reduced ? { opacity: 0 } : { y: -8, opacity: 0 }}
+              animate={reduced ? { opacity: 1 } : { y: 0, opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { y: 8, opacity: 0 }}
+              transition={{ duration: 0.18, ease: EASE_WARM }}
+              className="inline-block tabular-nums"
+            >
+              {filteredTemplates.length}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+        <span>dari {templates.length} template</span>
       </div>
     </div>
   );

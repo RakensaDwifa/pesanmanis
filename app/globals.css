@@ -162,6 +162,41 @@ html:not([data-immersive]).dark .text-gray-500:not([data-light-card] *) {
   animation: ping-soft 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+@keyframes pm-float-heart {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate3d(0, -55vh, 0) rotate(14deg);
+    opacity: 0.9;
+  }
+  88% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate3d(0, -110vh, 0) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+.pm-floating-heart {
+  animation-name: pm-float-heart;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-floating-heart {
+    animation: none;
+    display: none;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -181,4 +216,73 @@ html[data-immersive] [data-site-chrome] {
 html[data-kurir-playing="1"] [data-floating-chat] {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Dual-handle audio range slider thumbs (cross-browser Chrome/Edge/Safari/Firefox) */
+.pm-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.pm-range-input::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+}
+
+.pm-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 18px;
+  width: 18px;
+  margin-top: -6px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(36, 25, 20, 0.28);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pm-range-input::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+  box-shadow: 0 3px 10px rgba(222, 112, 56, 0.42);
+}
+
+.pm-range-input::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.18);
+}
+
+.pm-range-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.pm-range-input::-moz-range-track {
+  height: 6px;
+  background: transparent;
+}
+
+.pm-range-input::-moz-range-thumb {
+  pointer-events: auto;
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(36, 25, 20, 0.28);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pm-range-input::-moz-range-thumb:hover {
+  transform: scale(1.12);
+}
+
+.pm-range-input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

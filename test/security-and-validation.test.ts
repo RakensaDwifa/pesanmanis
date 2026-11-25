@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
   isValidEmail,
   isValidMediaUrl,
@@ -124,6 +125,52 @@ test("validation: extractOwnedFotoStoragePath menolak hapus foto milik user lain
   assert.equal(
     extractOwnedFotoStoragePath(
       `https://evil.example/storage/v1/object/public/foto/${ownerId}/abc.webp`,
+      supabaseUrl,
+      ownerId
+    ),
+    null
+  );
+});
+
+test("validation: extractOwnedAudioStoragePath membersihkan fragment #t dan menolak milik user lain", () => {
+  const supabaseUrl = "https://demo-proj.supabase.co";
+  const ownerId = "11111111-1111-1111-1111-111111111111";
+  const victimId = "22222222-2222-2222-2222-222222222222";
+
+  // Milik sendiri dengan Media Fragment #t=10,45 -> valid & fragment dibersihkan
+  assert.equal(
+    extractOwnedAudioStoragePath(
+      `${supabaseUrl}/storage/v1/object/public/musik/${ownerId}/abc-lagu.mp3#t=10,45`,
+      supabaseUrl,
+      ownerId
+    ),
+    `${ownerId}/abc-lagu.mp3`
+  );
+
+  // Milik user lain -> ditolak
+  assert.equal(
+    extractOwnedAudioStoragePath(
+      `${supabaseUrl}/storage/v1/object/public/musik/${victimId}/secret.mp3`,
+      supabaseUrl,
+      ownerId
+    ),
+    null
+  );
+
+  // Path traversal -> ditolak
+  assert.equal(
+    extractOwnedAudioStoragePath(
+      `${supabaseUrl}/storage/v1/object/public/musik/${ownerId}/../${victimId}/x.mp3`,
+      supabaseUrl,
+      ownerId
+    ),
+    null
+  );
+
+  // Bucket salah (foto) -> ditolak
+  assert.equal(
+    extractOwnedAudioStoragePath(
+      `${supabaseUrl}/storage/v1/object/public/foto/${ownerId}/abc.webp`,
       supabaseUrl,
       ownerId
     ),

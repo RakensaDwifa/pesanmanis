@@ -30,6 +30,7 @@ function CoverflowItem({
   stackGap,
   cardWidth,
   isActive,
+  isNear,
   onSelect,
   isDragging,
 }: {
@@ -42,6 +43,7 @@ function CoverflowItem({
   stackGap: number;
   cardWidth: number;
   isActive: boolean;
+  isNear: boolean;
   onSelect: () => void;
   isDragging: () => boolean;
 }) {
@@ -130,15 +132,21 @@ function CoverflowItem({
         opacity,
         transformPerspective: 600,
       }}
-      className="flex items-center justify-center shrink-0 cursor-pointer will-change-transform"
+      className={`flex items-center justify-center shrink-0 ${
+        isActive ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+      } ${
+        isNear ? "will-change-transform" : ""
+      }`}
       onClick={handleClick}
     >
-      <div className="w-full bg-[#FFF9F5] dark:bg-[#281C17] rounded-3xl border border-[#E6D5CB] dark:border-[#4E3930] shadow-[0_16px_40px_rgba(36,25,20,0.18)] overflow-hidden flex flex-col select-none">
-        <Link
-          href={`/preview/${template.slug}`}
-          onClick={preventWhenDragging}
-          tabIndex={isActive ? 0 : -1}
-          aria-label={`Lihat Template ${template.name}`}
+      <div
+        className={`w-full bg-[#FFF9F5] dark:bg-[#281C17] rounded-3xl border border-[#E6D5CB] dark:border-[#4E3930] overflow-hidden flex flex-col select-none transition-shadow duration-200 ${
+          isActive
+            ? "shadow-[0_14px_34px_rgba(36,25,20,0.18)]"
+            : "shadow-md"
+        }`}
+      >
+        <div
           className="relative m-3 mb-0 block aspect-[4/5] rounded-2xl overflow-hidden bg-surface-container-low shadow-inner"
         >
           {/* Fallback kalau screenshot belum ada: gradient + emoji */}
@@ -153,10 +161,10 @@ function CoverflowItem({
             width={390}
             height={780}
             sizes="(min-width: 640px) 260px, 220px"
+            loading="lazy"
             className="absolute inset-0 h-full w-full object-cover pointer-events-none"
-            priority={index <= 2}
           />
-        </Link>
+        </div>
 
         <div className="px-3.5 pb-4 pt-3 text-center flex-1 flex flex-col gap-2">
           <h3 className="font-heading text-title-md font-bold text-[#241914] dark:text-[#FCEEE6] line-clamp-1">
@@ -209,6 +217,7 @@ export default function TemplateCarousel({
 
   // Ukuran responsif
   const [metrics, setMetrics] = useState({
+    isMobile: false,
     itemWidth: 260,
     slotGap: 215,
     stackGap: 52,
@@ -224,9 +233,10 @@ export default function TemplateCarousel({
       if (typeof window !== "undefined") {
         const isMobile = window.innerWidth < 640;
         setMetrics({
+          isMobile,
           itemWidth: isMobile ? 220 : 260,
-          slotGap: isMobile ? 170 : 215,
-          stackGap: isMobile ? 42 : 52,
+          slotGap: isMobile ? 168 : 215,
+          stackGap: isMobile ? 40 : 52,
           cardWidth: isMobile ? 220 : 260,
         });
       }
@@ -341,53 +351,65 @@ export default function TemplateCarousel({
       onKeyDown={handleKeyDown}
       className="relative w-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-3xl"
     >
-      {/* Mask Container: linear gradient di kiri dan kanan untuk fade out samping */}
+      {/* Mask Container: fade out samping hanya di desktop; di HP dimatikan agar bebas alpha-mask berat */}
       <div
         className="relative w-full overflow-hidden flex items-center justify-center py-4 select-none touch-pan-y"
-        style={{
-          maskImage:
-            "linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%)",
-        }}
+        style={
+          metrics.isMobile
+            ? undefined
+            : {
+                maskImage:
+                  "linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%)",
+              }
+        }
       >
         <motion.div
           onPanStart={handlePanStart}
           onPan={handlePan}
           onPanEnd={handlePanEnd}
-          className="relative flex items-center justify-center h-[500px] w-full cursor-grab active:cursor-grabbing"
+          className="relative flex items-center justify-center h-[450px] sm:h-[500px] w-full cursor-grab active:cursor-grabbing"
         >
-          {templates.map((template, index) => (
-            <CoverflowItem
-              key={template.slug}
-              template={template}
-              index={index}
-              total={n}
-              scrollX={scrollX}
-              itemWidth={metrics.itemWidth}
-              slotGap={metrics.slotGap}
-              stackGap={metrics.stackGap}
-              cardWidth={metrics.cardWidth}
-              isActive={index === activeIndex}
-              onSelect={() => handleCardSelect(index)}
-              isDragging={() => isDraggingRef.current}
-            />
-          ))}
+          {templates.map((template, index) => {
+            const rawDist = Math.abs(index - activeIndex);
+            const circularDist = Math.min(rawDist, n - rawDist);
+            return (
+              <CoverflowItem
+                key={template.slug}
+                template={template}
+                index={index}
+                total={n}
+                scrollX={scrollX}
+                itemWidth={metrics.itemWidth}
+                slotGap={metrics.slotGap}
+                stackGap={metrics.stackGap}
+                cardWidth={metrics.cardWidth}
+                isActive={index === activeIndex}
+                isNear={circularDist <= 1}
+                onSelect={() => handleCardSelect(index)}
+                isDragging={() => isDraggingRef.current}
+              />
+            );
+          })}
         </motion.div>
       </div>
 
       {/* Kontrol Navigasi: Panah Kiri, Dot Indikator, dan Panah Kanan */}
       <div className="mt-6 flex items-center justify-center gap-4 sm:gap-6 z-10 relative">
-        <button
+        <motion.button
           type="button"
           onClick={handlePrev}
           aria-label="Template sebelumnya"
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
+          whileHover={{ scale: 1.07 }}
+          whileTap={{ scale: 0.92 }}
+          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-colors duration-200 hover:border-primary/40 cursor-pointer"
         >
           <ChevronLeft className="h-6 w-6" />
-        </button>
+        </motion.button>
 
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-white/80 dark:bg-[#281C17]/80 backdrop-blur-xs rounded-full border border-outline-variant/20 shadow-2xs">
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-white/95 dark:bg-[#281C17]/95 rounded-full border border-outline-variant/25 shadow-2xs">
           {templates.map((t, i) => (
             <button
               key={t.slug}
@@ -404,14 +426,17 @@ export default function TemplateCarousel({
           ))}
         </div>
 
-        <button
+        <motion.button
           type="button"
           onClick={handleNext}
           aria-label="Template berikutnya"
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-primary/40 cursor-pointer"
+          whileHover={{ scale: 1.07 }}
+          whileTap={{ scale: 0.92 }}
+          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 dark:bg-[#2E241F] text-primary border border-outline-variant/30 dark:border-[#4E3930] shadow-[0_8px_20px_rgba(222,112,56,0.18)] transition-colors duration-200 hover:border-primary/40 cursor-pointer"
         >
           <ChevronRight className="h-6 w-6" />
-        </button>
+        </motion.button>
       </div>
     </div>
   );

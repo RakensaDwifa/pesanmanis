@@ -135,16 +135,16 @@ function LoginFormInner({ remote }: { remote: boolean }) {
       </div>
 
       {/* Form */}
-      <div className="flex flex-col justify-center px-5 py-10 lg:px-14 xl:px-20">
+      <div className="flex flex-col justify-center px-5 pt-24 pb-24 lg:py-10 lg:px-14 xl:px-20">
         <div className="max-w-md w-full mx-auto">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-6"
+            className="inline-flex items-center gap-1.5 text-body-md font-semibold text-on-surface-variant hover:text-primary transition-colors mb-5 sm:mb-6"
           >
             <ArrowLeft className="h-4 w-4" /> Kembali
           </Link>
 
-          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
+          <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8">
             <h1 className="font-heading text-headline-lg text-primary mb-2">Masuk</h1>
             <p className="text-body-md text-on-surface-variant mb-6">
               Kelola ucapanmu, lihat siapa yang sudah membuka link, dan edit dalam
@@ -152,8 +152,8 @@ function LoginFormInner({ remote }: { remote: boolean }) {
             </p>
 
           {!remote && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-6">
-              <p className="text-body-md text-amber-800">
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/12 p-4 mb-6">
+              <p className="text-body-md text-amber-900 dark:text-amber-200">
                 Mode demo aktif (Supabase belum terhubung). Login akan tersedia
                 setelah konfigurasi lengkap.
               </p>
@@ -161,15 +161,15 @@ function LoginFormInner({ remote }: { remote: boolean }) {
           )}
 
           {error === "auth" && !sent && (
-            <p className="text-body-md text-red-600 mb-4">
+            <p className="text-body-md text-red-600 dark:text-red-400 mb-4">
               Link masuk tidak valid atau sudah kedaluwarsa. Coba kirim ulang.
             </p>
           )}
 
           {sent ? (
             <div className="text-center py-8">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-                <MailCheck className="h-8 w-8 text-green-600" />
+              <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
+                <MailCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h2 className="font-heading text-title-lg text-on-surface mb-2">
                 Cek email kamu 📬
@@ -183,9 +183,10 @@ function LoginFormInner({ remote }: { remote: boolean }) {
           ) : (
             <div className="space-y-4">
               <button
+                type="button"
                 onClick={() => void signInWithGoogle()}
                 disabled={loading || !remote}
-                className="w-full inline-flex items-center justify-center gap-3 px-8 py-3.5 bg-white text-on-surface text-label-lg font-semibold rounded-full border border-outline-variant shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:hover:translate-y-0"
+                className="w-full inline-flex items-center justify-center gap-3 px-6 sm:px-8 py-3.5 bg-surface text-on-surface text-label-lg font-semibold rounded-full border border-outline-variant/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -196,24 +197,28 @@ function LoginFormInner({ remote }: { remote: boolean }) {
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-outline-variant" />
+                <div className="h-px flex-1 bg-outline-variant/60" />
                 <span className="text-label-md text-on-surface-variant">
                   atau lanjut dengan email
                 </span>
-                <div className="h-px flex-1 bg-outline-variant" />
+                <div className="h-px flex-1 bg-outline-variant/60" />
               </div>
 
               <form onSubmit={submit} className="space-y-4">
                 <div>
-                  <label className="block text-label-lg font-semibold text-on-surface mb-1.5">
+                  <label
+                    htmlFor="login-email"
+                    className="block text-label-lg font-semibold text-on-surface mb-1.5"
+                  >
                     Email
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
                     <input
+                      id="login-email"
                       type="email"
                       required
-                      className="w-full rounded-2xl border border-outline-variant bg-white pl-11 pr-4 py-3 text-body-md text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
+                      className="w-full rounded-2xl border border-outline-variant/80 bg-surface pl-11 pr-4 py-3 text-body-md text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/30 transition-all"
                       placeholder="kamu@email.com"
                       value={email}
                       disabled={!remote}
@@ -222,12 +227,12 @@ function LoginFormInner({ remote }: { remote: boolean }) {
                   </div>
                 </div>
                 {errorMsg && (
-                  <p className="text-body-md text-red-600">{errorMsg}</p>
+                  <p className="text-body-md text-red-600 dark:text-red-400">{errorMsg}</p>
                 )}
                 <button
                   type="submit"
                   disabled={loading || !remote}
-                  className="w-full inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-surface-container-low text-on-surface text-label-lg font-semibold rounded-full hover:bg-surface-container transition-colors disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-surface-container-low text-on-surface text-label-lg font-semibold rounded-full hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Kirim Link Masuk

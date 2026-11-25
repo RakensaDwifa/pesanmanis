@@ -78,6 +78,34 @@ export function extractOwnedFotoStoragePath(
 }
 
 /**
+ * Extracts a Storage object path belonging to the configured Supabase project's "musik" bucket.
+ * Strips any media range fragment (`#t=...`) and query string before checking ownership.
+ */
+export function extractOwnedAudioStoragePath(
+  rawUrl: unknown,
+  configuredSupabaseUrl: string,
+  ownerUserId: string
+): string | null {
+  if (typeof rawUrl !== "string" || !configuredSupabaseUrl || !ownerUserId) return null;
+  const base = configuredSupabaseUrl.replace(/\/+$/, "");
+  const expectedPrefix = `${base}/storage/v1/object/public/musik/`;
+  const trimmed = rawUrl.trim();
+  if (!trimmed.startsWith(expectedPrefix)) return null;
+
+  const rawPath = trimmed.slice(expectedPrefix.length).split("#")[0].split("?")[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    return null;
+  }
+  if (!decoded || decoded.includes("..") || decoded.startsWith("/")) return null;
+
+  if (!decoded.startsWith(`${ownerUserId}/`)) return null;
+  return decoded;
+}
+
+/**
  * Normalizes a base app URL from environment variables, handling empty strings and trailing slashes.
  */
 export function normalizeBaseUrl(raw: string | undefined, fallback: string): string {

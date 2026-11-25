@@ -5,8 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TemplateShell, Signature, PhotoGrid, TimelineSection } from "./shared";
 import type { TemplateRenderProps } from "@/lib/types";
 
-export default function KartuUcapan({ content, preview }: TemplateRenderProps) {
-  const [opened, setOpened] = useState(Boolean(preview));
+export default function KartuUcapan({ content, preview, interactive }: TemplateRenderProps) {
+  const [opened, setOpened] = useState(interactive ? false : Boolean(preview));
 
   return (
     <TemplateShell content={content} preview={preview} className="bg-gradient-to-b from-[#FFF4E6] via-[#FFE9CE] to-[#FFD9A8]">

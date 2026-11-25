@@ -49,10 +49,10 @@ export default function ReferralDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-16">
+    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
       <div className="max-w-[900px] mx-auto px-5 md:px-16">
-        <div className="mb-10">
-          <h1 className="font-heading text-headline-lg text-primary mb-1">Program Referral</h1>
+        <div className="mb-8 sm:mb-10">
+          <h1 className="font-heading text-headline-md sm:text-headline-lg text-primary mb-1">Program Referral</h1>
           <p className="text-body-md text-on-surface-variant">
             Ajak temanmu bikin kejutan — kamu dapat saldo Rp{" "}
             {REFERRAL_REWARD_AMOUNT.toLocaleString("id-ID")} untuk setiap teman yang menyelesaikan
@@ -65,7 +65,7 @@ export default function ReferralDashboard() {
         ) : (
           <>
             {/* Kode & link */}
-            <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8 mb-6">
+            <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8 mb-6">
               <div className="flex items-center gap-2 mb-4">
                 <Gift className="h-5 w-5 text-primary" />
                 <h2 className="font-heading text-title-lg text-on-surface">Kode Referral Kamu</h2>
@@ -80,11 +80,12 @@ export default function ReferralDashboard() {
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
+                      type="button"
                       onClick={() => {
                         copyLink();
                         AnalyticsEvents.referralShared(code);
                       }}
-                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary text-white text-label-lg font-semibold shadow-sm hover:-translate-y-0.5 transition-all"
+                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary text-white text-label-lg font-semibold shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
                     >
                       <Copy className="h-4 w-4" />
                       {copied ? "Tersalin!" : "Salin Link Referral"}
@@ -101,35 +102,35 @@ export default function ReferralDashboard() {
                   )}
                 </>
               ) : (
-                <p className="text-body-md text-red-600">
+                <p className="text-body-md text-red-600 dark:text-red-400">
                   Gagal memuat kode referral. Coba refresh halaman.
                 </p>
               )}
             </div>
 
             {/* Statistik */}
-            <div className="grid sm:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
               {[
-                { icon: Users, label: "Teman Diundang", value: String(stats.invited) },
-                { icon: Gift, label: "Berhasil Transaksi", value: String(stats.completed) },
+                { icon: Users, label: "Diundang", value: String(stats.invited) },
+                { icon: Gift, label: "Transaksi", value: String(stats.completed) },
                 {
                   icon: Wallet,
-                  label: "Saldo Tersedia",
+                  label: "Saldo",
                   value: `Rp ${(stats.balance ?? stats.earned).toLocaleString("id-ID")}`,
                 },
               ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 text-center">
-                  <div className="w-11 h-11 rounded-full bg-primary-fixed/40 flex items-center justify-center mx-auto mb-3">
-                    <Icon className="h-5 w-5 text-primary" />
+                <div key={label} className="bg-white rounded-2xl sm:rounded-3xl border border-outline-variant/30 shadow-card p-3.5 sm:p-6 text-center">
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-primary-fixed/40 flex items-center justify-center mx-auto mb-2 sm:mb-3">
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <p className="font-heading text-headline-md text-on-surface">{value}</p>
-                  <p className="text-label-md text-on-surface-variant mt-1">{label}</p>
+                  <p className="font-heading text-title-md sm:text-headline-md text-on-surface truncate">{value}</p>
+                  <p className="text-[11px] sm:text-label-md text-on-surface-variant mt-0.5 sm:mt-1 truncate">{label}</p>
                 </div>
               ))}
             </div>
 
             {/* Cara kerja */}
-            <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6 md:p-8">
+            <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8">
               <h2 className="font-heading text-title-lg text-on-surface mb-4">Cara Kerjanya</h2>
               <ol className="space-y-3 list-none">
                 {[
