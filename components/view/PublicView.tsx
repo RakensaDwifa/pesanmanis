@@ -22,6 +22,7 @@ import FlowerTransition, {
   type FlowerTransitionRef,
 } from "@/components/effects/FlowerTransition";
 import { getTemplate } from "@/lib/templates";
+import InAppBrowserBanner from "@/components/view/InAppBrowserBanner";
 
 const storyKey = (id: string) => `pm:story:${id}`;
 const legacyEntryKey = (id: string) => `pm:entry:${id}`;
@@ -195,6 +196,7 @@ export default function PublicView({
             />
           ) : (
             <>
+              <InAppBrowserBanner />
               {ucapan.paid && ucapan.touchParticles && (
                 <ParticleTouch type={ucapan.touchParticles} />
               )}
