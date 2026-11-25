@@ -1,15 +1,45 @@
 // Sumber kebenaran tunggal untuk harga ucapan berbayar (PesanManis).
 //
-// Strategi harga: promo perkenalan Rp 8.900 untuk PROMO_QUOTA pembeli pertama,
-// lalu otomatis kembali ke harga normal Rp 19.000.
+// Strategi harga Tiering 2 Level:
+// - Tier "classic"   : promo Rp 8.900, normal Rp 12.900
+// - Tier "signature" : promo Rp 14.900, normal Rp 24.900
+// Promo berlaku untuk PROMO_QUOTA pembeli pertama yang lunas, lalu otomatis
+// kembali ke harga normal masing-masing tier.
 //
 // Aturan penting:
 // - File ini TIDAK boleh mengimpor Supabase (dipakai juga di komponen client).
 // - Harga final selalu ditentukan server lewat lib/pricing-server.ts.
 // - Kolom `payments.amount` wajib diisi server; jangan andalkan default DB.
 
-export const PROMO_AMOUNT = 8900;
-export const NORMAL_AMOUNT = 19000;
+export type TemplateTier = "classic" | "signature";
+
+export const TIER_PRICING: Record<
+  TemplateTier,
+  { label: string; promo: number; normal: number }
+> = {
+  classic: {
+    label: "Klasik",
+    promo: 8900,
+    normal: 12900,
+  },
+  signature: {
+    label: "Signature",
+    promo: 14900,
+    normal: 24900,
+  },
+};
+
+const SIGNATURE_TEMPLATE_SLUGS = new Set(["kaca-berembun", "bonceng-malam"]);
+
+export function getTemplateTier(slug?: string | null): TemplateTier {
+  if (!slug) return "classic";
+  return SIGNATURE_TEMPLATE_SLUGS.has(slug.trim()) ? "signature" : "classic";
+}
+
+export const PROMO_AMOUNT = TIER_PRICING.classic.promo;
+export const NORMAL_AMOUNT = TIER_PRICING.classic.normal;
+export const SIGNATURE_PROMO_AMOUNT = TIER_PRICING.signature.promo;
+export const SIGNATURE_NORMAL_AMOUNT = TIER_PRICING.signature.normal;
 export const PROMO_QUOTA = 20;
 
 export function formatPrice(amount: number): string {
@@ -18,10 +48,18 @@ export function formatPrice(amount: number): string {
 
 export const PROMO_AMOUNT_LABEL = formatPrice(PROMO_AMOUNT);
 export const NORMAL_AMOUNT_LABEL = formatPrice(NORMAL_AMOUNT);
+export const SIGNATURE_PROMO_AMOUNT_LABEL = formatPrice(SIGNATURE_PROMO_AMOUNT);
+export const SIGNATURE_NORMAL_AMOUNT_LABEL = formatPrice(SIGNATURE_NORMAL_AMOUNT);
 
 export interface PriceInfo {
   /** Harga yang harus dibayar saat ini. */
   amount: number;
+  /** Harga normal tier terkait (tanpa promo). */
+  normalAmount: number;
+  /** Tier template yang dihitung. */
+  tier: TemplateTier;
+  /** Label ringkas tier untuk UI. */
+  tierLabel: string;
   /** True bila masih dalam periode promo. */
   isPromo: boolean;
   /** Sisa kuota promo (0 bila promo habis). */
@@ -29,18 +67,35 @@ export interface PriceInfo {
 }
 
 /**
- * Hitung harga aktif berdasarkan jumlah pembelian promo yang sudah lunas.
+ * Hitung harga aktif berdasarkan jumlah pembelian promo yang sudah lunas dan tier template.
  * Dipakai di server; jangan dipakai untuk menampilkan harga final di client
  * tanpa data dari /api/pricing.
  */
-export function priceForPromoUsed(promoUsed: number): PriceInfo {
+export function priceForPromoUsed(
+  promoUsed: number,
+  tier: TemplateTier = "classic"
+): PriceInfo {
+  const tierConfig = TIER_PRICING[tier] ?? TIER_PRICING.classic;
   const used = Number.isFinite(promoUsed) ? Math.max(0, Math.floor(promoUsed)) : 0;
   const remaining = Math.max(0, PROMO_QUOTA - used);
   const isPromo = remaining > 0;
   return {
-    amount: isPromo ? PROMO_AMOUNT : NORMAL_AMOUNT,
+    amount: isPromo ? tierConfig.promo : tierConfig.normal,
+    normalAmount: tierConfig.normal,
+    tier,
+    tierLabel: tierConfig.label,
     isPromo,
     remaining,
+  };
+}
+
+/**
+ * Hitung peta harga untuk seluruh tier dalam satu pemanggilan.
+ */
+export function getAllTierPrices(promoUsed: number): Record<TemplateTier, PriceInfo> {
+  return {
+    classic: priceForPromoUsed(promoUsed, "classic"),
+    signature: priceForPromoUsed(promoUsed, "signature"),
   };
 }
 
@@ -49,7 +104,7 @@ export function priceForPromoUsed(promoUsed: number): PriceInfo {
  * Sengaja memilih promo agar pengguna tidak tertagih harga penuh tanpa
  * pemberitahuan, dan supaya transaksi tetap bisa diselesaikan.
  */
-export const PRICE_FALLBACK: PriceInfo = priceForPromoUsed(0);
+export const PRICE_FALLBACK: PriceInfo = priceForPromoUsed(0, "classic");
 
 /**
  * Validasi nominal notifikasi Midtrans terhadap nominal yang tersimpan

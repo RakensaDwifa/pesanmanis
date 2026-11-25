@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Builder from "@/components/builder/Builder";
 import { getTemplate } from "@/lib/templates";
 
@@ -16,8 +17,8 @@ export default async function BuilderRoute({
 }) {
   const { slug } = await params;
   const { edit } = await searchParams;
-  if (!getTemplate(slug)) {
-    const { notFound } = await import("next/navigation");
+  const template = getTemplate(slug);
+  if (!template || !template.active) {
     notFound();
   }
   return <Builder slug={slug} editId={edit} />;

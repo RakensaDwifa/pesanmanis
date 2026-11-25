@@ -6,6 +6,7 @@ import { calculateCheckoutTotal, sanitizeAddons } from "@/lib/pricing";
 import { getActivePrice } from "@/lib/pricing-server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { validateSlugFormat } from "@/lib/slug";
+import { getTemplate } from "@/lib/templates";
 import { isRemote } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { buildDraftAddonState } from "@/lib/supabase/rows";
@@ -80,6 +81,16 @@ export async function POST(request: Request) {
   }
   if (ucapanRow.paid) {
     return NextResponse.json({ ok: false, error: "ALREADY_PAID" }, { status: 400 });
+  }
+  if (!getTemplate(ucapanRow.template_slug)?.active) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "TEMPLATE_UNAVAILABLE",
+        message: "Template ini sedang dalam pengembangan dan belum tersedia untuk checkout.",
+      },
+      { status: 400 }
+    );
   }
 
   const sanitizedAddons = sanitizeAddons(body.addons);
@@ -201,8 +212,8 @@ export async function POST(request: Request) {
     particleStyle: validParticle,
   });
 
-  // Server-authoritative base price (promo vs normal)
-  const price = await getActivePrice();
+  // Server-authoritative base price based on template tier (promo vs normal)
+  const price = await getActivePrice(ucapanRow.template_slug);
   const calculation = calculateCheckoutTotal(price.amount, sanitizedAddons);
 
   // Supersede previous UNPAID attempts for the same ucapanId so retrying checkout

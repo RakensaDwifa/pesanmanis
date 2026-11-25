@@ -9,6 +9,7 @@ import {
 } from "@/lib/supabase/rows";
 import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
 import type { UcapanContent } from "@/lib/types";
+import { getTemplate } from "@/lib/templates";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { isRecord } from "@/lib/validation";
 
@@ -137,6 +138,19 @@ export async function POST(request: Request) {
   const validation = validateUcapanInput(body);
   if (!validation.valid) {
     return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
+  }
+
+  const templateSlug =
+    typeof body.templateSlug === "string" ? body.templateSlug.trim() : "";
+  if (!getTemplate(templateSlug)?.active) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "TEMPLATE_UNAVAILABLE",
+        message: "Template ini sedang dalam pengembangan dan belum tersedia.",
+      },
+      { status: 400 }
+    );
   }
 
   const draftAddons = buildDraftAddonState({

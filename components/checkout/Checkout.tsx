@@ -100,7 +100,7 @@ export default function Checkout({ id }: { id: string }) {
   const router = useRouter();
   const [ucapan, setUcapan] = useState<StoredUcapan | null>(null);
   const [loadingUcapan, setLoadingUcapan] = useState(true);
-  const pricing = usePricing();
+  const pricing = usePricing(ucapan?.templateSlug);
   const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -373,7 +373,7 @@ export default function Checkout({ id }: { id: string }) {
             {/* ── Ringkasan harga ── */}
             <div className="rounded-2xl bg-surface-container-low p-5">
               <div className="flex justify-between text-body-md text-on-surface-variant mb-2">
-                <span>Website ucapan personal</span>
+                <span>Website ucapan ({pricing.tierLabel})</span>
                 <span className="font-semibold text-on-surface">{formatPrice(calculation.baseAmount)}</span>
               </div>
               {calculation.addonTotal > 0 && (

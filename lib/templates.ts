@@ -133,11 +133,11 @@ export const TEMPLATES: TemplateMeta[] = [
     type: "ungkapan-sayang",
     description:
       "Perjalanan night ride romantis. Kunci helm, tahan gas menembus lampu jalan kota, dan buka jok motor berisi mawar rahasia.",
-    active: true,
+    active: false,
+    comingSoon: true,
     order: 9,
     gradient: "from-[#18181B] to-[#27272A]",
     hasNarrative: true,
-    badge: "popular",
     mockupSubtitle: "NIGHT RIDE",
     mockupHeadline: "Menembus lampu kota bersamamu",
     mockupCta: "Tahan gas 🌙",
@@ -160,6 +160,23 @@ export function getTemplate(slug: string): TemplateMeta | undefined {
 
 export function getActiveTemplates(): TemplateMeta[] {
   return TEMPLATES.filter((t) => t.active).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Returns templates displayed on the `/templates` catalog, including
+ * `comingSoon` previews alongside active templates.
+ */
+export function getCatalogTemplates(): TemplateMeta[] {
+  return TEMPLATES.filter((t) => t.active || t.comingSoon).sort(
+    (a, b) => a.order - b.order
+  );
+}
+
+/**
+ * Returns true only when a template exists and is open for new creations/checkouts.
+ */
+export function isTemplateSelectable(slug: string): boolean {
+  return Boolean(getTemplate(slug)?.active);
 }
 
 export function slugify(text: string): string {

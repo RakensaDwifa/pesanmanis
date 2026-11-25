@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { safeStringEqual } from "@/lib/gate-token";
+import { cleanupExpiredUnpaidDrafts } from "@/lib/cleanup-unpaid";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -115,6 +116,20 @@ export async function GET(request: Request) {
     }
   }
 
+  // Jalankan auto-cleanup draft unpaid kadaluarsa (> 21 hari) setelah email recovery
+  let cleanupSummary = {
+    ok: true,
+    cleanedDrafts: 0,
+    cleanedStorageFiles: 0,
+    skippedByPaymentGuard: 0,
+    failed: 0,
+  };
+  try {
+    cleanupSummary = await cleanupExpiredUnpaidDrafts(admin);
+  } catch (cleanupErr) {
+    console.warn("[cron:abandoned-cart] error saat cleanup draft unpaid:", cleanupErr);
+  }
+
   return NextResponse.json({
     ok: true,
     processed: sessions?.length ?? 0,
@@ -122,5 +137,8 @@ export async function GET(request: Request) {
     failed,
     skippedPaid,
     skippedNoEmail,
+    cleanedDrafts: cleanupSummary.cleanedDrafts,
+    cleanedStorageFiles: cleanupSummary.cleanedStorageFiles,
+    cleanupSkippedByGuard: cleanupSummary.skippedByPaymentGuard,
   });
 }

@@ -1,5 +1,5 @@
 ﻿import { Metadata } from "next";
-import { getActiveTemplates } from "@/lib/templates";
+import { getCatalogTemplates } from "@/lib/templates";
 import TemplatesHero from "./TemplatesHero";
 import TemplatesClient from "./TemplatesClient";
 
@@ -15,7 +15,7 @@ export default async function TemplatesPage({
   searchParams: Promise<{ kategori?: string }>;
 }) {
   const { kategori } = await searchParams;
-  const templates = getActiveTemplates();
+  const templates = getCatalogTemplates();
 
   return (
     <section className="w-full relative bg-surface min-h-screen text-on-surface overflow-x-clip">

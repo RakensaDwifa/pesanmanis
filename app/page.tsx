@@ -55,7 +55,7 @@ const STEPS = [
   {
     icon: Rocket,
     title: "Bayar & Bagikan",
-    desc: `Sekali bayar ${BRAND.priceLabel}, link langsung aktif. Tinggal kirim atau scan QR.`,
+    desc: `Sekali bayar mulai ${BRAND.priceLabel}, link langsung aktif. Tinggal kirim atau scan QR.`,
   },
 ];
 
@@ -375,7 +375,7 @@ export default function HomePage() {
                 <MotionFadeUp delay={0.1} y={12}>
                   <p className="text-body-lg font-medium text-white/90 mb-9 max-w-lg mx-auto">
                     Nggak perlu mahal buat bikin dia ngerasa spesial.{" "}
-                    {BRAND.priceLabel}, sekali bayar.
+                    Mulai {BRAND.priceLabel}, sekali bayar.
                   </p>
                 </MotionFadeUp>
                 <MotionFadeUp delay={0.16} y={12}>

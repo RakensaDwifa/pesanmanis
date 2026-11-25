@@ -218,7 +218,7 @@ export default function TemplatesHero() {
           />
           <div className="relative flex items-baseline gap-2.5 mb-1.5 flex-wrap">
             <span className="text-body-md font-medium text-on-surface-variant">
-              Semua template
+              Mulai dari
             </span>
             <div className="inline-flex items-baseline gap-2">
               {pricing.isPromo && (

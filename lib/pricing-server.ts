@@ -2,23 +2,17 @@ import "server-only";
 
 import { isRemote } from "@/lib/supabase/config";
 import {
-  PRICE_FALLBACK,
+  getAllTierPrices,
+  getTemplateTier,
   type PriceInfo,
-  PROMO_AMOUNT,
   priceForPromoUsed,
+  type TemplateTier,
+  TIER_PRICING,
 } from "./pricing";
 
-/**
- * Ambil harga aktif dari database: promo berakhir setelah PROMO_QUOTA
- * pembelian promo yang lunas.
- *
- * Menggunakan kolom eksplisit `is_promo` agar pembeli promo yang mengambil add-on
- * atau memakai saldo kredit referral tetap dihitung dalam kuota promo.
- * Fallback ke `amount = PROMO_AMOUNT` hanya bila migrasi `schema_v9.sql` belum dijalankan.
- */
-export async function getActivePrice(): Promise<PriceInfo> {
+async function countPaidPromoUsed(): Promise<number> {
   if (!isRemote()) {
-    return priceForPromoUsed(0);
+    return 0;
   }
 
   try {
@@ -36,17 +30,40 @@ export async function getActivePrice(): Promise<PriceInfo> {
         .from("payments")
         .select("id", { count: "exact", head: true })
         .eq("status", "PAID")
-        .eq("amount", PROMO_AMOUNT));
+        .in("amount", [
+          TIER_PRICING.classic.promo,
+          TIER_PRICING.signature.promo,
+        ]));
     }
 
     if (error) {
       console.warn("[pricing] gagal menghitung kuota promo:", error.message);
-      return PRICE_FALLBACK;
+      return 0;
     }
 
-    return priceForPromoUsed(count ?? 0);
+    return count ?? 0;
   } catch (error) {
     console.warn("[pricing] error tak terduga saat menghitung kuota promo:", error);
-    return PRICE_FALLBACK;
+    return 0;
   }
+}
+
+/**
+ * Ambil harga aktif dari database berdasarkan tier `templateSlug`.
+ * Promo berakhir setelah PROMO_QUOTA pembelian promo yang lunas.
+ */
+export async function getActivePrice(templateSlug?: string): Promise<PriceInfo> {
+  const tier = getTemplateTier(templateSlug);
+  const promoUsed = await countPaidPromoUsed();
+  return priceForPromoUsed(promoUsed, tier);
+}
+
+/**
+ * Ambil peta harga aktif untuk seluruh tier dalam satu kueri DB.
+ */
+export async function getActiveTierPrices(): Promise<
+  Record<TemplateTier, PriceInfo>
+> {
+  const promoUsed = await countPaidPromoUsed();
+  return getAllTierPrices(promoUsed);
 }

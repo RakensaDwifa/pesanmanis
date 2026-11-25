@@ -5,7 +5,11 @@ import crypto from "node:crypto";
 import {
   PROMO_AMOUNT,
   NORMAL_AMOUNT,
+  SIGNATURE_PROMO_AMOUNT,
+  SIGNATURE_NORMAL_AMOUNT,
   PROMO_QUOTA,
+  getTemplateTier,
+  getAllTierPrices,
   priceForPromoUsed,
   amountMatchesPaid,
   formatPrice,
@@ -25,10 +29,21 @@ import {
   referralRewardFor,
 } from "../lib/referral-policy.ts";
 
-test("pricing: kalkulasi kuota promo dan harga normal", () => {
+test("pricing: kalkulasi kuota promo dan harga normal (classic & signature)", () => {
+  // Klasifikasi tier template
+  assert.equal(getTemplateTier("amplop-cinta"), "classic");
+  assert.equal(getTemplateTier("permintaan-maaf"), "classic");
+  assert.equal(getTemplateTier("kaca-berembun"), "signature");
+  assert.equal(getTemplateTier("bonceng-malam"), "signature");
+  assert.equal(getTemplateTier(undefined), "classic");
+  assert.equal(getTemplateTier(null), "classic");
+
+  // Backward-compatible default (tanpa argumen tier -> classic)
   // Awal: kuota 20, harga promo 8900
   const initial = priceForPromoUsed(0);
   assert.equal(initial.amount, PROMO_AMOUNT);
+  assert.equal(initial.normalAmount, NORMAL_AMOUNT);
+  assert.equal(initial.tier, "classic");
   assert.equal(initial.isPromo, true);
   assert.equal(initial.remaining, PROMO_QUOTA);
 
@@ -38,31 +53,63 @@ test("pricing: kalkulasi kuota promo dan harga normal", () => {
   assert.equal(mid.isPromo, true);
   assert.equal(mid.remaining, 5);
 
-  // Batas: 20 promo terpakai, kembali ke normal 19000
+  // Batas: 20 promo terpakai, kembali ke normal classic 12900
   const limit = priceForPromoUsed(20);
   assert.equal(limit.amount, NORMAL_AMOUNT);
+  assert.equal(limit.amount, 12900);
   assert.equal(limit.isPromo, false);
   assert.equal(limit.remaining, 0);
 
-  // Lewat batas: 25 pembelian, tetap normal 19000
+  // Lewat batas: 25 pembelian, tetap normal classic 12900
   const over = priceForPromoUsed(25);
   assert.equal(over.amount, NORMAL_AMOUNT);
   assert.equal(over.isPromo, false);
   assert.equal(over.remaining, 0);
+
+  // Tier Signature: promo 14900, normal 24900
+  const sigPromo = priceForPromoUsed(0, "signature");
+  assert.equal(sigPromo.amount, SIGNATURE_PROMO_AMOUNT);
+  assert.equal(sigPromo.amount, 14900);
+  assert.equal(sigPromo.normalAmount, SIGNATURE_NORMAL_AMOUNT);
+  assert.equal(sigPromo.normalAmount, 24900);
+  assert.equal(sigPromo.tier, "signature");
+  assert.equal(sigPromo.isPromo, true);
+  assert.equal(sigPromo.remaining, PROMO_QUOTA);
+
+  const sigNormal = priceForPromoUsed(20, "signature");
+  assert.equal(sigNormal.amount, SIGNATURE_NORMAL_AMOUNT);
+  assert.equal(sigNormal.amount, 24900);
+  assert.equal(sigNormal.isPromo, false);
+  assert.equal(sigNormal.remaining, 0);
+
+  // Peta harga gabungan untuk kedua tier
+  const allPromo = getAllTierPrices(3);
+  assert.equal(allPromo.classic.amount, 8900);
+  assert.equal(allPromo.signature.amount, 14900);
+  assert.equal(allPromo.signature.remaining, 17);
+
+  const allNormal = getAllTierPrices(20);
+  assert.equal(allNormal.classic.amount, 12900);
+  assert.equal(allNormal.signature.amount, 24900);
 });
 
 test("pricing: validasi format rupiah", () => {
   assert.equal(formatPrice(8900), "Rp 8.900");
-  assert.equal(formatPrice(19000), "Rp 19.000");
+  assert.equal(formatPrice(12900), "Rp 12.900");
+  assert.equal(formatPrice(14900), "Rp 14.900");
+  assert.equal(formatPrice(24900), "Rp 24.900");
 });
 
 test("pricing: pencocokan nominal gross_amount webhook", () => {
   // String desimal dari Midtrans "8900.00" vs expected 8900
   assert.equal(amountMatchesPaid("8900.00", 8900), true);
-  assert.equal(amountMatchesPaid("19000", 19000), true);
+  assert.equal(amountMatchesPaid("12900", 12900), true);
+  assert.equal(amountMatchesPaid("14900.00", 14900), true);
+  assert.equal(amountMatchesPaid("24900.00", 24900), true);
 
-  // Beda nominal: tagihan promo tapi dibayar 1000 atau sebaliknya
-  assert.equal(amountMatchesPaid("8900.00", 19000), false);
+  // Beda nominal: tagihan promo tapi dibayar normal/tier lain
+  assert.equal(amountMatchesPaid("8900.00", 12900), false);
+  assert.equal(amountMatchesPaid("8900.00", 14900), false);
   assert.equal(amountMatchesPaid("1000.00", 8900), false);
 
   // Nilai expected kosong/0 (transaksi legacy tanpa kolom amount) diizinkan
@@ -151,9 +198,22 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(allInOne.totalAmount, 16400);
   assert.equal(allInOne.bundleApplied, "all_in_one");
 
-  // All-in-One pada harga normal (19000 + 7500 = 26500)
-  const allInOneNormal = calculateCheckoutTotal(19000, ALL_ADDON_KEYS);
-  assert.equal(allInOneNormal.totalAmount, 26500);
+  // All-in-One pada harga normal Classic (12900 + 7500 = 20400)
+  const allInOneNormal = calculateCheckoutTotal(12900, ALL_ADDON_KEYS);
+  assert.equal(allInOneNormal.totalAmount, 20400);
+
+  // Tier Signature: promo (14900) & normal (24900) dengan add-on / All-in-One
+  const sigSingle = calculateCheckoutTotal(14900, ["custom_slug"]);
+  assert.equal(sigSingle.addonTotal, 2000);
+  assert.equal(sigSingle.totalAmount, 16900);
+
+  const sigAllInOnePromo = calculateCheckoutTotal(14900, ALL_ADDON_KEYS);
+  assert.equal(sigAllInOnePromo.addonTotal, 7500);
+  assert.equal(sigAllInOnePromo.discount, 3500);
+  assert.equal(sigAllInOnePromo.totalAmount, 22400);
+
+  const sigAllInOneNormal = calculateCheckoutTotal(24900, ALL_ADDON_KEYS);
+  assert.equal(sigAllInOneNormal.totalAmount, 32400);
 });
 
 test("slug: validasi aturan penamaan slug dan reserved words", () => {

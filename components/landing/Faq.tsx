@@ -29,9 +29,9 @@ const FAQS = [
       "Setelah pembayaran terverifikasi, masuk ke akunmu melalui menu Masuk lalu buka Dashboard. Pilih tombol Bagikan pada ucapanmu untuk menyalin link khusus atau mengunduh QR Code yang siap dikirim ke pacar, sahabat, maupun orang tersayang.",
   },
   {
-    question: `Benar harganya ${BRAND.priceLabel}? Website ucapannya aktif sampai kapan?`,
+    question: `Benar harganya mulai ${BRAND.priceLabel}? Website ucapannya aktif sampai kapan?`,
     answer:
-      `Betul! Harga promo perkenalan setiap template hanya ${BRAND.priceLabel} (harga normal ${BRAND.normalPriceLabel} setelah kuota promo habis). Website yang sudah diaktifkan berlaku selamanya tanpa biaya langganan, dan kamu tetap bisa mengedit isinya selama 7 hari sejak pembayaran berhasil.`,
+      `Betul! Saat promo perkenalan, template Klasik hanya ${BRAND.priceLabel} (normal ${BRAND.normalPriceLabel}) dan template Signature hanya ${BRAND.signaturePriceLabel} (normal ${BRAND.signatureNormalPriceLabel}). Website yang sudah diaktifkan berlaku selamanya tanpa biaya langganan, dan kamu tetap bisa mengedit isinya selama 7 hari sejak pembayaran berhasil.`,
   },
 ];
 

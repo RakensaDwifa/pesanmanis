@@ -8,16 +8,16 @@ import {
   useMotionValue,
   useSpring,
 } from "framer-motion";
-import { ArrowRight, Eye, Sparkles, Star } from "lucide-react";
+import { ArrowRight, Clock, Eye, Sparkles, Star } from "lucide-react";
 import { templateEmoji } from "@/lib/templates";
 import { CATEGORY_META, type TemplateMeta } from "@/lib/types";
 import { AnalyticsEvents } from "@/lib/analytics";
-import type { ClientPriceState } from "@/lib/use-pricing";
+import type { TierClientPrice } from "@/lib/use-pricing";
 import { EASE_WARM, SPRING_TACTILE } from "@/components/landing/MotionPrimitives";
 
 interface TemplateCardProps {
   template: TemplateMeta;
-  pricing: ClientPriceState;
+  pricing: TierClientPrice;
   isTouchOrMobile: boolean;
   reducedMotion: boolean;
 }
@@ -33,6 +33,7 @@ export default function TemplateCard({
   const [isHovered, setIsHovered] = useState(false);
 
   const catMeta = CATEGORY_META[t.type];
+  const isComingSoon = Boolean(t.comingSoon || !t.active);
   const isDarkMockup = t.phoneDark ?? false;
   const enable3D = !isTouchOrMobile && !reducedMotion;
 
@@ -146,25 +147,38 @@ export default function TemplateCard({
             {/* Top Badges Bar */}
             <div className="absolute top-3 inset-x-3 flex items-center justify-between z-20 pointer-events-none">
               <div>
-                {t.badge === "popular" && (
+                {isComingSoon ? (
                   <motion.span
                     animate={enable3D ? { y: isHovered ? -2 : 0 } : undefined}
                     transition={SPRING_TACTILE}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-surface-container-highest text-on-surface border border-outline-variant/40 shadow-xs"
                   >
-                    <Star className="h-3 w-3 fill-current" />
-                    <span>Terpopuler</span>
+                    <Clock className="h-3 w-3" />
+                    <span>Segera Hadir</span>
                   </motion.span>
-                )}
-                {t.badge === "new" && (
-                  <motion.span
-                    animate={enable3D ? { y: isHovered ? -2 : 0 } : undefined}
-                    transition={SPRING_TACTILE}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    <span>Baru</span>
-                  </motion.span>
+                ) : (
+                  <>
+                    {t.badge === "popular" && (
+                      <motion.span
+                        animate={enable3D ? { y: isHovered ? -2 : 0 } : undefined}
+                        transition={SPRING_TACTILE}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs"
+                      >
+                        <Star className="h-3 w-3 fill-current" />
+                        <span>Terpopuler</span>
+                      </motion.span>
+                    )}
+                    {t.badge === "new" && (
+                      <motion.span
+                        animate={enable3D ? { y: isHovered ? -2 : 0 } : undefined}
+                        transition={SPRING_TACTILE}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary text-white shadow-xs"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        <span>Baru</span>
+                      </motion.span>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -294,7 +308,13 @@ export default function TemplateCard({
         {/* Card Body */}
         <div className="p-5 flex-1 flex flex-col justify-between">
           <div>
-            <h2 className="font-heading text-xl md:text-[22px] font-semibold text-on-surface mb-1.5 group-hover:text-primary transition-colors duration-200">
+            <h2
+              className={`font-heading text-xl md:text-[22px] font-semibold text-on-surface mb-1.5 ${
+                isComingSoon
+                  ? ""
+                  : "group-hover:text-primary transition-colors duration-200"
+              }`}
+            >
               {t.name}
             </h2>
             <p className="text-body-md text-on-surface-variant text-[13.5px] leading-relaxed line-clamp-2 mb-4">
@@ -304,54 +324,77 @@ export default function TemplateCard({
 
           {/* Actions & Footer */}
           <div className="mt-auto space-y-3.5">
-            {/* Action Row — Tactile Spring + Sheen + Icon Micro-Motion */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <motion.div
-                whileHover={reducedMotion ? undefined : { y: -1.5, scale: 1.02 }}
-                whileTap={reducedMotion ? undefined : { scale: 0.96 }}
-                transition={SPRING_TACTILE}
-                className="w-full"
-              >
-                <Link
-                  href={`/preview/${t.slug}`}
-                  onClick={() => AnalyticsEvents.templatePreviewed?.(t.slug)}
-                  className="group/preview w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full border border-outline-variant/40 bg-surface text-primary font-semibold text-xs sm:text-[13px] hover:bg-primary/10 hover:border-primary transition-colors duration-200"
+            {/* Action Row — Tactile Spring + Sheen + Icon Micro-Motion (or disabled Coming Soon) */}
+            {isComingSoon ? (
+              <div className="w-full">
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full border border-outline-variant/40 bg-surface-container text-on-surface-variant font-semibold text-xs sm:text-[13px] cursor-not-allowed opacity-85"
                 >
-                  <Eye className="h-3.5 w-3.5 transition-transform duration-200 group-hover/preview:scale-115" />
-                  <span>Preview</span>
-                </Link>
-              </motion.div>
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>Segera Hadir</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                <motion.div
+                  whileHover={reducedMotion ? undefined : { y: -1.5, scale: 1.02 }}
+                  whileTap={reducedMotion ? undefined : { scale: 0.96 }}
+                  transition={SPRING_TACTILE}
+                  className="w-full"
+                >
+                  <Link
+                    href={`/preview/${t.slug}`}
+                    onClick={() => AnalyticsEvents.templatePreviewed?.(t.slug)}
+                    className="group/preview w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full border border-outline-variant/40 bg-surface text-primary font-semibold text-xs sm:text-[13px] hover:bg-primary/10 hover:border-primary transition-colors duration-200"
+                  >
+                    <Eye className="h-3.5 w-3.5 transition-transform duration-200 group-hover/preview:scale-115" />
+                    <span>Preview</span>
+                  </Link>
+                </motion.div>
 
-              <motion.div
-                whileHover={reducedMotion ? undefined : { y: -2, scale: 1.02 }}
-                whileTap={reducedMotion ? undefined : { scale: 0.96 }}
-                transition={SPRING_TACTILE}
-                className="w-full"
-              >
-                <Link
-                  href={`/buat/${t.slug}`}
-                  onClick={() => AnalyticsEvents.templateSelected?.(t.slug)}
-                  className="group/cta relative overflow-hidden w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full bg-primary text-white font-semibold text-xs sm:text-[13px] shadow-xs hover:bg-primary/95 hover:shadow-[0_6px_18px_rgba(222,112,56,0.32)] transition-all duration-200"
+                <motion.div
+                  whileHover={reducedMotion ? undefined : { y: -2, scale: 1.02 }}
+                  whileTap={reducedMotion ? undefined : { scale: 0.96 }}
+                  transition={SPRING_TACTILE}
+                  className="w-full"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/cta:translate-x-[420%] transition-transform duration-700 ease-out motion-reduce:hidden"
-                  />
-                  <span className="relative z-[1]">Buat Sekarang</span>
-                  <ArrowRight className="relative z-[1] h-3.5 w-3.5 transition-transform duration-200 group-hover/cta:translate-x-1" />
-                </Link>
-              </motion.div>
-            </div>
+                  <Link
+                    href={`/buat/${t.slug}`}
+                    onClick={() => AnalyticsEvents.templateSelected?.(t.slug)}
+                    className="group/cta relative overflow-hidden w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-full bg-primary text-white font-semibold text-xs sm:text-[13px] shadow-xs hover:bg-primary/95 hover:shadow-[0_6px_18px_rgba(222,112,56,0.32)] transition-all duration-200"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover/cta:translate-x-[420%] transition-transform duration-700 ease-out motion-reduce:hidden"
+                    />
+                    <span className="relative z-[1]">Buat Sekarang</span>
+                    <ArrowRight className="relative z-[1] h-3.5 w-3.5 transition-transform duration-200 group-hover/cta:translate-x-1" />
+                  </Link>
+                </motion.div>
+              </div>
+            )}
 
             {/* Divider */}
             <div className="border-t border-outline-variant/20" />
 
             {/* Card Footer */}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-on-surface-variant/80 font-medium text-[11.5px] sm:text-xs">
-                Aktif selamanya · edit 7 hari
-              </span>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-bold text-xs">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {pricing.tier === "signature" && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/15 text-primary font-bold text-[10px] uppercase tracking-wider shrink-0">
+                    Signature
+                  </span>
+                )}
+                <span className="text-on-surface-variant/80 font-medium text-[11.5px] sm:text-xs truncate">
+                  {pricing.tier === "signature"
+                    ? "Aktif selamanya"
+                    : "Aktif selamanya · edit 7 hari"}
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-bold text-xs shrink-0">
                 {pricing.isPromo && (
                   <span className="line-through text-[11px] opacity-60 font-normal">
                     {pricing.normalPriceLabel}

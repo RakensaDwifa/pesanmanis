@@ -23,6 +23,7 @@ export interface TemplateMeta {
   type: TemplateCategory;
   description: string;
   active: boolean;
+  comingSoon?: boolean;
   order: number;
   gradient: string;
   /** Template punya alur naratif sendiri, jadi StoryFlow (ketuk hati) dilewati. */

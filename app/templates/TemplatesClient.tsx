@@ -10,8 +10,13 @@ import {
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { RotateCcw, Search, Sparkles, X } from "lucide-react";
-import { CATEGORY_ORDER, getActiveTemplates } from "@/lib/templates";
-import { CATEGORY_META, type TemplateCategory } from "@/lib/types";
+import { CATEGORY_ORDER } from "@/lib/templates";
+import { getTemplateTier } from "@/lib/pricing";
+import {
+  CATEGORY_META,
+  type TemplateCategory,
+  type TemplateMeta,
+} from "@/lib/types";
 import { usePricing } from "@/lib/use-pricing";
 import { useIsTouchOrMobile } from "@/lib/use-coarse-pointer";
 import { EASE_WARM, SPRING_TACTILE } from "@/components/landing/MotionPrimitives";
@@ -22,7 +27,7 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface TemplatesClientProps {
-  templates: ReturnType<typeof getActiveTemplates>;
+  templates: TemplateMeta[];
   initialCategory?: string | null;
 }
 
@@ -163,6 +168,11 @@ export default function TemplatesClient({
 
     // 3. Sort
     result.sort((a, b) => {
+      const soonA = Boolean(a.comingSoon || !a.active);
+      const soonB = Boolean(b.comingSoon || !b.active);
+      if (sortBy !== "name" && soonA !== soonB) {
+        return soonA ? 1 : -1;
+      }
       if (sortBy === "popular") {
         const scoreA = a.badge === "popular" ? 2 : a.badge === "new" ? 1 : 0;
         const scoreB = b.badge === "popular" ? 2 : b.badge === "new" ? 1 : 0;
@@ -455,7 +465,7 @@ export default function TemplatesClient({
               >
                 <TemplateCard
                   template={t}
-                  pricing={pricing}
+                  pricing={pricing.tiers[getTemplateTier(t.slug)]}
                   isTouchOrMobile={isTouchOrMobile}
                   reducedMotion={reduced}
                 />

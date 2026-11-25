@@ -189,7 +189,7 @@ function mapServerSaveError(code?: string, fallbackMessage?: string): string {
 }
 
 export default function BuilderPage({ slug, editId }: { slug: string; editId?: string }) {
-  const pricing = usePricing();
+  const pricing = usePricing(slug);
   const template = getTemplate(slug);
   const router = useRouter();
 

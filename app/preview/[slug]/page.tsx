@@ -16,6 +16,7 @@ export default async function PreviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  if (!getTemplate(slug)) notFound();
+  const template = getTemplate(slug);
+  if (!template || !template.active) notFound();
   return <TemplatePreview slug={slug} />;
 }
