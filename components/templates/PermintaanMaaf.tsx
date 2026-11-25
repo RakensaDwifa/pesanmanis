@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TemplateShell, Signature, PhotoGrid, TimelineSection } from "./shared";
+import { isRemote } from "@/lib/supabase/config";
+import { saveRecipientResponse } from "@/lib/store";
 import type { TemplateRenderProps } from "@/lib/types";
 
 const PLEAD_TEXTS = [
@@ -13,12 +15,18 @@ const PLEAD_TEXTS = [
   "Aku janji nggak akan ngulangin 🙏",
 ];
 
-export default function PermintaanMaaf({ content, preview, interactive }: TemplateRenderProps) {
+export default function PermintaanMaaf({
+  content,
+  preview,
+  interactive,
+  ucapanId,
+}: TemplateRenderProps) {
   const startOpen = interactive ? false : Boolean(preview);
   const [opened, setOpened] = useState(startOpen);
   const [forgiven, setForgiven] = useState(startOpen);
   const [attempts, setAttempts] = useState(0);
   const [runawayPos, setRunawayPos] = useState({ x: 0, y: 0 });
+  const respondedRef = useRef(false);
 
   const runaway = () => {
     setAttempts((n) => n + 1);
@@ -26,6 +34,40 @@ export default function PermintaanMaaf({ content, preview, interactive }: Templa
       x: (Math.random() - 0.5) * 160,
       y: (Math.random() - 0.5) * 120,
     });
+  };
+
+  const handleForgive = () => {
+    setForgiven(true);
+    if (preview || !ucapanId || respondedRef.current) return;
+
+    const sessionKey = `pm:responded:${ucapanId}`;
+    try {
+      if (sessionStorage.getItem(sessionKey) === "1") return;
+      sessionStorage.setItem(sessionKey, "1");
+    } catch {
+      /* ignore */
+    }
+    respondedRef.current = true;
+
+    const payload = {
+      type: "apology" as const,
+      decision: "forgiven" as const,
+      hesitationCount: Math.min(500, Math.max(0, Math.trunc(attempts))),
+    };
+
+    if (!isRemote()) {
+      saveRecipientResponse(ucapanId, {
+        ...payload,
+        respondedAt: Date.now(),
+      });
+      return;
+    }
+
+    void fetch(`/api/ucapan/${encodeURIComponent(ucapanId)}/response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => undefined);
   };
 
   return (
@@ -114,7 +156,7 @@ export default function PermintaanMaaf({ content, preview, interactive }: Templa
               <motion.button
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
-                onClick={() => setForgiven(true)}
+                onClick={handleForgive}
                 className="px-6 py-3.5 bg-[#5C7A5C] text-white text-label-lg font-semibold rounded-full shadow-md"
               >
                 Ya, aku maafkan 💛

@@ -1,4 +1,4 @@
-import type { StoredUcapan, UcapanContent } from "./types";
+import type { RecipientResponse, StoredUcapan, UcapanContent } from "./types";
 
 export type { StoredUcapan };
 
@@ -95,4 +95,18 @@ export function trackView(id: string): ViewRecord {
 
 export function getViews(id: string): ViewRecord | null {
   return read<ViewRecord>(VIEWS_KEY + id);
+}
+
+export function saveRecipientResponse(
+  id: string,
+  response: RecipientResponse
+): StoredUcapan | null {
+  const existing = getUcapan(id);
+  if (!existing) return null;
+  const updated: StoredUcapan = {
+    ...existing,
+    recipientResponse: response,
+  };
+  write(UCAPAN_KEY + id, updated);
+  return updated;
 }

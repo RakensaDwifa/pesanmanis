@@ -19,7 +19,13 @@ import {
 } from "../lib/pricing.ts";
 
 import { validateSlugFormat } from "../lib/slug.ts";
-import { buildDraftAddonColumns } from "../lib/supabase/rows.ts";
+import {
+  buildDraftAddonColumns,
+  mapUcapanRow,
+  stripPublicUcapan,
+  toUcapanRow,
+  type UcapanRow,
+} from "../lib/supabase/rows.ts";
 
 import { verifyMidtransSignature } from "../lib/midtrans-signature.ts";
 
@@ -190,30 +196,35 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(comboIntim.discount, 1000);
   assert.equal(comboIntim.totalAmount, 12400);
 
-  // All-in-One: 5 add-on sekaligus (11000 -> 7500, hemat 3500)
+  // All-in-One: 6 add-on sekaligus (14000 -> 9500, hemat 4500)
   const allInOne = calculateCheckoutTotal(8900, ALL_ADDON_KEYS);
-  assert.equal(allInOne.addonSubtotal, 11000);
-  assert.equal(allInOne.addonTotal, 7500);
-  assert.equal(allInOne.discount, 3500);
-  assert.equal(allInOne.totalAmount, 16400);
+  assert.equal(allInOne.addonSubtotal, 14000);
+  assert.equal(allInOne.addonTotal, 9500);
+  assert.equal(allInOne.discount, 4500);
+  assert.equal(allInOne.totalAmount, 18400);
   assert.equal(allInOne.bundleApplied, "all_in_one");
 
-  // All-in-One pada harga normal Classic (12900 + 7500 = 20400)
+  // All-in-One pada harga normal Classic (12900 + 9500 = 22400)
   const allInOneNormal = calculateCheckoutTotal(12900, ALL_ADDON_KEYS);
-  assert.equal(allInOneNormal.totalAmount, 20400);
+  assert.equal(allInOneNormal.totalAmount, 22400);
 
   // Tier Signature: promo (14900) & normal (24900) dengan add-on / All-in-One
   const sigSingle = calculateCheckoutTotal(14900, ["custom_slug"]);
   assert.equal(sigSingle.addonTotal, 2000);
   assert.equal(sigSingle.totalAmount, 16900);
 
+  const sigVoiceNote = calculateCheckoutTotal(8900, ["voice_note"]);
+  assert.equal(sigVoiceNote.addonTotal, 3000);
+  assert.equal(sigVoiceNote.totalAmount, 11900);
+  assert.equal(sigVoiceNote.bundleApplied, "none");
+
   const sigAllInOnePromo = calculateCheckoutTotal(14900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOnePromo.addonTotal, 7500);
-  assert.equal(sigAllInOnePromo.discount, 3500);
-  assert.equal(sigAllInOnePromo.totalAmount, 22400);
+  assert.equal(sigAllInOnePromo.addonTotal, 9500);
+  assert.equal(sigAllInOnePromo.discount, 4500);
+  assert.equal(sigAllInOnePromo.totalAmount, 24400);
 
   const sigAllInOneNormal = calculateCheckoutTotal(24900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOneNormal.totalAmount, 32400);
+  assert.equal(sigAllInOneNormal.totalAmount, 34400);
 });
 
 test("slug: validasi aturan penamaan slug dan reserved words", () => {
@@ -238,7 +249,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.deepEqual(buildDraftAddonColumns(undefined), {});
 
   const full = buildDraftAddonColumns({
-    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt"],
+    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt", "voice_note"],
     customSlug: "Raka Nadia",
     pin: "1402",
     particleStyle: "roses",
@@ -249,6 +260,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.equal(full.gate_type, "pin");
   assert.deepEqual(full.gate_data, { pin: "1402" });
   assert.equal(full.receipt_enabled, true);
+  assert.equal(full.voice_note_enabled, true);
 
   // Saat semua add-on dilepas, kolom di-reset ke null/false
   const cleared = buildDraftAddonColumns({ addons: [] });
@@ -258,6 +270,52 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.equal(cleared.gate_type, null);
   assert.equal(cleared.gate_data, null);
   assert.equal(cleared.receipt_enabled, false);
+  assert.equal(cleared.voice_note_enabled, false);
+});
+
+test("voice_note: serialisasi metadata dan proteksi stripPublicUcapan", () => {
+  const rowPayload = toUcapanRow({
+    templateSlug: "amplop-cinta",
+    toName: "Nadia",
+    fromName: "Ari",
+    title: "Untuk Kamu",
+    message: "Dengarkan pesanku ya",
+    photos: [],
+    voiceNoteUrl: "https://example.supabase.co/storage/v1/object/public/musik/uid/voice-notes/1.webm",
+  });
+
+  const baseRow: UcapanRow = {
+    id: "00000000-0000-4000-8000-000000000001",
+    template_slug: rowPayload.template_slug,
+    to_name: rowPayload.to_name,
+    from_name: rowPayload.from_name,
+    title: rowPayload.title,
+    message: rowPayload.message,
+    photos: rowPayload.photos,
+    music_url: rowPayload.music_url,
+    email: "ari@example.com",
+    timeline: rowPayload.timeline,
+    voice_note_enabled: false,
+    paid: true,
+    paid_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Jika paid = true tapi voice_note_enabled = false, stripPublicUcapan harus menyembunyikan voiceNoteUrl
+  const unpaidAddonMapped = mapUcapanRow(baseRow);
+  assert.equal(unpaidAddonMapped.voiceNoteEnabled, false);
+  const strippedUnpaidAddon = stripPublicUcapan(unpaidAddonMapped);
+  assert.equal(strippedUnpaidAddon.voiceNoteUrl, undefined);
+
+  // Jika paid = true dan voice_note_enabled = true, voiceNoteUrl tetap dikirim ke penerima
+  const paidAddonMapped = mapUcapanRow({ ...baseRow, voice_note_enabled: true });
+  assert.equal(paidAddonMapped.voiceNoteEnabled, true);
+  const strippedPaidAddon = stripPublicUcapan(paidAddonMapped);
+  assert.equal(
+    strippedPaidAddon.voiceNoteUrl,
+    "https://example.supabase.co/storage/v1/object/public/musik/uid/voice-notes/1.webm"
+  );
 });
 
 

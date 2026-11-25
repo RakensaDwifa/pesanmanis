@@ -6,6 +6,7 @@ import { BRAND } from "@/lib/brand";
 import { MotionStaggerGroup, MotionStaggerItem } from "./MotionPrimitives";
 
 const LINKS = [
+  { label: "Kado Custom", href: "/custom" },
   { label: "Syarat & Ketentuan", href: "/syarat-ketentuan" },
   { label: "Kebijakan Privasi", href: "/kebijakan-privasi" },
 ];

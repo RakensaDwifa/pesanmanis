@@ -3,6 +3,7 @@ import type {
   GateData,
   GateType,
   ParticleStyle,
+  RecipientResponse,
   StoredUcapan,
   TimelineItem,
   UcapanContent,
@@ -12,6 +13,7 @@ import type { MoodKey } from "../mood.ts";
 import { sanitizeAddons } from "../pricing.ts";
 import { validateSlugFormat } from "../slug.ts";
 import { isRecord, isValidEmail, isValidMediaUrl } from "../validation.ts";
+import { normalizeUnlockAt } from "../unlock-schedule.ts";
 
 export type { DraftAddonConfig, GateData, StoredUcapan, ViewSummary };
 
@@ -42,6 +44,8 @@ interface TimelineMetaEntry {
   title: string;
   mood: MoodKey | null;
   videoUrl: string | null;
+  voiceNoteUrl?: string | null;
+  unlockAt?: string | null;
 }
 
 export type RawTimelineEntry = TimelineItem | TimelineMetaEntry;
@@ -149,6 +153,7 @@ export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, 
     gate_type: gateType,
     gate_data: gateData,
     receipt_enabled: state.addons.includes("love_receipt"),
+    voice_note_enabled: state.addons.includes("voice_note"),
   };
 }
 
@@ -212,6 +217,12 @@ export function validateUcapanInput(
     }
   }
 
+  if (raw.voiceNoteUrl !== undefined && raw.voiceNoteUrl !== null && raw.voiceNoteUrl !== "") {
+    if (typeof raw.voiceNoteUrl !== "string" || !isValidMediaUrl(raw.voiceNoteUrl, 500)) {
+      return { valid: false, reason: "VOICE_NOTE_URL_INVALID" };
+    }
+  }
+
   if (raw.mood !== undefined && raw.mood !== null && raw.mood !== "") {
     if (typeof raw.mood !== "string" || !VALID_MOODS[raw.mood as MoodKey]) {
       return { valid: false, reason: "MOOD_INVALID" };
@@ -247,6 +258,13 @@ export function validateUcapanInput(
     }
   }
 
+  if (raw.unlockAt !== undefined && raw.unlockAt !== null && raw.unlockAt !== "") {
+    const normalized = normalizeUnlockAt(raw.unlockAt);
+    if (normalized === null) {
+      return { valid: false, reason: "UNLOCK_AT_INVALID" };
+    }
+  }
+
   return { valid: true };
 }
 
@@ -269,6 +287,8 @@ export interface UcapanRow {
   gate_type?: string | null;
   gate_data?: GateData | null;
   receipt_enabled?: boolean;
+  voice_note_enabled?: boolean;
+  recipient_response?: unknown;
   paid: boolean;
   paid_at: string | null;
   created_at: string;
@@ -280,6 +300,62 @@ export interface UcapanStatsRow {
   total_views: number;
   first_view_at: string | null;
   last_view_at: string | null;
+}
+
+export const MAX_HESITATION_COUNT = 500;
+
+export interface RecipientResponsePayload {
+  type: "apology";
+  decision: "forgiven";
+  hesitationCount: number;
+}
+
+export function validateRecipientResponseInput(
+  raw: unknown
+):
+  | { valid: true; data: RecipientResponsePayload }
+  | { valid: false; reason: string } {
+  if (!isRecord(raw)) {
+    return { valid: false, reason: "INVALID_BODY" };
+  }
+  if (raw.type !== "apology") {
+    return { valid: false, reason: "INVALID_RESPONSE_TYPE" };
+  }
+  if (raw.decision !== "forgiven") {
+    return { valid: false, reason: "INVALID_DECISION" };
+  }
+  if (
+    typeof raw.hesitationCount !== "number" ||
+    !Number.isInteger(raw.hesitationCount) ||
+    raw.hesitationCount < 0 ||
+    raw.hesitationCount > MAX_HESITATION_COUNT
+  ) {
+    return { valid: false, reason: "INVALID_HESITATION_COUNT" };
+  }
+  return {
+    valid: true,
+    data: {
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: raw.hesitationCount,
+    },
+  };
+}
+
+export function parseRecipientResponse(raw: unknown): RecipientResponse | null {
+  const checked = validateRecipientResponseInput(raw);
+  if (!checked.valid || !isRecord(raw)) return null;
+  if (
+    typeof raw.respondedAt !== "number" ||
+    !Number.isFinite(raw.respondedAt) ||
+    raw.respondedAt <= 0
+  ) {
+    return null;
+  }
+  return {
+    ...checked.data,
+    respondedAt: Math.trunc(raw.respondedAt),
+  };
 }
 
 function parseGateData(raw: unknown): GateData | null {
@@ -316,6 +392,8 @@ export function mapUcapanRow(
   const cleanTimeline: TimelineItem[] = [];
   let mood: MoodKey | undefined;
   let videoUrl: string | undefined;
+  let voiceNoteUrl: string | undefined;
+  let unlockAt: string | undefined;
 
   for (const item of rawTimeline) {
     if (isRecord(item) && item.date === META_TIMELINE_TAG) {
@@ -324,6 +402,13 @@ export function mapUcapanRow(
       }
       if (typeof item.videoUrl === "string" && item.videoUrl) {
         videoUrl = item.videoUrl;
+      }
+      if (typeof item.voiceNoteUrl === "string" && item.voiceNoteUrl) {
+        voiceNoteUrl = item.voiceNoteUrl;
+      }
+      if (typeof item.unlockAt === "string" && item.unlockAt) {
+        const normalized = normalizeUnlockAt(item.unlockAt);
+        if (normalized) unlockAt = normalized;
       }
     } else if (isRecord(item)) {
       cleanTimeline.push({
@@ -336,6 +421,7 @@ export function mapUcapanRow(
 
   const parsedDraft = parseDraftAddons(row.draft_addons);
   const liveGateData = parseGateData(row.gate_data);
+  const recipientResponse = parseRecipientResponse(row.recipient_response);
 
   // For unpaid drafts, fall back to draft_addons so Builder & Checkout restore preferences cross-device.
   const effectiveCustomSlug = row.paid
@@ -394,6 +480,12 @@ export function mapUcapanRow(
       ? parsedDraft.addons.includes("love_receipt")
       : Boolean(row.receipt_enabled);
 
+  const effectiveVoiceNote = row.paid
+    ? Boolean(row.voice_note_enabled)
+    : parsedDraft
+      ? parsedDraft.addons.includes("voice_note")
+      : Boolean(row.voice_note_enabled);
+
   return {
     id: row.id,
     templateSlug: row.template_slug,
@@ -404,6 +496,7 @@ export function mapUcapanRow(
     photos: row.photos ?? [],
     musicUrl: row.music_url ?? undefined,
     videoUrl,
+    voiceNoteUrl,
     mood,
     email: row.email ?? undefined,
     timeline: cleanTimeline.length > 0 ? cleanTimeline : undefined,
@@ -416,7 +509,10 @@ export function mapUcapanRow(
     gateType: effectiveGateType,
     gateData: effectiveGateData,
     receiptEnabled: effectiveReceipt,
+    voiceNoteEnabled: effectiveVoiceNote,
     draftAddons: parsedDraft,
+    recipientResponse: recipientResponse ?? undefined,
+    unlockAt: unlockAt ?? undefined,
     views: stats
       ? {
           count: stats.total_views ?? 0,
@@ -437,17 +533,23 @@ export function toUcapanRow(content: Partial<UcapanContent>) {
       item.date !== META_TIMELINE_TAG &&
       Boolean(item.date?.trim() || item.title?.trim() || item.description?.trim())
   );
-  const metaEntry: TimelineMetaEntry[] =
-    content.mood || content.videoUrl?.trim()
-      ? [
-          {
-            date: META_TIMELINE_TAG,
-            title: "",
-            mood: content.mood ?? null,
-            videoUrl: content.videoUrl?.trim() || null,
-          },
-        ]
-      : [];
+  const hasMetaData =
+    content.mood ||
+    content.videoUrl?.trim() ||
+    content.voiceNoteUrl?.trim() ||
+    content.unlockAt?.trim();
+  const metaEntry: TimelineMetaEntry[] = hasMetaData
+    ? [
+        {
+          date: META_TIMELINE_TAG,
+          title: "",
+          mood: content.mood ?? null,
+          videoUrl: content.videoUrl?.trim() || null,
+          voiceNoteUrl: content.voiceNoteUrl?.trim() || null,
+          unlockAt: content.unlockAt?.trim() || null,
+        },
+      ]
+    : [];
   const finalTimeline: RawTimelineEntry[] = [...cleanTimeline, ...metaEntry];
 
   return {
@@ -467,12 +569,15 @@ export function toUcapanRow(content: Partial<UcapanContent>) {
 export function stripPublicUcapan(ucapan: StoredUcapan): StoredUcapan {
   const safeGateData: GateData | null =
     ucapan.gateData?.question ? { question: ucapan.gateData.question } : null;
+  const allowVoiceNote = !ucapan.paid || Boolean(ucapan.voiceNoteEnabled);
   return {
     ...ucapan,
+    voiceNoteUrl: allowVoiceNote ? ucapan.voiceNoteUrl : undefined,
     email: undefined,
     draftAddons: undefined,
     gateData: safeGateData,
     locked: false,
+    // unlockAt dipertahankan agar CountdownGate bisa tampil di sisi penerima
   };
 }
 
@@ -493,6 +598,7 @@ export function stripLockedUcapan(ucapan: StoredUcapan): StoredUcapan {
     photos: [],
     musicUrl: undefined,
     videoUrl: undefined,
+    voiceNoteUrl: undefined,
     mood: ucapan.mood,
     email: undefined,
     timeline: undefined,
@@ -505,6 +611,10 @@ export function stripLockedUcapan(ucapan: StoredUcapan): StoredUcapan {
     gateType: ucapan.gateType,
     gateData: safeGateData,
     receiptEnabled: ucapan.receiptEnabled,
+    voiceNoteEnabled: ucapan.voiceNoteEnabled,
+    recipientResponse: undefined,
+    // unlockAt dipertahankan agar CountdownGate tampil sebelum Intimate Gate
+    unlockAt: ucapan.unlockAt,
     locked: true,
   };
 }

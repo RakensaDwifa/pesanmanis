@@ -22,6 +22,7 @@ import { isRemote } from "@/lib/supabase/config";
 import { toast } from "sonner";
 import { AnalyticsEvents } from "@/lib/analytics";
 import { getTemplate, templateEmoji } from "@/lib/templates";
+import { parseRecipientResponse } from "@/lib/supabase/rows";
 import type { StoredUcapan, ViewRecord } from "@/lib/store";
 import QrCodeCard from "@/components/ui/QrCodeCard";
 
@@ -232,6 +233,32 @@ export default function Dashboard() {
             )
           );
           toast.success(`💌 Balasan baru dari ${newReply.fromName}!`);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "ucapan" },
+        (payload) => {
+          const row = payload.new as {
+            id?: string;
+            recipient_response?: unknown;
+          };
+          const targetId = row?.id;
+          if (!targetId || !ownedIds.has(targetId)) return;
+          const nextResponse = parseRecipientResponse(row.recipient_response);
+          if (!nextResponse) return;
+
+          setUcapans((prev) =>
+            prev.map((u) =>
+              u.id === targetId
+                ? { ...u, recipientResponse: nextResponse }
+                : u
+            )
+          );
+          const target = ucapansRef.current.find((u) => u.id === targetId);
+          toast.success(
+            `💚 ${target?.toName || "Penerima"} sudah merespons ucapanmu!`
+          );
         }
       )
       .subscribe((status) => {
@@ -556,6 +583,24 @@ export default function Dashboard() {
                               {new Date(view.firstSeen).toLocaleString("id-ID")}
                             </p>
                           )}
+
+                          {/* Keputusan kontekstual penerima (template Permintaan Maaf) */}
+                          {u.recipientResponse?.type === "apology" &&
+                            u.recipientResponse.decision === "forgiven" && (
+                              <div className="mt-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-label-md font-semibold text-emerald-800 dark:text-emerald-300">
+                                  Dimaafkan 💚 ·{" "}
+                                  {u.recipientResponse.hesitationCount === 0
+                                    ? "Langsung dimaafkan tanpa ragu!"
+                                    : `Sempat menekan 'Belum dulu' sebanyak ${u.recipientResponse.hesitationCount} kali`}
+                                </span>
+                                <span className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+                                  {new Date(
+                                    u.recipientResponse.respondedAt
+                                  ).toLocaleString("id-ID")}
+                                </span>
+                              </div>
+                            )}
 
                           {/* Reaksi & Balasan dari penerima */}
                           {(reactionEntries.length > 0 || replies.length > 0) && (

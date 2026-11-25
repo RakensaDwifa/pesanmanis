@@ -3,9 +3,11 @@
 -- Jalankan setelah schema_v8.sql di database yang sudah ada (idempotent).
 -- ============================================================
 
--- 1. Ucapan: kolom draft_addons + partial unique index custom_slug (hanya paid = true)
+-- 1. Ucapan: kolom draft_addons, recipient_response, voice_note_enabled + partial unique index custom_slug (hanya paid = true)
 alter table public.ucapan
-  add column if not exists draft_addons jsonb default null;
+  add column if not exists draft_addons jsonb default null,
+  add column if not exists recipient_response jsonb default null,
+  add column if not exists voice_note_enabled boolean not null default false;
 
 alter table public.ucapan
   drop constraint if exists ucapan_custom_slug_key;
@@ -63,6 +65,8 @@ begin
       or new.gate_type is not null
       or new.gate_data is not null
       or new.receipt_enabled is true
+      or new.voice_note_enabled is true
+      or new.recipient_response is not null
     then
       raise exception 'Kolom berbayar dan add-on hanya bisa diaktifkan oleh sistem';
     end if;
@@ -113,6 +117,12 @@ begin
     end if;
     if new.receipt_enabled is distinct from old.receipt_enabled then
       raise exception 'Kolom receipt_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.voice_note_enabled is distinct from old.voice_note_enabled then
+      raise exception 'Kolom voice_note_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.recipient_response is distinct from old.recipient_response then
+      raise exception 'Kolom recipient_response hanya bisa diubah oleh sistem';
     end if;
     if old.paid is true and new.draft_addons is distinct from old.draft_addons then
       raise exception 'Kolom draft_addons tidak boleh diubah setelah pembayaran lunas';

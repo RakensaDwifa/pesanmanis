@@ -143,6 +143,7 @@ export async function activatePaidPayment(
     ucapanAddonUpdate = {
       qr_photo_enabled: paidAddons.includes("custom_qr"),
       receipt_enabled: paidAddons.includes("love_receipt"),
+      voice_note_enabled: paidAddons.includes("voice_note"),
       ...(paidAddons.includes("custom_slug") ? {} : { custom_slug: null }),
       ...(paidAddons.includes("touch_particles") ? {} : { touch_particles: null }),
       ...(paidAddons.includes("intimate_gate")

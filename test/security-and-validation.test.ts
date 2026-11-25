@@ -16,10 +16,13 @@ import {
   verifyGateUnlockToken,
 } from "../lib/gate-token.ts";
 import {
+  MAX_HESITATION_COUNT,
   buildDraftAddonState,
   mapUcapanRow,
+  parseRecipientResponse,
   stripLockedUcapan,
   stripPublicUcapan,
+  validateRecipientResponseInput,
   validateUcapanInput,
   type UcapanRow,
 } from "../lib/supabase/rows.ts";
@@ -299,4 +302,126 @@ test("rows: draft_addons dipulihkan untuk ucapan unpaid tetapi diabaikan untuk p
   assert.equal(mappedPaid.customSlug, null);
   assert.equal(mappedPaid.gateType, null);
   assert.equal(mappedPaid.touchParticles, null);
+});
+
+test("recipient-response: validasi ketat, sanitasi & penyembunyian saat gate terkunci", () => {
+  // Valid payload
+  assert.deepEqual(
+    validateRecipientResponseInput({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 0,
+    }),
+    {
+      valid: true,
+      data: { type: "apology", decision: "forgiven", hesitationCount: 0 },
+    }
+  );
+  assert.equal(
+    validateRecipientResponseInput({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: MAX_HESITATION_COUNT,
+    }).valid,
+    true
+  );
+
+  // Invalid payloads
+  assert.equal(validateRecipientResponseInput(null).valid, false);
+  assert.equal(
+    validateRecipientResponseInput({
+      type: "unknown",
+      decision: "forgiven",
+      hesitationCount: 2,
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateRecipientResponseInput({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: -1,
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateRecipientResponseInput({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 2.5,
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateRecipientResponseInput({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: MAX_HESITATION_COUNT + 1,
+    }).valid,
+    false
+  );
+
+  // Parser DB mengharuskan respondedAt numerik positif valid
+  assert.equal(
+    parseRecipientResponse({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 4,
+    }),
+    null
+  );
+  assert.deepEqual(
+    parseRecipientResponse({
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 4,
+      respondedAt: 1700000000000.9,
+    }),
+    {
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 4,
+      respondedAt: 1700000000000,
+    }
+  );
+
+  // Mapping di UcapanRow + redaksi saat gate masih terkunci
+  const rowWithResponse: UcapanRow = {
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    template_slug: "permintaan-maaf",
+    to_name: "Nadia",
+    from_name: "Raka",
+    title: "Maaf ya",
+    message: "Beneran nyesel.",
+    photos: [],
+    music_url: null,
+    email: "raka@example.com",
+    timeline: null,
+    gate_type: "pin",
+    gate_data: { pin: "1402" },
+    recipient_response: {
+      type: "apology",
+      decision: "forgiven",
+      hesitationCount: 6,
+      respondedAt: 1700000000000,
+    },
+    paid: true,
+    paid_at: "2026-01-01T00:00:00Z",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  const mapped = mapUcapanRow(rowWithResponse);
+  assert.deepEqual(mapped.recipientResponse, {
+    type: "apology",
+    decision: "forgiven",
+    hesitationCount: 6,
+    respondedAt: 1700000000000,
+  });
+
+  const locked = stripLockedUcapan(mapped);
+  assert.equal(locked.recipientResponse, undefined);
+
+  const unlocked = stripPublicUcapan(mapped);
+  assert.deepEqual(unlocked.recipientResponse, mapped.recipientResponse);
 });

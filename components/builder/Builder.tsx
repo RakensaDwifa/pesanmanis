@@ -20,6 +20,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Clock,
   CloudUpload,
   CreditCard,
   Eye,
@@ -91,7 +92,15 @@ import { validateSlugFormat } from "@/lib/slug";
 import ParticleTouch from "@/components/effects/ParticleTouch";
 import GateOverlay from "@/components/effects/GateOverlay";
 import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
+import VoiceNoteRecorder from "@/components/builder/VoiceNoteRecorder";
+import VoiceNotePlayer from "@/components/view/VoiceNotePlayer";
 import { smoothScrollTo } from "@/components/ui/smooth-scroll";
+import {
+  toLocalDatetimeInputValue,
+  fromLocalDatetimeInputValue,
+  detectIndonesianTimezone,
+  isUcapanCountdownLocked,
+} from "@/lib/unlock-schedule";
 
 const SECTIONS = [
   { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
@@ -107,6 +116,7 @@ const ADDON_NOTES: Record<AddonKey, string> = {
   touch_particles: "Efek kelopak/hati saat layar disentuh",
   intimate_gate: "Harus masukkan PIN atau jawab kuis nostalgia sebelum surat terbuka",
   love_receipt: "Struk cinta bisa diunduh ke galeri HP",
+  voice_note: "Rekam suara langsung atau unggah audio pesan pribadi (maks 3 menit)",
 };
 
 const TRIVIA_PROMPTS = [
@@ -216,6 +226,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [previewReplayKey, setPreviewReplayKey] = useState(0);
   const [videoPanelToggle, setVideoPanelToggle] = useState<boolean | null>(null);
   const [timelinePanelToggle, setTimelinePanelToggle] = useState<boolean | null>(null);
+  const [countdownPanelToggle, setCountdownPanelToggle] = useState<boolean | null>(null);
+  const [minUnlockDatetime] = useState(() =>
+    toLocalDatetimeInputValue(new Date(Date.now() + 60_000).toISOString())
+  );
   const toNameInputRef = useRef<HTMLInputElement | null>(null);
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -532,6 +546,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             }
           }
           if (u.receiptEnabled) restored.add("love_receipt");
+          if (u.voiceNoteEnabled) restored.add("voice_note");
           if (restored.size > 0) setSelectedAddons(restored);
           markRestored();
         }
@@ -710,6 +725,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       } else if (!/^\d{4,6}$/.test(pinInput)) {
         return "PIN harus 4–6 angka.";
       }
+    }
+    if (selectedAddons.has("voice_note") && !content.voiceNoteUrl?.trim()) {
+      return "Rekam atau unggah pesan suara terlebih dulu.";
     }
     return null;
   };
@@ -1024,6 +1042,8 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const isVideoPanelOpen = videoPanelToggle ?? hasVideo;
   const isTimelinePanelOpen =
     timelinePanelToggle ?? (content.timeline?.length ?? 0) > 0;
+  const isCountdownPanelOpen =
+    countdownPanelToggle ?? Boolean(content.unlockAt);
   const mediaSummaryParts = [
     photoCount > 0 ? `${photoCount} foto` : null,
     activeMusicInfo ? "1 lagu" : null,
@@ -1754,6 +1774,114 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                 </AnimatePresence>
                               </div>
 
+                              {/* Jadwalkan Waktu Buka (Countdown) */}
+                              <div className="rounded-2xl border border-outline-variant/30 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCountdownPanelToggle(!isCountdownPanelOpen)
+                                  }
+                                  aria-expanded={isCountdownPanelOpen}
+                                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-surface hover:bg-primary-fixed/20 transition-colors cursor-pointer text-left"
+                                >
+                                  <Clock className="h-4 w-4 text-primary shrink-0" />
+                                  <span className="flex-1 text-label-md font-semibold text-on-surface truncate">
+                                    Jadwalkan Waktu Buka (Countdown)
+                                  </span>
+                                  <span
+                                    className={`text-label-sm font-medium px-2 py-0.5 rounded-full ${
+                                      content.unlockAt
+                                        ? "bg-primary/15 text-primary"
+                                        : "bg-outline-variant/20 text-on-surface-variant"
+                                    }`}
+                                  >
+                                    {content.unlockAt ? "Aktif" : "Opsional"}
+                                  </span>
+                                  <ChevronDown
+                                    className={`h-4 w-4 text-on-surface-variant transition-transform duration-200 ${
+                                      isCountdownPanelOpen ? "rotate-180" : ""
+                                    }`}
+                                  />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {isCountdownPanelOpen && (
+                                    <motion.div
+                                      key="countdown-panel"
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.22, ease: "easeInOut" }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="px-4 pb-4 pt-2 space-y-3 border-t border-outline-variant/20">
+                                        <p className="text-body-sm text-on-surface-variant">
+                                          Ucapan hanya bisa dibuka penerima setelah waktu yang kamu tentukan. Hitung mundur tampil otomatis.
+                                        </p>
+                                        <div className="space-y-1.5">
+                                          <label className="text-label-sm font-medium text-on-surface">
+                                            Waktu Buka
+                                          </label>
+                                          <input
+                                            type="datetime-local"
+                                            className={inputClass}
+                                            value={
+                                              content.unlockAt
+                                                ? toLocalDatetimeInputValue(content.unlockAt)
+                                                : ""
+                                            }
+                                            min={minUnlockDatetime}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              set(
+                                                "unlockAt",
+                                                val
+                                                  ? fromLocalDatetimeInputValue(val)
+                                                  : null
+                                              );
+                                            }}
+                                          />
+                                          <p className="text-label-sm text-on-surface-variant">
+                                            Zona waktu perangkatmu:{" "}
+                                            <span className="font-semibold text-primary">
+                                              {detectIndonesianTimezone()}
+                                            </span>
+                                          </p>
+                                        </div>
+                                        {content.unlockAt && (
+                                          <div className="rounded-xl bg-primary/8 border border-primary/20 px-3 py-2.5 flex items-start justify-between gap-3">
+                                            <div>
+                                              <p className="text-label-sm font-semibold text-primary mb-0.5">
+                                                Terbuka pada:
+                                              </p>
+                                              <p className="text-body-sm text-on-surface">
+                                                {new Date(content.unlockAt).toLocaleString(
+                                                  "id-ID",
+                                                  {
+                                                    weekday: "long",
+                                                    day: "numeric",
+                                                    month: "long",
+                                                    year: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                  }
+                                                )}
+                                              </p>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => set("unlockAt", null)}
+                                              className="shrink-0 text-label-sm text-error font-medium hover:underline cursor-pointer"
+                                            >
+                                              Hapus
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => switchSection("tambahan")}
@@ -2056,6 +2184,16 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                               Coba tombol <strong>Struk Cinta</strong> di Live Preview.
                                             </p>
                                           )}
+
+                                          {key === "voice_note" && (
+                                            <VoiceNoteRecorder
+                                              value={content.voiceNoteUrl}
+                                              disabled={false}
+                                              slug={slug}
+                                              editId={editId}
+                                              onChange={(url) => set("voiceNoteUrl", url)}
+                                            />
+                                          )}
                                         </div>
                                       )}
                                     </div>
@@ -2241,6 +2379,11 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <p className="text-label-lg font-semibold text-on-surface-variant flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" /> Live Preview
+                {content.unlockAt && isUcapanCountdownLocked(content.unlockAt) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold">
+                    <Clock className="h-3 w-3" /> Countdown aktif
+                  </span>
+                )}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -2372,6 +2515,15 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
               {selectedAddons.has("love_receipt") && (
                 <LoveReceiptModal
                   toName={content.toName || "Kamu"}
+                  fromName={content.fromName || "Aku"}
+                  variant="embedded"
+                />
+              )}
+
+              {selectedAddons.has("voice_note") && content.voiceNoteUrl && (
+                <VoiceNotePlayer
+                  key={content.voiceNoteUrl}
+                  url={content.voiceNoteUrl}
                   fromName={content.fromName || "Aku"}
                   variant="embedded"
                 />

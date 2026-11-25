@@ -48,6 +48,8 @@ create table if not exists public.ucapan (
   gate_type varchar(20) default null,
   gate_data jsonb default null,
   receipt_enabled boolean not null default false,
+  voice_note_enabled boolean not null default false,
+  recipient_response jsonb default null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -104,6 +106,8 @@ begin
       or new.gate_type is not null
       or new.gate_data is not null
       or new.receipt_enabled is true
+      or new.voice_note_enabled is true
+      or new.recipient_response is not null
     then
       raise exception 'Kolom berbayar dan add-on hanya bisa diaktifkan oleh sistem';
     end if;
@@ -154,6 +158,12 @@ begin
     end if;
     if new.receipt_enabled is distinct from old.receipt_enabled then
       raise exception 'Kolom receipt_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.voice_note_enabled is distinct from old.voice_note_enabled then
+      raise exception 'Kolom voice_note_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.recipient_response is distinct from old.recipient_response then
+      raise exception 'Kolom recipient_response hanya bisa diubah oleh sistem';
     end if;
     if old.paid is true and new.draft_addons is distinct from old.draft_addons then
       raise exception 'Kolom draft_addons tidak boleh diubah setelah pembayaran lunas';

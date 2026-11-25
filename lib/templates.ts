@@ -223,9 +223,11 @@ export function fillContentDefaults(
     photos: content.photos ?? [],
     musicUrl: content.musicUrl,
     videoUrl: content.videoUrl,
+    voiceNoteUrl: content.voiceNoteUrl,
     mood: content.mood,
     email: content.email,
     timeline: content.timeline,
     createdAt: content.createdAt,
+    unlockAt: content.unlockAt,
   };
 }

@@ -78,11 +78,23 @@ export interface UcapanContent {
   photos: string[];
   musicUrl?: string;
   videoUrl?: string;
+  voiceNoteUrl?: string;
   mood?: MoodKey;
   email?: string;
   timeline?: TimelineItem[];
   createdAt?: number;
+  /** ISO 8601 — ucapan hanya bisa dibuka setelah waktu ini. Disimpan di __pm_meta__ JSONB. */
+  unlockAt?: string | null;
 }
+
+export interface ApologyRecipientResponse {
+  type: "apology";
+  decision: "forgiven";
+  hesitationCount: number;
+  respondedAt: number;
+}
+
+export type RecipientResponse = ApologyRecipientResponse;
 
 export interface StoredUcapan extends UcapanContent {
   id: string;
@@ -96,15 +108,19 @@ export interface StoredUcapan extends UcapanContent {
   gateType?: string | null;
   gateData?: GateData | null;
   receiptEnabled?: boolean;
+  voiceNoteEnabled?: boolean;
   draftAddons?: DraftAddonConfig | null;
+  recipientResponse?: RecipientResponse | null;
   /** True when content is redacted server-side pending Intimate Gate verification. */
   locked?: boolean;
+  // unlockAt diinherit dari UcapanContent — tidak perlu reduplicate, sudah ada di sana.
 }
 
 export interface TemplateRenderProps {
   content: UcapanContent;
   preview?: boolean;
   interactive?: boolean;
+  ucapanId?: string;
   onOpenChange?: (open: boolean) => void;
   /** Hide built-in CassettePlayer & SfxToggle when a parent container manages audio UI (e.g. Hero preview card). */
   hideAudioControls?: boolean;

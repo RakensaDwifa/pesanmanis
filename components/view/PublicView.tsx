@@ -1,14 +1,14 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
-} from "react";
-import { getUcapan, trackView } from "@/lib/store";
+} from "react";import { getUcapan, trackView } from "@/lib/store";
 import type { StoredUcapan } from "@/lib/types";
 import TemplateRenderer from "@/components/templates/registry";
 import Watermark from "@/components/Watermark";
@@ -23,6 +23,9 @@ import FlowerTransition, {
 } from "@/components/effects/FlowerTransition";
 import { getTemplate } from "@/lib/templates";
 import InAppBrowserBanner from "@/components/view/InAppBrowserBanner";
+import CountdownGate from "@/components/view/CountdownGate";
+import VoiceNotePlayer from "@/components/view/VoiceNotePlayer";
+import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 
 const storyKey = (id: string) => `pm:story:${id}`;
 const legacyEntryKey = (id: string) => `pm:entry:${id}`;
@@ -58,6 +61,13 @@ export default function PublicView({
   // When Intimate Gate unlocks via server verification, the full redacted payload arrives here.
   const [unlockedUcapan, setUnlockedUcapan] = useState<StoredUcapan | null>(null);
   const ucapan = unlockedUcapan ?? remote ?? demoUcapan;
+
+  // Countdown / Jadwal Buka: tampilkan CountdownGate sebelum StoryFlow & Intimate Gate.
+  const [countdownUnlocked, setCountdownUnlocked] = useState<boolean>(() => {
+    const unlockAt = remote?.unlockAt ?? null;
+    if (!unlockAt) return true;
+    return !isUcapanCountdownLocked(unlockAt);
+  });
 
   // Template naratif punya alurnya sendiri; StoryFlow (ketuk hati) dilewati.
   const skipStory = Boolean(getTemplate(ucapan?.templateSlug ?? "")?.hasNarrative);
@@ -107,7 +117,7 @@ export default function PublicView({
   }, [id, skipStory]);
 
   useEffect(() => {
-    if (!ucapan || hasActiveGate || viewTrackedRef.current) return;
+    if (!ucapan || !countdownUnlocked || hasActiveGate || viewTrackedRef.current) return;
     viewTrackedRef.current = true;
     trackView(id);
     fetch("/api/views", {
@@ -115,7 +125,17 @@ export default function PublicView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ucapanId: id }),
     }).catch(() => undefined);
-  }, [id, ucapan, hasActiveGate]);
+  }, [id, ucapan, countdownUnlocked, hasActiveGate]);
+
+  // Transisi bunga: overlay flower menutup layar, konten diganti saat tertutup.
+  // Didefinisikan sebelum early return agar tidak melanggar rules-of-hooks.
+  const revealTemplate = useCallback(() => {
+    if (flowerRef.current) {
+      void flowerRef.current.play(() => setManualShowTemplate(true));
+    } else {
+      setManualShowTemplate(true);
+    }
+  }, []);
 
   if (!ucapan) {
     if (!isClient && !remote) {
@@ -137,14 +157,16 @@ export default function PublicView({
     );
   }
 
-  // Transisi bunga: overlay flower menutup layar, konten diganti saat tertutup.
-  const revealTemplate = () => {
-    if (flowerRef.current) {
-      void flowerRef.current.play(() => setManualShowTemplate(true));
-    } else {
-      setManualShowTemplate(true);
-    }
-  };
+  // CountdownGate: tampil SEBELUM StoryFlow & Intimate Gate jika jadwal buka belum tercapai.
+  if (!countdownUnlocked && ucapan?.unlockAt) {
+    return (
+      <CountdownGate
+        toName={ucapan.toName}
+        unlockAt={ucapan.unlockAt}
+        onUnlocked={() => setCountdownUnlocked(true)}
+      />
+    );
+  }
 
   if (!showTemplate) {
     return (
@@ -200,7 +222,7 @@ export default function PublicView({
               {ucapan.paid && ucapan.touchParticles && (
                 <ParticleTouch type={ucapan.touchParticles} />
               )}
-              <TemplateRenderer content={ucapan} />
+              <TemplateRenderer content={ucapan} ucapanId={id} />
               {!ucapan.paid && <Watermark />}
               {ucapan.paid && ucapan.receiptEnabled && (
                 <LoveReceiptModal
@@ -215,6 +237,14 @@ export default function PublicView({
                 />
               )}
               <StoryCardButton ucapan={ucapan} />
+              {ucapan.voiceNoteUrl && (!ucapan.paid || ucapan.voiceNoteEnabled) && (
+                <VoiceNotePlayer
+                  key={ucapan.voiceNoteUrl}
+                  url={ucapan.voiceNoteUrl}
+                  fromName={ucapan.fromName}
+                  variant="floating"
+                />
+              )}
               <ReactionBar ucapanId={id} />
             </>
           )}

@@ -245,24 +245,26 @@ export async function DELETE(
   const candidatePhotoPaths = (ucapan.photos ?? [])
     .map((url) => extractOwnedFotoStoragePath(url, configuredUrl, user.id))
     .filter((p): p is string => Boolean(p));
-  const candidateAudioPath = extractOwnedAudioStoragePath(
-    ucapan.musicUrl,
-    configuredUrl,
-    user.id
-  );
+  const candidateAudioPaths = [ucapan.musicUrl, ucapan.voiceNoteUrl]
+    .map((url) => extractOwnedAudioStoragePath(url, configuredUrl, user.id))
+    .filter((p): p is string => Boolean(p));
 
-  if (candidatePhotoPaths.length > 0 || candidateAudioPath) {
+  if (candidatePhotoPaths.length > 0 || candidateAudioPaths.length > 0) {
     try {
       const { data: siblingRows } = await supabase
         .from("ucapan")
-        .select("photos, music_url")
+        .select("photos, music_url, timeline")
         .eq("owner_id", user.id)
         .neq("id", id);
 
       const usedPhotosBySiblings = new Set<string>();
       const usedAudioBySiblings = new Set<string>();
       for (const row of siblingRows ?? []) {
-        const typedRow = row as { photos?: string[] | null; music_url?: string | null };
+        const typedRow = row as {
+          photos?: string[] | null;
+          music_url?: string | null;
+          timeline?: unknown[] | null;
+        };
         for (const p of typedRow.photos ?? []) {
           const sp = extractOwnedFotoStoragePath(p, configuredUrl, user.id);
           if (sp) usedPhotosBySiblings.add(sp);
@@ -273,6 +275,16 @@ export async function DELETE(
           user.id
         );
         if (ap) usedAudioBySiblings.add(ap);
+        for (const entry of typedRow.timeline ?? []) {
+          if (isRecord(entry) && typeof entry.voiceNoteUrl === "string") {
+            const vp = extractOwnedAudioStoragePath(
+              entry.voiceNoteUrl,
+              configuredUrl,
+              user.id
+            );
+            if (vp) usedAudioBySiblings.add(vp);
+          }
+        }
       }
 
       const safePhotosToRemove = candidatePhotoPaths.filter(
@@ -282,8 +294,11 @@ export async function DELETE(
         // Delete via user-scoped client so Storage RLS enforces ownership as defense-in-depth.
         await supabase.storage.from("foto").remove(safePhotosToRemove);
       }
-      if (candidateAudioPath && !usedAudioBySiblings.has(candidateAudioPath)) {
-        await supabase.storage.from("musik").remove([candidateAudioPath]);
+      const safeAudioToRemove = candidateAudioPaths.filter(
+        (p) => !usedAudioBySiblings.has(p)
+      );
+      if (safeAudioToRemove.length > 0) {
+        await supabase.storage.from("musik").remove(safeAudioToRemove);
       }
     } catch {
       // non-blocking: still delete the ucapan row

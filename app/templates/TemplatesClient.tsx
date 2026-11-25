@@ -9,7 +9,8 @@ import {
 } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { RotateCcw, Search, Sparkles, X } from "lucide-react";
+import { RotateCcw, Search, Sparkles, Wand2, X } from "lucide-react";
+import Link from "next/link";
 import { CATEGORY_ORDER } from "@/lib/templates";
 import { getTemplateTier } from "@/lib/pricing";
 import {
@@ -493,6 +494,30 @@ export default function TemplatesClient({
           </AnimatePresence>
         </span>
         <span>dari {templates.length} template</span>
+      </div>
+
+      {/* Subtle callout untuk layanan Kado Custom */}
+      <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-low px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-primary/12 text-primary flex items-center justify-center shrink-0">
+            <Wand2 className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-label-lg font-semibold text-on-surface">
+              Punya ide khusus yang belum ada di katalog?
+            </p>
+            <p className="text-body-md text-on-surface-variant">
+              Pesan layanan Kado Custom buatan penuh tim kami mulai Rp 50rb di link cantik{" "}
+              <span className="font-semibold text-on-surface">/u/[nama]</span>.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/custom"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 text-label-md font-semibold shrink-0 transition-colors"
+        >
+          Lihat Kado Custom →
+        </Link>
       </div>
     </div>
   );

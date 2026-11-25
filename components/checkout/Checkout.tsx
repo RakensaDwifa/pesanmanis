@@ -89,6 +89,7 @@ function persistDemoActivation(
         ? { pin: saved.pin }
         : null,
     receiptEnabled: selected.includes("love_receipt"),
+    voiceNoteEnabled: selected.includes("voice_note"),
   });
 }
 
@@ -145,6 +146,7 @@ export default function Checkout({ id }: { id: string }) {
           if (u?.touchParticles) addons.push("touch_particles");
           if (u?.gateType) addons.push("intimate_gate");
           if (u?.receiptEnabled) addons.push("love_receipt");
+          if (u?.voiceNoteEnabled) addons.push("voice_note");
           setSaved(
             addons.length > 0
               ? {
@@ -349,6 +351,13 @@ export default function Checkout({ id }: { id: string }) {
                         {key === "touch_particles" && (
                           <p className="text-label-md text-on-surface-variant">
                             {PARTICLE_LABELS[saved.particleStyle ?? "hearts"]}
+                          </p>
+                        )}
+                        {key === "voice_note" && (
+                          <p className="text-label-md text-on-surface-variant">
+                            {ucapan.voiceNoteUrl
+                              ? "Pesan suara siap diputar"
+                              : "Belum ada rekaman"}
                           </p>
                         )}
                       </div>
