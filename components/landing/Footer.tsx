@@ -11,6 +11,15 @@ const LINKS = [
   { label: "Kebijakan Privasi", href: "/kebijakan-privasi" },
 ];
 
+const TOPIC_LINKS = [
+  { label: "Ucapan Ulang Tahun", href: "/ucapan/ulang-tahun-pacar" },
+  { label: "Surat Permintaan Maaf", href: "/ucapan/permintaan-maaf-romantis" },
+  { label: "Anniversary Digital", href: "/ucapan/anniversary-interaktif" },
+  { label: "Kado LDR", href: "/ucapan/kado-digital-ldr" },
+  { label: "Confess Gebetan", href: "/ucapan/confess-gebetan" },
+  { label: "Ucapan Wisuda", href: "/ucapan/ucapan-wisuda-sahabat" },
+];
+
 export default function Footer() {
   return (
     <footer data-site-chrome className="w-full pt-14 pb-24 md:py-20 bg-primary">
@@ -39,6 +48,18 @@ export default function Footer() {
               className="text-body-md text-white/85 hover:text-white transition-colors"
             >
               {link.label}
+            </Link>
+          ))}
+        </MotionStaggerItem>
+
+        <MotionStaggerItem y={10} className="flex flex-wrap justify-center gap-x-5 gap-y-2 max-w-2xl">
+          {TOPIC_LINKS.map((topic) => (
+            <Link
+              key={topic.href}
+              href={topic.href}
+              className="text-label-md text-white/75 hover:text-white underline-offset-4 hover:underline transition-colors"
+            >
+              {topic.label}
             </Link>
           ))}
         </MotionStaggerItem>
