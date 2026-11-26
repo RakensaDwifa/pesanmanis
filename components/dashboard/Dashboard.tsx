@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Check,
@@ -109,26 +109,29 @@ export default function Dashboard() {
   );
   const [now] = useState(() => Date.now());
   const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
-  const activeTab: DashboardTab =
-    searchParams.get("tab") === "referral" ? "referral" : "ucapan";
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
+    searchParams.get("tab") === "referral" ? "referral" : "ucapan"
+  );
   const reduced = useReducedMotion();
   const lastViewToastRef = useRef<Map<string, number>>(new Map());
   const ucapansRef = useRef<RemoteUcapan[]>(ucapans);
 
   const handleTabChange = useCallback(
     (tab: DashboardTab) => {
-      const params = new URLSearchParams(searchParams.toString());
+      setActiveTab(tab);
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
       if (tab === "referral") {
         params.set("tab", "referral");
       } else {
         params.delete("tab");
       }
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+      window.history.replaceState(null, "", nextUrl);
     },
-    [pathname, router, searchParams]
+    [pathname]
   );
 
   useEffect(() => {
@@ -500,14 +503,13 @@ export default function Dashboard() {
             />
           </div>
 
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence initial={false}>
             {activeTab === "referral" ? (
               <motion.div
                 key="dashboard-referral"
-                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                transition={{ duration: 0.28, ease: EASE_WARM }}
+                transition={{ duration: 0.18, ease: EASE_WARM }}
               >
                 <ReferralDashboard embedded demo={loaded && demo} />
               </motion.div>
