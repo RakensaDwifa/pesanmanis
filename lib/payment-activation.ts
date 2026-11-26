@@ -181,7 +181,20 @@ export async function activatePaidPayment(
       ucapanId: maskId(ucapanId),
     });
     ucapanUpdateWithClear.custom_slug = null;
-    await admin.from("ucapan").update(ucapanUpdateWithClear).eq("id", ucapanId);
+    ({ error: ucapanUpdateErr } = await admin
+      .from("ucapan")
+      .update(ucapanUpdateWithClear)
+      .eq("id", ucapanId));
+  }
+
+  if (ucapanUpdateErr) {
+    console.error("[payment-activation] gagal update ucapan:", {
+      ref: maskId(merchantRef),
+      ucapanId: maskId(ucapanId),
+      code: ucapanUpdateErr.code,
+      message: ucapanUpdateErr.message,
+      details: ucapanUpdateErr.details,
+    });
   }
 
   // Mark abandoned-cart session recovered
