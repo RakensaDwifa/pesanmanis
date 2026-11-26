@@ -84,6 +84,8 @@ import { AnalyticsEvents } from "@/lib/analytics";
 import { usePricing } from "@/lib/use-pricing";
 import {
   ADDON_PRICING,
+  EXTRA_PHOTO_LIMIT,
+  FREE_PHOTO_LIMIT,
   calculateCheckoutTotal,
   formatPrice,
   type AddonKey,
@@ -128,6 +130,7 @@ const ADDON_NOTES: Record<AddonKey, string> = {
   intimate_gate: "Harus masukkan PIN atau jawab kuis nostalgia sebelum surat terbuka",
   love_receipt: "Struk cinta bisa diunduh ke galeri HP",
   voice_note: "Rekam suara langsung atau unggah audio pesan pribadi (maks 3 menit)",
+  extra_photos: "Tampilkan hingga 10 foto kenangan (bawaan 5 foto)",
 };
 
 const TRIVIA_PROMPTS = [
@@ -568,6 +571,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           }
           if (u.receiptEnabled) restored.add("love_receipt");
           if (u.voiceNoteEnabled) restored.add("voice_note");
+          if (u.extraPhotosEnabled) restored.add("extra_photos");
           if (restored.size > 0) setSelectedAddons(restored);
           markRestored();
         }
@@ -596,15 +600,19 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
 
   const uploadPhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const maxAllowed =
+      isPaid && !selectedAddons.has("extra_photos")
+        ? FREE_PHOTO_LIMIT
+        : EXTRA_PHOTO_LIMIT;
     const currentCount = (content.photos ?? []).filter(Boolean).length;
-    const remainingSlots = Math.max(0, 10 - currentCount);
+    const remainingSlots = Math.max(0, maxAllowed - currentCount);
     if (remainingSlots === 0) {
-      toast.error("Maksimal 10 foto per ucapan.");
+      toast.error(`Maksimal ${maxAllowed} foto per ucapan.`);
       return;
     }
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
     if (files.length > remainingSlots) {
-      toast.info(`Hanya ${remainingSlots} foto pertama yang diunggah (batas 10 foto).`);
+      toast.info(`Hanya ${remainingSlots} foto pertama yang diunggah (batas ${maxAllowed} foto).`);
     }
     setUploading(true);
     try {
@@ -642,10 +650,24 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
       }
 
       if (uploadedUrls.length > 0) {
+        const nextTotal = currentCount + uploadedUrls.length;
         setContent((c) => ({
           ...c,
-          photos: [...(c.photos ?? []).filter(Boolean), ...uploadedUrls].slice(0, 10),
+          photos: [...(c.photos ?? []).filter(Boolean), ...uploadedUrls].slice(
+            0,
+            maxAllowed
+          ),
         }));
+        if (!isPaid && nextTotal > FREE_PHOTO_LIMIT && !selectedAddons.has("extra_photos")) {
+          setSelectedAddons((prev) => {
+            const next = new Set(prev);
+            next.add("extra_photos");
+            return next;
+          });
+          toast.info(
+            `Foto ke-${FREE_PHOTO_LIMIT + 1}–${EXTRA_PHOTO_LIMIT} otomatis mengaktifkan add-on Ekstra Slot Foto (+${formatPrice(ADDON_PRICING.extra_photos.amount)}).`
+          );
+        }
       }
       toast.success("Foto berhasil diunggah");
     } catch {
@@ -1500,14 +1522,36 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                   <span
                                     className={cn(
                                       "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-                                      photoCount > 0
-                                        ? "bg-primary-fixed/40 text-primary"
-                                        : "bg-surface text-on-surface-variant border border-outline-variant/40"
+                                      photoCount > FREE_PHOTO_LIMIT
+                                        ? selectedAddons.has("extra_photos")
+                                          ? "bg-primary-fixed/40 text-primary"
+                                          : "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                                        : photoCount > 0
+                                          ? "bg-primary-fixed/40 text-primary"
+                                          : "bg-surface text-on-surface-variant border border-outline-variant/40"
                                     )}
                                   >
-                                    {photoCount}/10 foto
+                                    {photoCount > FREE_PHOTO_LIMIT
+                                      ? selectedAddons.has("extra_photos")
+                                        ? `${photoCount}/${EXTRA_PHOTO_LIMIT} · Ekstra Foto (+${formatPrice(ADDON_PRICING.extra_photos.amount)})`
+                                        : `${photoCount}/${EXTRA_PHOTO_LIMIT} · Hanya ${FREE_PHOTO_LIMIT} foto aktif`
+                                      : `${photoCount}/${FREE_PHOTO_LIMIT} gratis`}
                                   </span>
                                 </div>
+                                {!isPaid && photoCount > FREE_PHOTO_LIMIT && !selectedAddons.has("extra_photos") && (
+                                  <div className="mb-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-label-md text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2">
+                                    <span>
+                                      Batas gratis {FREE_PHOTO_LIMIT} foto. Aktifkan Ekstra Slot Foto agar semua {photoCount} foto tampil.
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleAddon("extra_photos")}
+                                      className="shrink-0 font-semibold text-primary hover:underline cursor-pointer"
+                                    >
+                                      Aktifkan
+                                    </button>
+                                  </div>
+                                )}
                                 <label className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-outline-variant bg-surface/70 px-4 py-6 cursor-pointer hover:border-primary/50 hover:bg-primary-fixed/10 transition-colors">
                                   <ImagePlus className="h-7 w-7 text-primary" />
                                   <span className="text-body-md font-semibold text-on-surface text-center">
@@ -2215,6 +2259,12 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                               editId={editId}
                                               onChange={(url) => set("voiceNoteUrl", url)}
                                             />
+                                          )}
+
+                                          {key === "extra_photos" && (
+                                            <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                              Saat ini terpasang <strong>{photoCount} foto</strong>. Tanpa add-on ini, hanya {FREE_PHOTO_LIMIT} foto pertama yang ditampilkan di halaman penerima.
+                                            </p>
                                           )}
                                         </div>
                                       )}
