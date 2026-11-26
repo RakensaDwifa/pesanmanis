@@ -104,8 +104,30 @@ export default function HomePage() {
       "Ada hal-hal yang lebih mudah ditulis daripada diucapkan. Terima kasih sudah jadi rumah yang paling nyaman.",
   });
 
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: BRAND.name,
+    applicationCategory: "LifestyleApplication",
+    operatingSystem: "Web",
+    url: BRAND.baseUrl,
+    description: BRAND.description,
+    offers: {
+      "@type": "Offer",
+      price: String(BRAND.price),
+      priceCurrency: "IDR",
+      availability: "https://schema.org/InStock",
+      url: `${BRAND.baseUrl}/templates`,
+      description: `Ucapan digital interaktif sekali bayar aktif selamanya mulai ${BRAND.priceLabel}.`,
+    },
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
       {/* HERO — split 2 kolom di desktop + live preview template asli */}
       <section className="w-full relative bg-surface overflow-hidden">
         <div
