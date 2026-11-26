@@ -36,7 +36,9 @@ export default function Header({
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
-  const isBuilderRoute = pathname?.startsWith("/buat/") ?? false;
+  const hideHeaderCreateCta =
+    (pathname?.startsWith("/buat/") || pathname?.startsWith("/dashboard")) ??
+    false;
 
   useEffect(() => {
     const onScroll = () => {
@@ -201,7 +203,7 @@ export default function Header({
             </Link>
           )}
           <ThemeToggle />
-          {!isBuilderRoute && (
+          {!hideHeaderCreateCta && (
             <motion.div
               whileHover={{ y: -1.5, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
@@ -222,7 +224,7 @@ export default function Header({
         </div>
 
         <div className="flex lg:hidden items-center gap-1.5">
-          {!isBuilderRoute && (
+          {!hideHeaderCreateCta && (
             <motion.div whileTap={{ scale: 0.95 }} transition={SPRING_TACTILE}>
               <Link
                 href="/templates"
@@ -314,7 +316,7 @@ export default function Header({
                 </div>
               )}
 
-              {!isBuilderRoute && (
+              {!hideHeaderCreateCta && (
                 <Link
                   href="/templates"
                   onClick={() => setOpen(false)}

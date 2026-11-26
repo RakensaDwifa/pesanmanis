@@ -1,21 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  Check,
+  CheckCircle2,
+  Clock,
   Copy,
   CopyPlus,
   ExternalLink,
   Eye,
+  Link2,
   Loader2,
+  Mail,
   Pencil,
+  QrCode,
   RefreshCw,
   Share2,
   Trash2,
   Wallet,
 } from "lucide-react";
-import { deleteUcapan, getViews, listUcapan } from "@/lib/store";
+import { deleteUcapan, getViews, listUcapan, savePaidUcapan } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { isRemote } from "@/lib/supabase/config";
 import { toast } from "sonner";
@@ -24,12 +38,18 @@ import { getTemplate, templateEmoji } from "@/lib/templates";
 import { parseRecipientResponse } from "@/lib/supabase/rows";
 import type { StoredUcapan, ViewRecord } from "@/lib/store";
 import QrCodeCard from "@/components/ui/QrCodeCard";
-import { EASE_WARM } from "@/components/landing/MotionPrimitives";
-import { DashboardMobileHeader, DashboardSidebar } from "./DashboardShellChrome";
+import { EASE_WARM, SPRING_TACTILE } from "@/components/landing/MotionPrimitives";
+import {
+  DashboardMobileHeader,
+  DashboardSidebar,
+  type DashboardTab,
+} from "./DashboardShellChrome";
 import { DashboardContentSkeleton } from "./DashboardSkeleton";
 import DeleteConfirmModal from "./DeleteConfirmModal";
+import ReferralDashboard from "./ReferralDashboard";
 
 const EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const EMPTY_SUBSCRIBE = () => () => {};
 
 interface RemoteUcapan extends StoredUcapan {
   reactions?: Record<string, number>;
@@ -45,6 +65,29 @@ function publicUrlFor(u: RemoteUcapan): string {
   return `${origin}/t/${slug}/${u.id}`;
 }
 
+function publicPathLabel(u: RemoteUcapan): string {
+  if (u.paid && u.customSlug) {
+    return `/u/${u.customSlug}`;
+  }
+  const slug = u.templateSlug || u.id.slice(0, 8);
+  return `/t/${slug}/${u.id.slice(0, 8)}…`;
+}
+
+function editWindowInfo(u: RemoteUcapan, now: number): {
+  open: boolean;
+  label: string;
+} {
+  if (!u.paid) {
+    return { open: true, label: "Draft bebas diedit" };
+  }
+  const remainingMs = EDIT_WINDOW_MS - (now - (u.paidAt ?? u.createdAt));
+  if (remainingMs <= 0) {
+    return { open: false, label: "Masa edit habis" };
+  }
+  const daysLeft = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  return { open: true, label: `Sisa edit ${daysLeft} hari` };
+}
+
 export default function Dashboard() {
   const [ucapans, setUcapans] = useState<RemoteUcapan[]>([]);
   const [demo, setDemo] = useState(false);
@@ -57,10 +100,36 @@ export default function Dashboard() {
   const [deleteTarget, setDeleteTarget] = useState<RemoteUcapan | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [realtimeLive, setRealtimeLive] = useState(false);
+  const canNativeShare = useSyncExternalStore(
+    EMPTY_SUBSCRIBE,
+    () =>
+      typeof navigator !== "undefined" &&
+      typeof (navigator as Navigator & { share?: unknown }).share === "function",
+    () => false
+  );
   const [now] = useState(() => Date.now());
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const activeTab: DashboardTab =
+    searchParams.get("tab") === "referral" ? "referral" : "ucapan";
   const reduced = useReducedMotion();
   const lastViewToastRef = useRef<Map<string, number>>(new Map());
   const ucapansRef = useRef<RemoteUcapan[]>(ucapans);
+
+  const handleTabChange = useCallback(
+    (tab: DashboardTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === "referral") {
+        params.set("tab", "referral");
+      } else {
+        params.delete("tab");
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   useEffect(() => {
     ucapansRef.current = ucapans;
@@ -190,7 +259,7 @@ export default function Dashboard() {
           if (Date.now() - lastToast > 15_000) {
             lastViewToastRef.current.set(targetId, Date.now());
             const target = ucapansRef.current.find((u) => u.id === targetId);
-            toast.info(`👀 ${target?.toName || "Seseorang"} baru saja membuka ucapanmu!`);
+            toast.info(`${target?.toName || "Seseorang"} baru saja membuka ucapanmu!`);
           }
         }
       )
@@ -238,7 +307,7 @@ export default function Dashboard() {
                 : u
             )
           );
-          toast.success(`💌 Balasan baru dari ${newReply.fromName}!`);
+          toast.success(`Balasan baru dari ${newReply.fromName}!`);
         }
       )
       .on(
@@ -263,7 +332,7 @@ export default function Dashboard() {
           );
           const target = ucapansRef.current.find((u) => u.id === targetId);
           toast.success(
-            `💚 ${target?.toName || "Penerima"} sudah merespons ucapanmu!`
+            `${target?.toName || "Penerima"} sudah merespons ucapanmu!`
           );
         }
       )
@@ -293,7 +362,7 @@ export default function Dashboard() {
         });
         if (openQr === id) setOpenQr(null);
         setDeleteTarget(null);
-        toast.success("Ucapan dihapus");
+        toast.success("Ucapan dihapus", { id: "dashboard-delete" });
       } finally {
         setDeletingId(null);
       }
@@ -306,15 +375,19 @@ export default function Dashboard() {
       });
       const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
       if (!res.ok || !json.ok) {
-        toast.error("Gagal menghapus ucapan. Coba lagi ya.");
+        toast.error("Gagal menghapus ucapan. Coba lagi ya.", {
+          id: "dashboard-delete",
+        });
         return;
       }
       setUcapans((list) => list.filter((u) => u.id !== id));
       if (openQr === id) setOpenQr(null);
       setDeleteTarget(null);
-      toast.success("Ucapan dihapus");
+      toast.success("Ucapan dihapus", { id: "dashboard-delete" });
     } catch {
-      toast.error("Gagal terhubung ke server saat menghapus ucapan.");
+      toast.error("Gagal terhubung ke server saat menghapus ucapan.", {
+        id: "dashboard-delete",
+      });
     } finally {
       setDeletingId(null);
     }
@@ -322,7 +395,23 @@ export default function Dashboard() {
 
   const duplicate = async (id: string) => {
     if (demo) {
-      toast.info("Duplikat tersedia saat terhubung ke Supabase");
+      const source = ucapans.find((u) => u.id === id);
+      if (!source) return;
+      const cloned: RemoteUcapan = {
+        ...source,
+        id: crypto.randomUUID(),
+        title: source.title ? `${source.title} (Salinan)` : "Untuk Kamu (Salinan)",
+        paid: false,
+        paidAt: undefined,
+        customSlug: undefined,
+        createdAt: Date.now(),
+        recipientResponse: undefined,
+        reactions: undefined,
+        replies: undefined,
+      };
+      savePaidUcapan(cloned);
+      setUcapans((prev) => [cloned, ...prev]);
+      toast.success("Draft duplikat berhasil dibuat", { id: "dashboard-duplicate" });
       return;
     }
     setDuplicatingId(id);
@@ -353,10 +442,13 @@ export default function Dashboard() {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(u.id);
+      toast.success("Link ucapan disalin!", { id: "dashboard-copy-link" });
       setTimeout(() => setCopiedId(null), 2000);
       AnalyticsEvents.shareClicked(u.templateSlug, "clipboard");
     } catch {
-      // abaikan
+      toast.error("Gagal menyalin link. Coba salin manual ya.", {
+        id: "dashboard-copy-link",
+      });
     }
   };
 
@@ -388,12 +480,14 @@ export default function Dashboard() {
   const activeCount = ucapans.filter((u) => u.paid).length;
 
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
+    <div className="min-h-[72vh] bg-surface pt-24 pb-16">
       <div className="max-w-[1200px] mx-auto px-5 md:px-10">
         {/* Header ringkas khusus mobile (< lg) agar navigasi langsung interaktif */}
         <DashboardMobileHeader
           demo={loaded && demo}
           realtimeLive={loaded && realtimeLive}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
         />
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-8 items-start">
@@ -401,11 +495,23 @@ export default function Dashboard() {
             <DashboardSidebar
               demo={loaded && demo}
               realtimeLive={loaded && realtimeLive}
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
             />
           </div>
 
           <AnimatePresence mode="wait" initial={false}>
-            {!loaded ? (
+            {activeTab === "referral" ? (
+              <motion.div
+                key="dashboard-referral"
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                transition={{ duration: 0.28, ease: EASE_WARM }}
+              >
+                <ReferralDashboard embedded demo={loaded && demo} />
+              </motion.div>
+            ) : !loaded ? (
               <motion.div
                 key="dashboard-skeleton"
                 initial={reduced ? { opacity: 0 } : { opacity: 0.92 }}
@@ -480,8 +586,8 @@ export default function Dashboard() {
                     {ucapans.map((u, idx) => {
                       const view = viewOf(u);
                       // Batas edit 7 hari hanya berlaku setelah pembayaran lunas; draft unpaid selalu bisa diedit.
-                      const editOpen =
-                        !u.paid || now - (u.paidAt ?? u.createdAt) < EDIT_WINDOW_MS;
+                      const editStatus = editWindowInfo(u, now);
+                      const editOpen = editStatus.open;
                       const qr = openQr === u.id;
                       const url = publicUrlFor(u);
                       const meta = getTemplate(u.templateSlug);
@@ -502,14 +608,14 @@ export default function Dashboard() {
                           <div className="flex flex-col sm:flex-row">
                             {/* Thumbnail template */}
                             <div
-                              className={`sm:w-32 shrink-0 bg-gradient-to-br ${meta?.gradient ?? "from-primary-fixed to-surface-container-high"} flex items-center justify-center py-5 sm:py-0`}
+                              className={`sm:w-32 shrink-0 bg-gradient-to-br ${meta?.gradient ?? "from-primary-fixed to-surface-container-high"} dark:brightness-90 flex items-center justify-center py-5 sm:py-0`}
                             >
                               <span className="text-5xl">{templateEmoji(u.templateSlug)}</span>
                             </div>
 
                             <div className="flex-1 p-5 md:p-6 min-w-0">
-                              <div className="flex items-start justify-between gap-3 flex-wrap">
-                                <div className="min-w-0">
+                              <div className="flex items-start justify-between gap-2.5">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h2 className="font-heading text-title-md text-on-surface truncate">
                                       {u.title || "Untuk Kamu"}
@@ -524,22 +630,51 @@ export default function Dashboard() {
                                       {u.paid ? "Aktif" : "Menunggu bayar"}
                                     </span>
                                   </div>
-                                  <p className="text-body-md text-on-surface-variant mt-0.5 truncate">
+                                  <p className="text-body-md text-on-surface-variant mt-1 leading-snug">
                                     Untuk {u.toName} · dari {u.fromName} · {meta?.name ?? u.templateSlug}
                                   </p>
                                 </div>
                                 {/* Stats inline */}
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low text-label-md font-semibold text-on-surface">
-                                    <Eye className="h-3.5 w-3.5 text-primary" />
-                                    {view ? `${view.count}×` : "0×"}
-                                  </span>
-                                </div>
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/35 text-label-md font-semibold text-on-surface shrink-0"
+                                  title="Total dibuka"
+                                >
+                                  <Eye className="h-3.5 w-3.5 text-primary" />
+                                  {view ? `${view.count}×` : "0×"}
+                                </span>
+                              </div>
+
+                              {/* Meta ringkas: link publik + sisa masa edit */}
+                              <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[12px] text-on-surface-variant">
+                                {u.paid && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void copyLink(u)}
+                                    title="Klik untuk menyalin link"
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-container/80 border border-outline-variant/30 px-2.5 py-1 font-mono text-[11px] text-on-surface hover:border-primary/40 hover:text-primary transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                  >
+                                    <Link2 className="h-3 w-3 text-primary shrink-0" />
+                                    <span className="truncate max-w-[180px] sm:max-w-[240px]">
+                                      {publicPathLabel(u)}
+                                    </span>
+                                  </button>
+                                )}
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border ${
+                                    editOpen
+                                      ? "bg-surface-container/60 border-outline-variant/25 text-on-surface-variant"
+                                      : "bg-red-500/8 border-red-500/20 text-red-700 dark:text-red-300"
+                                  }`}
+                                >
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  {editStatus.label}
+                                </span>
                               </div>
 
                               {view?.firstSeen && (
-                                <p className="text-label-md text-on-surface-variant mt-2">
-                                  👀 Pertama dibuka{" "}
+                                <p className="inline-flex items-center gap-1.5 text-label-md text-on-surface-variant mt-2">
+                                  <Eye className="h-3.5 w-3.5 shrink-0" />
+                                  Pertama dibuka{" "}
                                   {new Date(view.firstSeen).toLocaleString("id-ID")}
                                 </p>
                               )}
@@ -548,8 +683,9 @@ export default function Dashboard() {
                               {u.recipientResponse?.type === "apology" &&
                                 u.recipientResponse.decision === "forgiven" && (
                                   <div className="mt-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="text-label-md font-semibold text-emerald-800 dark:text-emerald-300">
-                                      Dimaafkan 💚 ·{" "}
+                                    <span className="inline-flex items-center gap-1.5 text-label-md font-semibold text-emerald-800 dark:text-emerald-300">
+                                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                      Dimaafkan ·{" "}
                                       {u.recipientResponse.hesitationCount === 0
                                         ? "Langsung dimaafkan tanpa ragu!"
                                         : `Sempat menekan 'Belum dulu' sebanyak ${u.recipientResponse.hesitationCount} kali`}
@@ -583,8 +719,9 @@ export default function Dashboard() {
                                   )}
                                   {replies.length > 0 && (
                                     <div className="space-y-1.5">
-                                      <p className="text-label-md font-semibold text-on-surface-variant">
-                                        💌 Balasan ({replies.length}):
+                                      <p className="inline-flex items-center gap-1.5 text-label-md font-semibold text-on-surface-variant">
+                                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                                        Balasan ({replies.length}):
                                       </p>
                                       {replies.map((rep, repIdx) => (
                                         <div
@@ -602,102 +739,181 @@ export default function Dashboard() {
                                 </div>
                               )}
 
-                              {/* Aksi */}
-                              <div className="flex items-center gap-2 flex-wrap mt-4">
-                                {!u.paid ? (
-                                  <Link
-                                    href={`/checkout/${u.id}`}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all"
-                                  >
-                                    <Wallet className="h-3.5 w-3.5" />
-                                    Bayar Sekarang
-                                  </Link>
-                                ) : (
-                                  <button
-                                    onClick={() => void copyLink(u)}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all"
-                                  >
-                                    <Copy className="h-3.5 w-3.5" />
-                                    {copiedId === u.id ? "Tersalin!" : "Salin Link"}
-                                  </button>
-                                )}
-                                {u.paid && (
-                                  <button
-                                    onClick={() => void shareCard(u)}
-                                    aria-label="Bagikan"
-                                    title="Bagikan"
-                                    className="p-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
-                                  >
-                                    <Share2 className="h-4 w-4" />
-                                  </button>
-                                )}
-                                {u.paid && (
-                                  <button
-                                    onClick={() => setOpenQr(qr ? null : u.id)}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-label-md font-semibold bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
-                                  >
-                                    QR
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => void duplicate(u.id)}
-                                  disabled={duplicatingId === u.id}
-                                  aria-label="Duplikat ucapan"
-                                  title="Duplikat ucapan ini"
-                                  className="p-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors disabled:opacity-50"
-                                >
-                                  <CopyPlus className="h-4 w-4" />
-                                </button>
-                                {u.paid && (
-                                  <a
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label="Buka ucapan"
-                                    className="p-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                  </a>
-                                )}
-                                <Link
-                                  href={`/buat/${u.templateSlug}?edit=${u.id}`}
-                                  aria-label="Edit ucapan"
-                                  className={`p-2 rounded-full transition-colors ${
-                                    editOpen
-                                      ? "bg-surface-container-low text-on-surface hover:bg-surface-container"
-                                      : "bg-surface-container-low/50 text-on-surface-variant/50 cursor-not-allowed pointer-events-none"
-                                  }`}
-                                  title={editOpen ? "Edit ucapan" : "Masa edit 7 hari sudah habis"}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Link>
-                                <button
-                                  type="button"
-                                  disabled={deletingId === u.id}
-                                  onClick={() => setDeleteTarget(u)}
-                                  aria-label="Hapus ucapan"
-                                  title="Hapus ucapan"
-                                  className="p-2 rounded-full bg-surface-container-low text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {deletingId === u.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                              {/* Aksi: 2 grup seimbang (Aksi Utama kiri | Aksi Kelola kanan) */}
+                              <div className="flex flex-wrap items-center justify-between gap-2.5 mt-4 pt-3.5 border-t border-outline-variant/20">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {!u.paid ? (
+                                    <Link
+                                      href={`/checkout/${u.id}`}
+                                      className="inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                                    >
+                                      <Wallet className="h-4 w-4" />
+                                      Bayar Sekarang
+                                    </Link>
                                   ) : (
-                                    <Trash2 className="h-4 w-4" />
+                                    <button
+                                      type="button"
+                                      onClick={() => void copyLink(u)}
+                                      className="inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-full text-label-md font-semibold bg-primary text-white shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                                    >
+                                      {copiedId === u.id ? (
+                                        <Check className="h-4 w-4" />
+                                      ) : (
+                                        <Copy className="h-4 w-4" />
+                                      )}
+                                      {copiedId === u.id ? "Tersalin!" : "Salin Link"}
+                                    </button>
                                   )}
-                                </button>
+                                  {u.paid && (
+                                    <motion.button
+                                      type="button"
+                                      onClick={() => setOpenQr(qr ? null : u.id)}
+                                      aria-expanded={qr}
+                                      aria-label={qr ? "Tutup QR Code" : "Tampilkan QR Code"}
+                                      whileHover={reduced ? undefined : { y: -1.5, scale: 1.02 }}
+                                      whileTap={reduced ? undefined : { scale: 0.94 }}
+                                      transition={SPRING_TACTILE}
+                                      className={`inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-2 rounded-full text-label-md font-semibold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                                        qr
+                                          ? "bg-primary/15 text-primary border-primary/40 shadow-2xs"
+                                          : "bg-surface-container border-outline-variant/35 text-on-surface hover:bg-surface-container-high"
+                                      }`}
+                                    >
+                                      <motion.span
+                                        aria-hidden
+                                        animate={
+                                          reduced
+                                            ? undefined
+                                            : qr
+                                              ? { rotate: 0, scale: 1.12 }
+                                              : { rotate: 0, scale: 1 }
+                                        }
+                                        transition={SPRING_TACTILE}
+                                        className="inline-flex"
+                                      >
+                                        <QrCode className="h-4 w-4" />
+                                      </motion.span>
+                                      <span>QR</span>
+                                    </motion.button>
+                                  )}
+                                  {u.paid && canNativeShare && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void shareCard(u)}
+                                      aria-label="Bagikan"
+                                      title="Bagikan"
+                                      className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/35 text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    >
+                                      <Share2 className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2 sm:ml-auto">
+                                  {u.paid && (
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      aria-label="Buka ucapan"
+                                      title="Buka halaman ucapan"
+                                      className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/35 text-on-surface hover:bg-surface-container-high transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                    </a>
+                                  )}
+                                  <Link
+                                    href={`/buat/${u.templateSlug}?edit=${u.id}`}
+                                    aria-label="Edit ucapan"
+                                    className={`inline-flex items-center justify-center h-10 w-10 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                                      editOpen
+                                        ? "bg-surface-container border-outline-variant/35 text-on-surface hover:bg-surface-container-high"
+                                        : "bg-surface-container/40 border-outline-variant/20 text-on-surface-variant/50 cursor-not-allowed pointer-events-none"
+                                    }`}
+                                    title={editOpen ? "Edit ucapan" : "Masa edit 7 hari sudah habis"}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Link>
+                                  <button
+                                    type="button"
+                                    onClick={() => void duplicate(u.id)}
+                                    disabled={duplicatingId === u.id}
+                                    aria-label="Duplikat ucapan"
+                                    title="Duplikat ucapan ini"
+                                    className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/35 text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                  >
+                                    <CopyPlus className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={deletingId === u.id}
+                                    onClick={() => setDeleteTarget(u)}
+                                    aria-label="Hapus ucapan"
+                                    title="Hapus ucapan"
+                                    className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                                  >
+                                    {deletingId === u.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </div>
 
-                              {qr && (
-                                <div className="mt-4 pt-4 border-t border-outline-variant/30">
-                                  <QrCodeCard
-                                    url={url}
-                                    toName={u.toName}
-                                    photoUrl={u.photos?.[0]}
-                                    qrPhotoEnabled={u.qrPhotoEnabled}
-                                    compact
-                                  />
-                                </div>
-                              )}
+                              <AnimatePresence initial={false}>
+                                {qr && (
+                                  <motion.div
+                                    key="qr-panel"
+                                    initial={
+                                      reduced
+                                        ? { opacity: 0 }
+                                        : { height: 0, opacity: 0 }
+                                    }
+                                    animate={
+                                      reduced
+                                        ? { opacity: 1 }
+                                        : { height: "auto", opacity: 1 }
+                                    }
+                                    exit={
+                                      reduced
+                                        ? { opacity: 0 }
+                                        : { height: 0, opacity: 0 }
+                                    }
+                                    transition={{ duration: 0.34, ease: EASE_WARM }}
+                                    className="overflow-hidden"
+                                  >
+                                    <motion.div
+                                      initial={
+                                        reduced
+                                          ? { opacity: 0 }
+                                          : { opacity: 0, y: -14, scale: 0.98 }
+                                      }
+                                      animate={
+                                        reduced
+                                          ? { opacity: 1 }
+                                          : { opacity: 1, y: 0, scale: 1 }
+                                      }
+                                      exit={
+                                        reduced
+                                          ? { opacity: 0 }
+                                          : { opacity: 0, y: -10, scale: 0.98 }
+                                      }
+                                      transition={{ duration: 0.32, ease: EASE_WARM }}
+                                      style={{ transformOrigin: "top center" }}
+                                      className="mt-4 pt-4 border-t border-outline-variant/30"
+                                    >
+                                      <QrCodeCard
+                                        url={url}
+                                        toName={u.toName}
+                                        photoUrl={u.photos?.[0]}
+                                        qrPhotoEnabled={u.qrPhotoEnabled}
+                                        compact
+                                      />
+                                    </motion.div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                           </div>
                         </motion.div>

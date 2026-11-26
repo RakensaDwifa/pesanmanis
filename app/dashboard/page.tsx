@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import Dashboard from "@/components/dashboard/Dashboard";
+import { DashboardShellSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -19,5 +21,9 @@ export default async function DashboardPage() {
     if (!user) redirect("/login");
   }
 
-  return <Dashboard />;
+  return (
+    <Suspense fallback={<DashboardShellSkeleton />}>
+      <Dashboard />
+    </Suspense>
+  );
 }

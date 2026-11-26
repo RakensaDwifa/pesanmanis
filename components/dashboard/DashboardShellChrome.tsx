@@ -7,10 +7,29 @@ import {
   REFERRAL_REWARD_AMOUNT,
 } from "@/lib/referral-policy";
 
+export type DashboardTab = "ucapan" | "referral";
+
 interface DashboardShellChromeProps {
   demo?: boolean;
   realtimeLive?: boolean;
+  activeTab?: DashboardTab;
+  onTabChange?: (tab: DashboardTab) => void;
 }
+
+const NAV_ITEMS: {
+  id: DashboardTab;
+  label: string;
+  href: string;
+  icon: typeof LayoutGrid;
+}[] = [
+  { id: "ucapan", label: "Ucapan Saya", href: "/dashboard", icon: LayoutGrid },
+  {
+    id: "referral",
+    label: "Referral",
+    href: "/dashboard?tab=referral",
+    icon: Gift,
+  },
+];
 
 /**
  * Interactive Dashboard navigation sidebar (desktop) and compact top header (mobile).
@@ -20,6 +39,8 @@ interface DashboardShellChromeProps {
 export function DashboardSidebar({
   demo = false,
   realtimeLive = false,
+  activeTab = "ucapan",
+  onTabChange,
 }: DashboardShellChromeProps) {
   return (
     <aside className="lg:sticky lg:top-24 self-start bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6">
@@ -39,19 +60,41 @@ export function DashboardSidebar({
         Dashboard Kamu
       </h1>
       <nav className="space-y-1.5 mb-6" aria-label="Navigasi dashboard">
-        <span className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-primary-fixed/40 text-primary text-label-lg font-semibold">
-          <LayoutGrid className="h-4.5 w-4.5" /> Ucapan Saya
-        </span>
-        <Link
-          href="/dashboard/referral"
-          className="flex items-center gap-3 px-4 py-2.5 rounded-2xl text-on-surface-variant hover:bg-surface-container-low hover:text-primary text-label-lg font-semibold transition-colors"
-        >
-          <Gift className="h-4.5 w-4.5" /> Referral
-        </Link>
+        {NAV_ITEMS.map(({ id, label, href, icon: Icon }) => {
+          const isActive = activeTab === id;
+          const classes = `flex items-center gap-3 w-full px-4 py-2.5 rounded-2xl text-label-lg font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+            isActive
+              ? "bg-primary-fixed/40 text-primary"
+              : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+          }`;
+          if (onTabChange) {
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onTabChange(id)}
+                aria-current={isActive ? "page" : undefined}
+                className={classes}
+              >
+                <Icon className="h-4.5 w-4.5" /> {label}
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={id}
+              href={href}
+              aria-current={isActive ? "page" : undefined}
+              className={classes}
+            >
+              <Icon className="h-4.5 w-4.5" /> {label}
+            </Link>
+          );
+        })}
       </nav>
       <Link
         href="/templates"
-        className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_6px_20px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-200"
+        className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-white text-label-lg font-semibold rounded-full shadow-[0_6px_20px_rgba(222,112,56,0.35)] hover:-translate-y-0.5 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
       >
         <Plus className="h-4 w-4" /> Buat Ucapan Baru
       </Link>
@@ -71,6 +114,8 @@ export function DashboardSidebar({
 export function DashboardMobileHeader({
   demo = false,
   realtimeLive = false,
+  activeTab = "ucapan",
+  onTabChange,
 }: DashboardShellChromeProps) {
   return (
     <div className="lg:hidden mb-5 bg-white rounded-2xl border border-outline-variant/30 shadow-card p-4 space-y-3">
@@ -90,24 +135,46 @@ export function DashboardMobileHeader({
         </div>
         <Link
           href="/templates"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-label-md font-semibold rounded-full shadow-xs shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-4 py-2 bg-primary text-white text-label-md font-semibold rounded-full shadow-xs shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
         >
-          <Plus className="h-3.5 w-3.5" /> Buat
+          <Plus className="h-4 w-4" /> Buat
         </Link>
       </div>
       <nav
         className="grid grid-cols-2 gap-1.5 p-1 rounded-full bg-surface-container-low border border-outline-variant/30"
         aria-label="Navigasi dashboard mobile"
       >
-        <span className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-full bg-primary text-white text-label-md font-semibold">
-          <LayoutGrid className="h-3.5 w-3.5" /> Ucapan Saya
-        </span>
-        <Link
-          href="/dashboard/referral"
-          className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-full text-on-surface-variant hover:text-primary text-label-md font-semibold transition-colors"
-        >
-          <Gift className="h-3.5 w-3.5" /> Referral
-        </Link>
+        {NAV_ITEMS.map(({ id, label, href, icon: Icon }) => {
+          const isActive = activeTab === id;
+          const classes = `inline-flex items-center justify-center gap-1.5 min-h-[38px] py-2 px-3 rounded-full text-label-md font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+            isActive
+              ? "bg-primary text-white"
+              : "text-on-surface-variant hover:text-primary"
+          }`;
+          if (onTabChange) {
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onTabChange(id)}
+                aria-current={isActive ? "page" : undefined}
+                className={classes}
+              >
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={id}
+              href={href}
+              aria-current={isActive ? "page" : undefined}
+              className={classes}
+            >
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </Link>
+          );
+        })}
       </nav>
       {demo && (
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/12 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
