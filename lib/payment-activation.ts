@@ -43,6 +43,7 @@ export interface ActivatePaidPaymentResult {
   alreadyPaid?: boolean;
   mismatch?: boolean;
   notFound?: boolean;
+  ucapanUpdateFailed?: boolean;
 }
 
 /**
@@ -195,6 +196,7 @@ export async function activatePaidPayment(
       message: ucapanUpdateErr.message,
       details: ucapanUpdateErr.details,
     });
+    return { ok: false, ucapanUpdateFailed: true };
   }
 
   // Mark abandoned-cart session recovered

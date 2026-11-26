@@ -54,7 +54,12 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+  caller_role text := coalesce(
+    nullif(auth.role(), ''),
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  );
 begin
   if caller_role is distinct from 'service_role' then
     if new.paid is true
@@ -87,7 +92,12 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  caller_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
+  caller_role text := coalesce(
+    nullif(auth.role(), ''),
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+    ''
+  );
 begin
   -- Hanya service_role (webhook, status server, admin) yang boleh ubah kolom ini
   if caller_role is distinct from 'service_role' then

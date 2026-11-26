@@ -259,8 +259,8 @@ export default function CustomBriefForm() {
 
       {!hasWhatsApp && (
         <p className="text-[12px] text-on-surface-variant bg-surface px-3.5 py-2.5 rounded-xl border border-outline-variant/30">
-          Nomor WhatsApp belum dikonfigurasi pada environment lokal. Tombol kirim akan membuka email ke{" "}
-          <span className="font-semibold text-on-surface">{BRAND.contactEmail}</span>, atau kamu bisa menyalin teks brief langsung.
+          Brief akan dikirim langsung melalui email ke{" "}
+          <span className="font-semibold text-on-surface">{BRAND.contactEmail}</span>, atau kamu bisa menyalin teks brief untuk dikirim manual.
         </p>
       )}
 
