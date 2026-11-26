@@ -71,9 +71,10 @@ export default function TemplatePreview({ slug }: { slug: string }) {
           {/* Selama alur berjalan: hanya tombol kembali */}
           <button
             type="button"
+            data-light-card
             onClick={handleBack}
             aria-label="Kembali"
-            className="fixed top-4 left-4 z-[80] inline-flex items-center gap-1.5 rounded-full bg-white/80 backdrop-blur-md border border-white/60 px-3 py-2 text-label-md font-semibold text-primary shadow-sm hover:bg-white transition"
+            className="fixed top-4 left-4 z-[80] inline-flex items-center gap-1.5 rounded-full bg-white/85 backdrop-blur-md border border-white/60 px-3 py-2 text-label-md font-semibold text-primary shadow-sm hover:bg-white transition"
           >
             <ArrowLeft className="h-4 w-4" />
             Kembali
@@ -100,7 +101,8 @@ export default function TemplatePreview({ slug }: { slug: string }) {
           {/* Bar navigasi preview */}
           <div
             data-preview-bar
-            className="fixed top-0 inset-x-0 z-[80] bg-gradient-to-b from-white/85 to-white/40 backdrop-blur-md"
+            data-light-card
+            className="fixed top-0 inset-x-0 z-[80] bg-gradient-to-b from-white/90 to-white/60 text-[#241914] backdrop-blur-md"
           >
             <div className="flex items-center gap-2 px-3 sm:px-5 py-3">
               <button

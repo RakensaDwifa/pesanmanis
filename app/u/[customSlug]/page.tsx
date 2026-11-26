@@ -4,12 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { hasValidGateCookie } from "@/lib/gate-cookie";
 import {
+  extractUnlockAtFromTimeline,
   mapUcapanRow,
   stripLockedUcapan,
   stripPublicUcapan,
 } from "@/lib/supabase/rows";
 import type { UcapanRow } from "@/lib/supabase/rows";
+import { currentEpochMs, isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import PublicView from "@/components/view/PublicView";
+import DemoCustomSlugView from "@/components/view/DemoCustomSlugView";
 
 export async function generateMetadata({
   params,
@@ -21,13 +24,14 @@ export async function generateMetadata({
   let fromName = "Seseorang";
   let message = "";
   let gateType: string | null = null;
+  let countdownLocked = false;
 
   if (isRemote()) {
     try {
       const supabase = createAdminClient();
       const { data } = await supabase
         .from("ucapan")
-        .select("to_name,from_name,message,gate_type,paid")
+        .select("to_name,from_name,message,gate_type,timeline,paid")
         .eq("custom_slug", customSlug)
         .eq("paid", true)
         .maybeSingle();
@@ -36,6 +40,9 @@ export async function generateMetadata({
         fromName = data.from_name ?? fromName;
         message = data.message ?? "";
         gateType = data.gate_type ?? null;
+        countdownLocked = isUcapanCountdownLocked(
+          extractUnlockAtFromTimeline(data.timeline)
+        );
       }
     } catch {
       /* fallback */
@@ -44,8 +51,9 @@ export async function generateMetadata({
 
   const teaser = message.trim().split(/\s+/).slice(0, 18).join(" ");
   const title = `Untuk ${toName} 💌 — dari ${fromName}`;
-  const description =
-    gateType === "trivia"
+  const description = countdownLocked
+    ? "⏳ Pesan kejutan terjadwal. Tunggu hitungan mundurnya habis untuk membuka kejutan spesial ini."
+    : gateType === "trivia"
       ? "🔒 Pesan rahasia terkunci. Jawab kuis kenangan untuk membuka kejutan spesial ini."
       : gateType
         ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
@@ -81,8 +89,7 @@ export default async function CustomSlugRoute({
   const { customSlug } = await params;
 
   if (!isRemote()) {
-    // Di lokal tidak ada DB; redirect ke halaman utama
-    notFound();
+    return <DemoCustomSlugView customSlug={customSlug} />;
   }
 
   const supabase = createAdminClient();
@@ -96,11 +103,15 @@ export default async function CustomSlugRoute({
   if (!data) notFound();
 
   const row = data as UcapanRow;
+  const serverNowMs = currentEpochMs();
   const mapped = mapUcapanRow(row);
-  const unlocked = !row.gate_type || (await hasValidGateCookie(row.id));
+  const countdownLocked = isUcapanCountdownLocked(mapped.unlockAt, serverNowMs);
+  const unlocked =
+    !countdownLocked &&
+    (!row.gate_type || (await hasValidGateCookie(row.id)));
   const remote = unlocked
     ? stripPublicUcapan(mapped)
     : stripLockedUcapan(mapped);
 
-  return <PublicView id={remote.id} remote={remote} />;
+  return <PublicView id={remote.id} remote={remote} serverNowMs={serverNowMs} />;
 }

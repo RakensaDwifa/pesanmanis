@@ -102,6 +102,17 @@ import {
   isUcapanCountdownLocked,
 } from "@/lib/unlock-schedule";
 
+const MINUTE_SUBSCRIBE = () => () => {};
+let cachedClientMinDatetime = "";
+function getClientMinUnlockDatetime(): string {
+  if (!cachedClientMinDatetime) {
+    cachedClientMinDatetime = toLocalDatetimeInputValue(
+      new Date(Date.now() + 60_000).toISOString()
+    );
+  }
+  return cachedClientMinDatetime;
+}
+
 const SECTIONS = [
   { id: "identitas", label: "Identitas", icon: UserRound, hint: "Siapa untuk siapa" },
   { id: "pesan", label: "Pesan", icon: MessageSquareHeart, hint: "Tulis perasaanmu" },
@@ -189,6 +200,14 @@ function mapServerSaveError(code?: string, fallbackMessage?: string): string {
       return "URL musik latar harus berupa tautan HTTPS/YouTube atau jalur galeri yang valid.";
     case "VIDEO_URL_INVALID":
       return "URL video harus berupa tautan HTTPS/YouTube yang valid.";
+    case "VOICE_NOTE_URL_INVALID":
+      return "URL pesan suara tidak valid. Coba rekam atau unggah ulang.";
+    case "UNLOCK_AT_INVALID":
+      return "Format jadwal waktu buka (countdown) tidak valid.";
+    case "TEMPLATE_UNAVAILABLE":
+      return "Template ini sedang dalam pengembangan dan belum tersedia.";
+    case "TEMPLATE_LOCKED_AFTER_PAYMENT":
+      return "Template tidak dapat diganti setelah ucapan aktif dibayar.";
     case "EMAIL_INVALID":
       return "Format email tidak valid.";
     case "RATE_LIMIT_EXCEEDED":
@@ -227,8 +246,10 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [videoPanelToggle, setVideoPanelToggle] = useState<boolean | null>(null);
   const [timelinePanelToggle, setTimelinePanelToggle] = useState<boolean | null>(null);
   const [countdownPanelToggle, setCountdownPanelToggle] = useState<boolean | null>(null);
-  const [minUnlockDatetime] = useState(() =>
-    toLocalDatetimeInputValue(new Date(Date.now() + 60_000).toISOString())
+  const minUnlockDatetime = useSyncExternalStore(
+    MINUTE_SUBSCRIBE,
+    getClientMinUnlockDatetime,
+    () => ""
   );
   const toNameInputRef = useRef<HTMLInputElement | null>(null);
   const emailInputRef = useRef<HTMLInputElement | null>(null);
@@ -947,6 +968,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
         const alreadyPaid = Boolean(existingLocal?.paid);
         const nowTs = Date.now();
         savePaidUcapan({
+          ...(existingLocal ?? {}),
           ...fillContentDefaults(content),
           id,
           paid: alreadyPaid,
@@ -1492,7 +1514,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                     {uploading ? "Mengunggah…" : "Pilih Foto dari Galeri / Kamera"}
                                   </span>
                                   <span className="text-label-md text-on-surface-variant text-center">
-                                    Otomatis dikompres &amp; diunggah · maks 10MB/foto
+                                    Otomatis dikompres &amp; diunggah · maks 5MB/foto
                                   </span>
                                   <input
                                     type="file"

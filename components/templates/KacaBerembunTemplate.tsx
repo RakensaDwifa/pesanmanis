@@ -22,8 +22,11 @@ import { VideoBlock } from "./shared";
 export default function KacaBerembunTemplate({
   content,
   preview,
+  interactive,
 }: TemplateRenderProps) {
-  const [storyFinished, setStoryFinished] = useState(Boolean(preview));
+  const [storyFinished, setStoryFinished] = useState(
+    interactive ? false : Boolean(preview)
+  );
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
   const toName = content.toName || "Sayang";
@@ -42,7 +45,7 @@ export default function KacaBerembunTemplate({
           className={
             preview
               ? "relative min-h-[560px] z-30 flex items-center justify-center bg-[#070D18]"
-              : "fixed inset-0 z-50 flex items-center justify-center bg-[#070D18]"
+              : "fixed inset-0 z-[60] flex items-center justify-center bg-[#070D18]"
           }
         >
           <div className="w-full h-full max-w-md mx-auto relative flex flex-col justify-between">

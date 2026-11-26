@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import {
+  getAvailableCreditBalance,
   getOrCreateReferralCode,
   getReferralStats,
   applyReferralCode,
@@ -21,6 +22,21 @@ async function requireUser() {
 }
 
 export async function GET() {
+  if (!isRemote()) {
+    return NextResponse.json({
+      ok: true,
+      demo: true,
+      code: null,
+      stats: {
+        invited: 0,
+        completed: 0,
+        earned: 0,
+        balance: 0,
+        availableBalance: 0,
+      },
+    });
+  }
+
   const user = await requireUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "NEED_LOGIN" }, { status: 401 });
@@ -30,12 +46,19 @@ export async function GET() {
   if (!code) {
     return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
   }
-  const stats = await getReferralStats(user.id);
+  const [stats, availableBalance] = await Promise.all([
+    getReferralStats(user.id),
+    getAvailableCreditBalance(user.id),
+  ]);
 
   return NextResponse.json({
     ok: true,
+    demo: false,
     code,
-    stats,
+    stats: {
+      ...stats,
+      availableBalance,
+    },
   });
 }
 

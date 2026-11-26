@@ -167,10 +167,11 @@ export default function ReactionBar({ ucapanId }: { ucapanId: string }) {
       <AnimatePresence>
         {open && (
           <motion.div
+            data-light-card
             initial={{ opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.96 }}
-            className="w-72 max-w-[88vw] rounded-2xl bg-white/90 backdrop-blur-md border border-outline-variant/40 shadow-xl p-4"
+            className="w-72 max-w-[88vw] rounded-2xl bg-white/95 text-[#241914] backdrop-blur-md border border-outline-variant/40 shadow-xl p-4"
           >
             <p className="text-label-lg font-semibold text-on-surface mb-2">
               Kirim Balasan 💌

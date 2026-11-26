@@ -29,6 +29,7 @@ interface PaymentRecord {
   addon_config?: unknown;
   credit_used?: number | null;
   tripay_ref?: string | null;
+  paid_at?: string | null;
 }
 
 export interface ActivatePaidPaymentInput {
@@ -47,81 +48,23 @@ export interface ActivatePaidPaymentResult {
 }
 
 /**
- * Single atomic, idempotent activation path shared by Midtrans webhook and /api/payment/status.
- * Claims UNPAID -> PAID transition atomically so ucapan activation, credit redemption,
- * referral payouts, and emails execute at most once even under concurrent webhook + polling.
+ * Applies paid add-on flags, marks the ucapan row as paid, settles referrals/credits,
+ * and sends confirmation emails. Safe to re-run during self-healing if `payments.status`
+ * was already claimed as PAID while `ucapan.paid` remained false.
  */
-export async function activatePaidPayment(
-  input: ActivatePaidPaymentInput
+async function activateUcapanFromPayment(
+  admin: ReturnType<typeof createAdminClient>,
+  payment: PaymentRecord,
+  merchantRef: string,
+  grossAmount: string,
+  paidAtIso: string
 ): Promise<ActivatePaidPaymentResult> {
-  const admin = createAdminClient();
-  const { merchantRef, grossAmount, paymentType, transactionId } = input;
-  const now = new Date().toISOString();
-
-  let { data: paymentRaw, error: fetchErr } = await admin
-    .from("payments")
-    .select("id, ucapan_id, status, amount, addons, addon_config, credit_used, tripay_ref")
-    .eq("merchant_ref", merchantRef)
-    .maybeSingle();
-
-  // Backward-compatible fallback if schema_v9 columns are not yet present in an older DB.
-  if (fetchErr?.code === "42703") {
-    const legacy = await admin
-      .from("payments")
-      .select("id, ucapan_id, status, amount, addons, tripay_ref")
-      .eq("merchant_ref", merchantRef)
-      .maybeSingle();
-    paymentRaw = legacy.data as typeof paymentRaw;
-    fetchErr = legacy.error;
-  }
-
-  const payment = paymentRaw as PaymentRecord | null;
-  if (fetchErr || !payment || !payment.ucapan_id) {
-    console.warn("[payment-activation] pembayaran atau ucapan tidak ditemukan", {
-      ref: maskId(merchantRef),
-    });
+  const ucapanId = payment.ucapan_id;
+  if (!ucapanId) {
     return { ok: false, notFound: true };
   }
 
-  if (!amountMatchesPaid(grossAmount, payment.amount)) {
-    console.warn("[payment-activation] nominal tidak cocok, aktivasi dibatalkan", {
-      ref: maskId(merchantRef),
-      expected: maskAmount(Number(payment.amount ?? 0)),
-      received: maskAmount(Number(grossAmount || 0)),
-    });
-    return { ok: false, mismatch: true };
-  }
-
-  if (payment.status === "PAID") {
-    if (transactionId && !payment.tripay_ref) {
-      await admin
-        .from("payments")
-        .update({ tripay_ref: transactionId })
-        .eq("id", payment.id)
-        .is("tripay_ref", null);
-    }
-    return { ok: true, alreadyPaid: true };
-  }
-
-  // Atomic claim: only ONE concurrent caller can transition status from non-PAID to PAID.
-  const { data: claimed, error: claimErr } = await admin
-    .from("payments")
-    .update({
-      status: "PAID",
-      method: paymentType && typeof paymentType === "string" ? paymentType : "snap",
-      tripay_ref: transactionId || payment.tripay_ref || null,
-      paid_at: now,
-    })
-    .eq("id", payment.id)
-    .neq("status", "PAID")
-    .select("id")
-    .maybeSingle();
-
-  if (claimErr || !claimed) {
-    return { ok: true, alreadyPaid: true };
-  }
-
-  const ucapanId = payment.ucapan_id;
+  const now = new Date().toISOString();
   const paidAddons = sanitizeAddons(payment.addons);
   const cfg = isRecord(payment.addon_config) ? payment.addon_config : null;
   const hasSnapshot = Boolean(cfg && Object.keys(cfg).length > 0);
@@ -155,7 +98,7 @@ export async function activatePaidPayment(
 
   const ucapanUpdateWithClear: Record<string, unknown> = {
     paid: true,
-    paid_at: now,
+    paid_at: paidAtIso,
     updated_at: now,
     draft_addons: null,
     ...ucapanAddonUpdate,
@@ -168,6 +111,9 @@ export async function activatePaidPayment(
 
   if (ucapanUpdateErr?.code === "42703") {
     delete ucapanUpdateWithClear.draft_addons;
+    if (!paidAddons.includes("voice_note")) {
+      delete ucapanUpdateWithClear.voice_note_enabled;
+    }
     ({ error: ucapanUpdateErr } = await admin
       .from("ucapan")
       .update(ucapanUpdateWithClear)
@@ -221,7 +167,7 @@ export async function activatePaidPayment(
     ucapanId: maskId(ucapanId),
   });
 
-  // Settle pending referrals & redeem credits used for this payment
+  // Settle pending referrals & redeem credits used for this payment (both idempotent).
   if (ucapan?.owner_id) {
     try {
       const { completePendingReferrals, redeemCreditsForPayment } = await import(
@@ -237,7 +183,7 @@ export async function activatePaidPayment(
     }
   }
 
-  // Send buyer & admin confirmation emails exactly once (inside atomic claim winner)
+  // Send buyer & admin confirmation emails only after ucapan.paid = true succeeds.
   if (ucapan?.email) {
     try {
       const { sendPaymentSuccessEmail, sendAdminTransactionEmail } = await import(
@@ -279,6 +225,125 @@ export async function activatePaidPayment(
   }
 
   return { ok: true, alreadyPaid: false };
+}
+
+/**
+ * Single atomic, idempotent activation path shared by Midtrans webhook, /api/payment/status,
+ * and /api/admin/payments/sync. Claims UNPAID -> PAID transition atomically and self-heals
+ * if a previous PAID claim failed while updating the target `ucapan` row.
+ */
+export async function activatePaidPayment(
+  input: ActivatePaidPaymentInput
+): Promise<ActivatePaidPaymentResult> {
+  const admin = createAdminClient();
+  const { merchantRef, grossAmount, paymentType, transactionId } = input;
+  const now = new Date().toISOString();
+
+  let { data: paymentRaw, error: fetchErr } = await admin
+    .from("payments")
+    .select("id, ucapan_id, status, amount, addons, addon_config, credit_used, tripay_ref, paid_at")
+    .eq("merchant_ref", merchantRef)
+    .maybeSingle();
+
+  // Backward-compatible fallback if schema_v9 columns are not yet present in an older DB.
+  if (fetchErr?.code === "42703") {
+    const legacy = await admin
+      .from("payments")
+      .select("id, ucapan_id, status, amount, addons, tripay_ref, paid_at")
+      .eq("merchant_ref", merchantRef)
+      .maybeSingle();
+    paymentRaw = legacy.data as typeof paymentRaw;
+    fetchErr = legacy.error;
+  }
+
+  const payment = paymentRaw as PaymentRecord | null;
+  if (fetchErr || !payment || !payment.ucapan_id) {
+    console.warn("[payment-activation] pembayaran atau ucapan tidak ditemukan", {
+      ref: maskId(merchantRef),
+    });
+    return { ok: false, notFound: true };
+  }
+
+  if (!amountMatchesPaid(grossAmount, payment.amount)) {
+    console.warn("[payment-activation] nominal tidak cocok, aktivasi dibatalkan", {
+      ref: maskId(merchantRef),
+      expected: maskAmount(Number(payment.amount ?? 0)),
+      received: maskAmount(Number(grossAmount || 0)),
+    });
+    return { ok: false, mismatch: true };
+  }
+
+  if (payment.status === "PAID") {
+    if (transactionId && !payment.tripay_ref) {
+      await admin
+        .from("payments")
+        .update({ tripay_ref: transactionId })
+        .eq("id", payment.id)
+        .is("tripay_ref", null);
+    }
+
+    const { data: currentUcapan } = await admin
+      .from("ucapan")
+      .select("paid")
+      .eq("id", payment.ucapan_id)
+      .maybeSingle();
+
+    if (!currentUcapan) {
+      return { ok: false, notFound: true };
+    }
+    if (currentUcapan.paid) {
+      return { ok: true, alreadyPaid: true };
+    }
+
+    console.warn("[payment-activation] memulihkan payment PAID yang ucapan-nya belum aktif", {
+      ref: maskId(merchantRef),
+      ucapanId: maskId(payment.ucapan_id),
+    });
+    return activateUcapanFromPayment(
+      admin,
+      payment,
+      merchantRef,
+      grossAmount,
+      payment.paid_at || now
+    );
+  }
+
+  // Atomic claim: only ONE concurrent caller can transition status from non-PAID to PAID.
+  const { data: claimed, error: claimErr } = await admin
+    .from("payments")
+    .update({
+      status: "PAID",
+      method: paymentType && typeof paymentType === "string" ? paymentType : "snap",
+      tripay_ref: transactionId || payment.tripay_ref || null,
+      paid_at: now,
+    })
+    .eq("id", payment.id)
+    .neq("status", "PAID")
+    .select("id")
+    .maybeSingle();
+
+  if (claimErr) {
+    console.error("[payment-activation] gagal klaim status PAID pada payments:", {
+      ref: maskId(merchantRef),
+      code: claimErr.code,
+      message: claimErr.message,
+    });
+    return { ok: false };
+  }
+
+  if (!claimed) {
+    const { data: concurrentUcapan } = await admin
+      .from("ucapan")
+      .select("paid")
+      .eq("id", payment.ucapan_id)
+      .maybeSingle();
+    if (concurrentUcapan?.paid) {
+      return { ok: true, alreadyPaid: true };
+    }
+    return { ok: false, ucapanUpdateFailed: true };
+  }
+
+  return activateUcapanFromPayment(admin, payment, merchantRef, grossAmount, now);
 }
 
 /**

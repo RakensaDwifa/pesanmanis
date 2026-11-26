@@ -7,6 +7,7 @@ import {
   ArrowLeft, Loader2, Lock, QrCode, Wallet, Pencil,
 } from "lucide-react";
 import { getUcapan, savePaidUcapan } from "@/lib/store";
+import { isRemote } from "@/lib/supabase/config";
 import { getTemplate, templateEmoji } from "@/lib/templates";
 import { usePricing } from "@/lib/use-pricing";
 import { ADDON_PRICING, calculateCheckoutTotal, formatPrice, type AddonKey } from "@/lib/pricing";
@@ -183,18 +184,33 @@ export default function Checkout({ id }: { id: string }) {
 
   useEffect(() => {
     fetch("/api/payment/channels")
-      .then((r) => r.json())
-      .then((json: { demo: boolean }) => setDemoMode(json.demo))
-      .catch(() => setDemoMode(true));
+      .then(async (r) => {
+        if (!r.ok) throw new Error("CHANNELS_FAILED");
+        return (await r.json()) as { demo: boolean };
+      })
+      .then((json) => setDemoMode(Boolean(json.demo) && !isRemote()))
+      .catch(() => {
+        if (!isRemote()) setDemoMode(true);
+      });
 
     fetch("/api/referral")
       .then((r) => r.json())
-      .then((json: { ok?: boolean; stats?: { balance?: number; earned?: number } }) => {
-        if (json.ok && json.stats) {
-          const bal = Number(json.stats.balance ?? json.stats.earned ?? 0);
-          if (bal > 0) setCreditBalance(bal);
+      .then(
+        (json: {
+          ok?: boolean;
+          stats?: { balance?: number; earned?: number; availableBalance?: number };
+        }) => {
+          if (json.ok && json.stats) {
+            const bal = Number(
+              json.stats.availableBalance ??
+                json.stats.balance ??
+                json.stats.earned ??
+                0
+            );
+            if (bal > 0) setCreditBalance(bal);
+          }
         }
-      })
+      )
       .catch(() => undefined);
   }, [id]);
 
@@ -279,6 +295,9 @@ export default function Checkout({ id }: { id: string }) {
 
   const templateMeta = getTemplate(ucapan.templateSlug);
   const editHref = `/buat/${ucapan.templateSlug}?edit=${id}`;
+  const isDarkHeaderGradient =
+    ucapan.templateSlug === "kaca-berembun" ||
+    ucapan.templateSlug === "bonceng-malam";
 
   return (
     <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-12">
@@ -293,14 +312,23 @@ export default function Checkout({ id }: { id: string }) {
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card overflow-hidden">
           {/* Header gradient template */}
           <div
+            data-light-card={isDarkHeaderGradient ? undefined : ""}
             className={`bg-gradient-to-br ${templateMeta?.gradient ?? "from-primary-fixed to-surface-container-high"} px-5 sm:px-6 py-6 sm:py-7 flex items-center gap-4`}
           >
             <span className="text-5xl drop-shadow-md">{templateEmoji(ucapan.templateSlug)}</span>
             <div className="min-w-0">
-              <h1 className="font-heading text-title-lg text-on-surface truncate">
+              <h1
+                className={`font-heading text-title-lg truncate ${
+                  isDarkHeaderGradient ? "text-white" : "text-[#241914]"
+                }`}
+              >
                 {templateMeta?.name ?? ucapan.templateSlug}
               </h1>
-              <p className="text-body-md text-on-surface-variant truncate">
+              <p
+                className={`text-body-md truncate ${
+                  isDarkHeaderGradient ? "text-slate-200" : "text-[#55443c]"
+                }`}
+              >
                 Untuk {ucapan.toName} · dari {ucapan.fromName || "seseorang"}
               </p>
             </div>

@@ -14,6 +14,8 @@ import type { UcapanRow, UcapanStatsRow } from "@/lib/supabase/rows";
 import type { UcapanContent } from "@/lib/types";
 import { hasValidGateCookie } from "@/lib/gate-cookie";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getTemplate } from "@/lib/templates";
+import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import {
   extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
@@ -77,11 +79,18 @@ async function fetchOwnedUcapan(id: string): Promise<FetchResult> {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isRemote()) {
     return NextResponse.json({ ok: true, demo: true, ucapan: null });
+  }
+  const { success } = await checkRateLimit(`ucapan-read:${getClientIp(request)}`, 60, 60000);
+  if (!success) {
+    return NextResponse.json(
+      { ok: false, error: "RATE_LIMIT_EXCEEDED" },
+      { status: 429 }
+    );
   }
   const { id } = await params;
   if (!isValidUuid(id)) {
@@ -94,16 +103,20 @@ export async function GET(
     return NextResponse.json({ ok: true, demo: false, ucapan });
   }
 
-  // Public reader: only paid ucapan; redact content if Intimate Gate is active and locked.
+  // Public reader: only paid ucapan; redact content if Countdown or Intimate Gate is active and locked.
   const publicUcapan = await fetchUcapanAdmin(id);
   if (!publicUcapan || !publicUcapan.paid) {
     return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
   }
 
-  const isLocked = Boolean(publicUcapan.gateType) && !(await hasValidGateCookie(id));
+  const isCountdownLocked = isUcapanCountdownLocked(publicUcapan.unlockAt);
+  const isGateLocked =
+    Boolean(publicUcapan.gateType) && !(await hasValidGateCookie(id));
+  const isLocked = isCountdownLocked || isGateLocked;
   return NextResponse.json({
     ok: true,
     demo: false,
+    serverNowMs: Date.now(),
     ucapan: isLocked
       ? stripLockedUcapan(publicUcapan)
       : stripPublicUcapan(publicUcapan),
@@ -162,6 +175,29 @@ export async function PUT(
     return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 });
   }
 
+  const requestedSlug =
+    typeof body.templateSlug === "string" ? body.templateSlug.trim() : "";
+  if (ucapan.paid && requestedSlug !== ucapan.templateSlug) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "TEMPLATE_LOCKED_AFTER_PAYMENT",
+        message: "Template tidak dapat diubah setelah pembayaran lunas.",
+      },
+      { status: 403 }
+    );
+  }
+  if (!ucapan.paid && !getTemplate(requestedSlug)?.active) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "TEMPLATE_UNAVAILABLE",
+        message: "Template ini sedang dalam pengembangan dan belum tersedia.",
+      },
+      { status: 400 }
+    );
+  }
+
   // Unpaid drafts save add-on preferences in `draft_addons` without touching live paid columns.
   const draftAddons = !ucapan.paid
     ? buildDraftAddonState({
@@ -176,7 +212,10 @@ export async function PUT(
     : null;
 
   const baseUpdate: Record<string, unknown> = {
-    ...toUcapanRow(body as Partial<UcapanContent>),
+    ...toUcapanRow({
+      ...(body as Partial<UcapanContent>),
+      templateSlug: ucapan.paid ? ucapan.templateSlug : requestedSlug,
+    }),
     updated_at: new Date().toISOString(),
   };
 

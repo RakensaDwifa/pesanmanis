@@ -825,27 +825,39 @@ export default function Dashboard({ userName }: { userName?: string }) {
                                       <ExternalLink className="h-4 w-4" />
                                     </a>
                                   )}
-                                  <Link
-                                    href={`/buat/${u.templateSlug}?edit=${u.id}`}
-                                    aria-label="Edit ucapan"
-                                    className={`inline-flex items-center justify-center h-10 w-10 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                                      editOpen
-                                        ? "bg-surface-container border-outline-variant/35 text-on-surface hover:bg-surface-container-high"
-                                        : "bg-surface-container/40 border-outline-variant/20 text-on-surface-variant/50 cursor-not-allowed pointer-events-none"
-                                    }`}
-                                    title={editOpen ? "Edit ucapan" : "Masa edit 7 hari sudah habis"}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Link>
+                                  {editOpen ? (
+                                    <Link
+                                      href={`/buat/${u.templateSlug}?edit=${u.id}`}
+                                      aria-label="Edit ucapan"
+                                      title="Edit ucapan"
+                                      className="inline-flex items-center justify-center h-10 w-10 rounded-full border transition-colors bg-surface-container border-outline-variant/35 text-on-surface hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Link>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      aria-label="Masa edit 7 hari sudah habis"
+                                      title="Masa edit 7 hari sudah habis"
+                                      className="inline-flex items-center justify-center h-10 w-10 rounded-full border bg-surface-container/40 border-outline-variant/20 text-on-surface-variant/50 cursor-not-allowed"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => void duplicate(u.id)}
                                     disabled={duplicatingId === u.id}
                                     aria-label="Duplikat ucapan"
                                     title="Duplikat ucapan ini"
-                                    className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/35 text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/35 text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                                   >
-                                    <CopyPlus className="h-4 w-4" />
+                                    {duplicatingId === u.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <CopyPlus className="h-4 w-4" />
+                                    )}
                                   </button>
                                   <button
                                     type="button"

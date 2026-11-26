@@ -165,7 +165,7 @@ export function DashboardShellSkeleton() {
 /**
  * Motion shimmer skeleton for ReferralDashboard (`!loaded` and `/dashboard/referral/loading.tsx`).
  */
-export function ReferralContentSkeleton() {
+export function ReferralContentSkeleton({ embedded = false }: { embedded?: boolean }) {
   const reduced = useReducedMotion();
 
   return (
@@ -186,7 +186,9 @@ export function ReferralContentSkeleton() {
         <ShimmerBlock warm shimmerDelay={0.1} className="h-12 w-44 rounded-2xl" />
         <div className="flex flex-col sm:flex-row gap-3">
           <ShimmerBlock warm shimmerDelay={0.14} className="h-11 w-full sm:w-44 rounded-full" />
-          <ShimmerBlock shimmerDelay={0.18} className="h-11 w-full sm:w-44 rounded-full" />
+          {!embedded && (
+            <ShimmerBlock shimmerDelay={0.18} className="h-11 w-full sm:w-44 rounded-full" />
+          )}
         </div>
         <ShimmerBlock shimmerDelay={0.22} className="h-3.5 w-64 max-w-full rounded-full" />
       </motion.div>

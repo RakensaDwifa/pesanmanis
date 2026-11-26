@@ -113,14 +113,14 @@ function downloadCsvFile(filename: string, csvContent: string) {
 function statusBadgeStyle(status: string): string {
   switch (status) {
     case "PAID":
-      return "bg-green-100 text-green-700";
+      return "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300";
     case "UNPAID":
-      return "bg-amber-100 text-amber-700";
+      return "bg-amber-500/12 text-amber-800 dark:text-amber-300";
     case "FAILED":
     case "EXPIRED":
-      return "bg-red-100 text-red-700";
+      return "bg-red-500/12 text-red-700 dark:text-red-300";
     default:
-      return "bg-slate-100 text-slate-600";
+      return "bg-surface-container text-on-surface-variant";
   }
 }
 
@@ -342,12 +342,12 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-surface pt-24 pb-16">
         <div className="max-w-[700px] mx-auto px-5 text-center">
-          <div className="bg-red-50 border border-red-200 rounded-3xl p-10 shadow-card">
-            <ShieldAlert className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h1 className="font-heading text-headline-sm text-red-800 mb-2">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-3xl p-10 shadow-card">
+            <ShieldAlert className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
+            <h1 className="font-heading text-headline-sm text-red-800 dark:text-red-300 mb-2">
               Akses Ditolak / Gagal
             </h1>
-            <p className="text-body-md text-red-600 mb-6">{error}</p>
+            <p className="text-body-md text-red-600 dark:text-red-300/90 mb-6">{error}</p>
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white text-label-lg font-semibold rounded-full"
@@ -401,14 +401,14 @@ export default function AdminDashboard() {
               <span className="text-body-md text-on-surface-variant font-medium">
                 Total Pendapatan
               </span>
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
                 <Wallet className="h-5 w-5" />
               </div>
             </div>
             <p className="font-heading text-headline-md text-on-surface">
               Rp {stats.totalRevenue.toLocaleString("id-ID")}
             </p>
-            <p className="text-label-md text-green-600 mt-1">
+            <p className="text-label-md text-emerald-700 dark:text-emerald-400 mt-1">
               Dari {stats.totalPaidCount} pembayaran sukses
             </p>
           </div>
@@ -463,7 +463,7 @@ export default function AdminDashboard() {
               <span className="text-body-md text-on-surface-variant font-medium">
                 Abandoned Cart
               </span>
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-700 dark:text-amber-300">
                 <ShoppingBag className="h-5 w-5" />
               </div>
             </div>
@@ -700,8 +700,8 @@ export default function AdminDashboard() {
                             <span
                               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-label-md font-semibold ${
                                 u.paid
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-amber-100 text-amber-700"
+                                  ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+                                  : "bg-amber-500/12 text-amber-800 dark:text-amber-300"
                               }`}
                             >
                               {u.paid ? "Aktif" : "Pending"}
@@ -780,10 +780,10 @@ export default function AdminDashboard() {
                             <span
                               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-label-md font-semibold ${
                                 isRecovered
-                                  ? "bg-green-100 text-green-700"
+                                  ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
                                   : s.recovery_email_sent
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-slate-100 text-slate-600"
+                                    ? "bg-amber-500/12 text-amber-800 dark:text-amber-300"
+                                    : "bg-surface-container text-on-surface-variant"
                               }`}
                             >
                               {isRecovered

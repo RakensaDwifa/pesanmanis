@@ -43,7 +43,6 @@ export default function PermintaanMaaf({
     const sessionKey = `pm:responded:${ucapanId}`;
     try {
       if (sessionStorage.getItem(sessionKey) === "1") return;
-      sessionStorage.setItem(sessionKey, "1");
     } catch {
       /* ignore */
     }
@@ -56,6 +55,11 @@ export default function PermintaanMaaf({
     };
 
     if (!isRemote()) {
+      try {
+        sessionStorage.setItem(sessionKey, "1");
+      } catch {
+        /* ignore */
+      }
       saveRecipientResponse(ucapanId, {
         ...payload,
         respondedAt: Date.now(),
@@ -67,7 +71,21 @@ export default function PermintaanMaaf({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).catch(() => undefined);
+    })
+      .then((res) => {
+        if (res.ok) {
+          try {
+            sessionStorage.setItem(sessionKey, "1");
+          } catch {
+            /* ignore */
+          }
+        } else {
+          respondedRef.current = false;
+        }
+      })
+      .catch(() => {
+        respondedRef.current = false;
+      });
   };
 
   return (
@@ -152,7 +170,7 @@ export default function PermintaanMaaf({
               {PLEAD_TEXTS[Math.min(attempts, PLEAD_TEXTS.length - 1)]}
             </p>
 
-            <div className="relative w-full max-w-xs h-40">
+            <div className="relative flex flex-wrap items-center justify-center gap-3 w-full max-w-sm min-h-[120px] py-2">
               <motion.button
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
@@ -162,10 +180,10 @@ export default function PermintaanMaaf({
                 Ya, aku maafkan 💛
               </motion.button>
               <motion.button
-                animate={attempts > 0 ? runawayPos : {}}
+                animate={attempts > 0 ? runawayPos : { x: 0, y: 0 }}
                 transition={{ type: "spring", bounce: 0.5, duration: 0.5 }}
                 onClick={runaway}
-                className="absolute top-2 right-2 px-4 py-2 bg-surface-container-low text-on-surface-variant text-label-md font-semibold rounded-full border border-outline-variant/40"
+                className="px-4 py-2.5 bg-surface-container-low text-on-surface-variant text-label-md font-semibold rounded-full border border-outline-variant/40"
               >
                 Belum dulu 😤
               </motion.button>

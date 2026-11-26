@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import LoginForm from "@/components/auth/LoginForm";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Masuk",
   description: "Masuk ke dashboard PesanManis.",

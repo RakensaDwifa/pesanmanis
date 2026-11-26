@@ -5,11 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import { hasValidGateCookie } from "@/lib/gate-cookie";
 import {
+  extractUnlockAtFromTimeline,
   mapUcapanRow,
   stripLockedUcapan,
   stripPublicUcapan,
 } from "@/lib/supabase/rows";
 import type { UcapanRow } from "@/lib/supabase/rows";
+import { currentEpochMs, isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import { isValidUuid } from "@/lib/validation";
 import PublicView from "@/components/view/PublicView";
 
@@ -23,13 +25,14 @@ export async function generateMetadata({
   let fromName = "Seseorang";
   let message = "";
   let gateType: string | null = null;
+  let countdownLocked = false;
 
   if (isRemote() && isValidUuid(id)) {
     try {
       const supabase = createAdminClient();
       const { data } = await supabase
         .from("ucapan")
-        .select("to_name,from_name,message,gate_type,paid")
+        .select("to_name,from_name,message,gate_type,timeline,paid")
         .eq("id", id)
         .eq("paid", true)
         .maybeSingle();
@@ -38,6 +41,9 @@ export async function generateMetadata({
         fromName = data.from_name ?? fromName;
         message = data.message ?? "";
         gateType = data.gate_type ?? null;
+        countdownLocked = isUcapanCountdownLocked(
+          extractUnlockAtFromTimeline(data.timeline)
+        );
       }
     } catch {
       // fallback ke nilai default
@@ -46,8 +52,9 @@ export async function generateMetadata({
 
   const teaser = message.trim().split(/\s+/).slice(0, 18).join(" ");
   const title = `Untuk ${toName} 💌 — dari ${fromName}`;
-  const description =
-    gateType === "trivia"
+  const description = countdownLocked
+    ? "⏳ Pesan kejutan terjadwal. Tunggu hitungan mundurnya habis untuk membuka kejutan spesial ini."
+    : gateType === "trivia"
       ? "🔒 Pesan rahasia terkunci. Jawab kuis kenangan untuk membuka kejutan spesial ini."
       : gateType
         ? "🔒 Pesan rahasia terkunci. Masukkan PIN untuk membuka kejutan spesial ini."
@@ -83,6 +90,7 @@ export default async function ViewRoute({
   params: Promise<{ slug: string; id: string }>;
 }) {
   const { slug, id } = await params;
+  const serverNowMs = currentEpochMs();
 
   let remote = null;
   if (isRemote() && isValidUuid(id)) {
@@ -101,8 +109,13 @@ export default async function ViewRoute({
 
       const mapped = mapUcapanRow(row);
       if (row.paid) {
+        const countdownLocked = isUcapanCountdownLocked(
+          mapped.unlockAt,
+          serverNowMs
+        );
         const unlocked =
-          !row.gate_type || (await hasValidGateCookie(row.id));
+          !countdownLocked &&
+          (!row.gate_type || (await hasValidGateCookie(row.id)));
         remote = unlocked
           ? stripPublicUcapan(mapped)
           : stripLockedUcapan(mapped);
@@ -119,5 +132,5 @@ export default async function ViewRoute({
     }
   }
 
-  return <PublicView id={id} remote={remote} />;
+  return <PublicView id={id} remote={remote} serverNowMs={serverNowMs} />;
 }

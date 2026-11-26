@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Download, Heart, Receipt, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,13 +32,24 @@ export default function LoveReceiptModal({
   const [downloading, setDownloading] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "Hari Spesial";
+  const parsedDate = dateStr ? new Date(dateStr) : null;
+  const formattedDate =
+    parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : "Hari Spesial";
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen]);
 
   async function handleDownload() {
     if (!receiptRef.current) return;
@@ -82,13 +93,20 @@ export default function LoveReceiptModal({
       {isOpen && (
         <div
           data-lenis-prevent
+          onClick={() => setIsOpen(false)}
           className={
             variant === "floating"
               ? "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
               : "absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           }
         >
-          <div className="relative w-full max-w-sm rounded-3xl bg-neutral-100 p-5 shadow-2xl overflow-hidden flex flex-col items-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bukti Struk Cinta"
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl bg-neutral-100 p-5 shadow-2xl flex flex-col items-center"
+          >
             {/* Close Button */}
             <button
               onClick={() => setIsOpen(false)}
@@ -116,13 +134,13 @@ export default function LoveReceiptModal({
               </div>
 
               <div className="text-[11px] space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Penerima :</span>
-                  <span className="font-bold">{toName}</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-500 shrink-0">Penerima :</span>
+                  <span className="font-bold truncate text-right">{toName}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Pengirim :</span>
-                  <span className="font-bold">{fromName}</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-500 shrink-0">Pengirim :</span>
+                  <span className="font-bold truncate text-right">{fromName}</span>
                 </div>
               </div>
 

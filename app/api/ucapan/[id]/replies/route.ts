@@ -1,51 +1,25 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { hasValidGateCookie } from "@/lib/gate-cookie";
+import { canAccessPublicUcapan } from "@/lib/public-ucapan-access";
 import { asTrimmedString, isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-async function canAccessPublicUcapan(id: string): Promise<"ok" | "not_found" | "locked"> {
-  const admin = createAdminClient();
-  const { data: target } = await admin
-    .from("ucapan")
-    .select("id, paid, gate_type, owner_id")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!target) return "not_found";
-
-  if (!target.paid) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && target.owner_id === user.id) return "ok";
-    return "not_found";
-  }
-
-  if (target.gate_type) {
-    if (await hasValidGateCookie(id)) return "ok";
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && target.owner_id === user.id) return "ok";
-    return "locked";
-  }
-
-  return "ok";
-}
-
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isRemote()) {
     return NextResponse.json({ ok: true, demo: true, replies: [] });
+  }
+  const { success } = await checkRateLimit(`replies-read:${getClientIp(request)}`, 60, 60000);
+  if (!success) {
+    return NextResponse.json(
+      { ok: false, error: "RATE_LIMIT_EXCEEDED" },
+      { status: 429 }
+    );
   }
   const { id } = await params;
   if (!isValidUuid(id)) {

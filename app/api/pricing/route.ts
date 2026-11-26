@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getTemplateTier } from "@/lib/pricing";
 import { getActiveTierPrices } from "@/lib/pricing-server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,13 @@ export const dynamic = "force-dynamic";
  * sama dengan angka yang ditagih server.
  */
 export async function GET(request: Request) {
+  const { success } = await checkRateLimit(`pricing-read:${getClientIp(request)}`, 60, 60000);
+  if (!success) {
+    return NextResponse.json(
+      { ok: false, error: "RATE_LIMIT_EXCEEDED" },
+      { status: 429 }
+    );
+  }
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get("slug") ?? undefined;
   const tier = getTemplateTier(slug);

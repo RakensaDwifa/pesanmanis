@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { hasValidGateCookie } from "@/lib/gate-cookie";
+import { extractUnlockAtFromTimeline } from "@/lib/supabase/rows";
+import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import { isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: target } = await admin
     .from("ucapan")
-    .select("id, paid, gate_type")
+    .select("id, paid, gate_type, timeline")
     .eq("id", ucapanId)
     .eq("paid", true)
     .maybeSingle();
@@ -41,7 +43,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // Delay view count until Intimate Gate has been unlocked.
+  // Delay view count until countdown unlock time and Intimate Gate have passed.
+  if (isUcapanCountdownLocked(extractUnlockAtFromTimeline(target.timeline))) {
+    return NextResponse.json({ ok: true, skipped: true });
+  }
   if (target.gate_type && !(await hasValidGateCookie(ucapanId))) {
     return NextResponse.json({ ok: true, skipped: true });
   }

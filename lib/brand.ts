@@ -6,11 +6,24 @@ import {
   SIGNATURE_NORMAL_AMOUNT_LABEL,
   SIGNATURE_PROMO_AMOUNT,
   SIGNATURE_PROMO_AMOUNT_LABEL,
-} from "./pricing";
-import { normalizeBaseUrl } from "./validation";
+} from "./pricing.ts";
+import { normalizeBaseUrl } from "./validation.ts";
 
 const BRAND_DOMAIN = "pesanmanis.web.id";
 const CONTACT_EMAIL = `hello@${BRAND_DOMAIN}`;
+
+/** Normalizes an Indonesian phone/WhatsApp number (`08...` -> `628...`) or returns empty if invalid. */
+export function normalizeWhatsAppDigits(raw?: string | null): string {
+  let digits = (raw ?? "").replace(/\D/g, "");
+  if (digits.startsWith("0")) {
+    digits = `62${digits.slice(1)}`;
+  }
+  return digits.length >= 8 ? digits : "";
+}
+
+const SUPPORT_WA_DIGITS = normalizeWhatsAppDigits(
+  process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
+);
 
 export const BRAND = {
   name: "PesanManis",
@@ -22,8 +35,8 @@ export const BRAND = {
   tagline: "Kirim rasa, bukan sekadar kata.",
   description: `Buat website ucapan personal untuk orang spesial kamu. Birthday, anniversary, love letter — kirim kejutan manis yang bikin dia tersenyum. Harga promo perkenalan mulai ${PROMO_AMOUNT_LABEL} (harga normal mulai ${NORMAL_AMOUNT_LABEL}).`,
   contactEmail: CONTACT_EMAIL,
-  supportUrl: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
-    ? `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/\D/g, "")}?text=${encodeURIComponent("Halo Admin PesanManis, saya butuh bantuan.")}`
+  supportUrl: SUPPORT_WA_DIGITS
+    ? `https://wa.me/${SUPPORT_WA_DIGITS}?text=${encodeURIComponent("Halo Admin PesanManis, saya butuh bantuan.")}`
     : `mailto:${CONTACT_EMAIL}?subject=Bantuan%20PesanManis`,
   price: PROMO_AMOUNT,
   priceLabel: PROMO_AMOUNT_LABEL,

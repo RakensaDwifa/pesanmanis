@@ -1,4 +1,5 @@
 ﻿import { Metadata } from "next";
+import { BRAND } from "@/lib/brand";
 import { getCatalogTemplates } from "@/lib/templates";
 import TemplatesHero from "./TemplatesHero";
 import TemplatesClient from "./TemplatesClient";
@@ -7,6 +8,33 @@ export const metadata: Metadata = {
   title: "Pilih Template Ucapan Manis",
   description:
     "Jelajahi semua template ucapan manis interaktif. Coba preview gratis, lalu buat kejutan spesial untuk orang tersayang dalam hitungan menit.",
+  alternates: {
+    canonical: "/templates",
+  },
+  openGraph: {
+    title: `Pilih Template Ucapan Manis — ${BRAND.name}`,
+    description:
+      "Jelajahi semua template ucapan manis interaktif. Coba preview gratis, lalu buat kejutan spesial untuk orang tersayang dalam hitungan menit.",
+    url: `${BRAND.baseUrl}/templates`,
+    type: "website",
+    siteName: BRAND.name,
+    locale: "id_ID",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `Katalog Template ${BRAND.name}`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `Pilih Template Ucapan Manis — ${BRAND.name}`,
+    description:
+      "Jelajahi semua template ucapan manis interaktif. Coba preview gratis, lalu buat kejutan spesial dalam hitungan menit.",
+    images: ["/twitter-image"],
+  },
 };
 
 export default async function TemplatesPage({

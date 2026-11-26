@@ -18,6 +18,8 @@ const TOPIC_LINKS = [
   { label: "Kado LDR", href: "/ucapan/kado-digital-ldr" },
   { label: "Confess Gebetan", href: "/ucapan/confess-gebetan" },
   { label: "Ucapan Wisuda", href: "/ucapan/ucapan-wisuda-sahabat" },
+  { label: "Kartu Valentine", href: "/ucapan/valentine-romantis" },
+  { label: "Surat Cinta Online", href: "/ucapan/surat-cinta-online" },
 ];
 
 export default function Footer() {
@@ -87,7 +89,7 @@ export default function Footer() {
 
         <div className="w-full h-px bg-white/20" />
         <p className="text-label-md font-normal text-white/85 flex items-center gap-1 justify-center">
-          © 2026 {BRAND.name}.com — Dibuat dengan penuh cinta{" "}
+          © 2026 {BRAND.domain} — Dibuat dengan penuh cinta{" "}
           <Heart className="h-4 w-4 fill-current" />
         </p>
       </MotionStaggerGroup>

@@ -1,7 +1,11 @@
 import { ImageResponse } from "next/og";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
+import { extractUnlockAtFromTimeline } from "@/lib/supabase/rows";
+import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
+import { isValidUuid } from "@/lib/validation";
 
+export const dynamic = "force-dynamic";
 export const alt = "Sebuah Ucapan Untukmu";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -33,20 +37,30 @@ export default async function Image({
   const { id } = await params;
 
   let data = FALLBACK;
-  if (isRemote()) {
+  if (isRemote() && isValidUuid(id)) {
     try {
       const supabase = createAdminClient();
       const { data: row } = await supabase
         .from("ucapan")
-        .select("template_slug,to_name,from_name,title,gate_type")
+        .select("template_slug,to_name,from_name,title,gate_type,timeline")
         .eq("id", id)
         .eq("paid", true)
         .maybeSingle();
       if (row) {
+        const countdownLocked = isUcapanCountdownLocked(
+          extractUnlockAtFromTimeline(row.timeline)
+        );
+        const safeTo = (row.to_name ?? FALLBACK.toName).slice(0, 32);
+        const safeFrom = (row.from_name ?? FALLBACK.fromName).slice(0, 32);
+        const safeTitle = countdownLocked
+          ? "Menunggu Waktu Tiba"
+          : row.gate_type
+            ? "Pesan Rahasia Untukmu"
+            : (row.title ?? FALLBACK.title).slice(0, 64);
         data = {
-          toName: row.to_name ?? FALLBACK.toName,
-          fromName: row.from_name ?? FALLBACK.fromName,
-          title: row.gate_type ? "🔒 Pesan Rahasia Untukmu" : (row.title ?? FALLBACK.title),
+          toName: safeTo,
+          fromName: safeFrom,
+          title: safeTitle,
           slug: row.template_slug ?? FALLBACK.slug,
         };
       }

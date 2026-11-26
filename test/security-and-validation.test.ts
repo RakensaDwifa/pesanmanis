@@ -18,6 +18,7 @@ import {
 import {
   MAX_HESITATION_COUNT,
   buildDraftAddonState,
+  extractUnlockAtFromTimeline,
   mapUcapanRow,
   parseRecipientResponse,
   stripLockedUcapan,
@@ -26,6 +27,9 @@ import {
   validateUcapanInput,
   type UcapanRow,
 } from "../lib/supabase/rows.ts";
+import { getTemplate } from "../lib/templates.ts";
+import { isUcapanCountdownLocked } from "../lib/unlock-schedule.ts";
+import { normalizeWhatsAppDigits } from "../lib/brand.ts";
 
 test("validation: menolak input non-string dan URL protocol-relative (//)", () => {
   // Non-string JSON payload tidak boleh melempar TypeError
@@ -424,4 +428,58 @@ test("recipient-response: validasi ketat, sanitasi & penyembunyian saat gate ter
 
   const unlocked = stripPublicUcapan(mapped);
   assert.deepEqual(unlocked.recipientResponse, mapped.recipientResponse);
+});
+
+test("countdown: extractUnlockAtFromTimeline dan stripLockedUcapan menahan bocoran sebelum waktu buka", () => {
+  const futureIso = "2099-02-14T12:00:00.000Z";
+  const timeline = [
+    { date: "2025", title: "Awal" },
+    { date: "__pm_meta__", title: "", mood: "romantic", unlockAt: futureIso },
+  ];
+
+  const extracted = extractUnlockAtFromTimeline(timeline);
+  assert.equal(extracted, futureIso);
+  assert.equal(isUcapanCountdownLocked(extracted, Date.parse("2099-02-14T11:59:59.000Z")), true);
+  assert.equal(isUcapanCountdownLocked(extracted, Date.parse("2099-02-14T12:00:00.000Z")), false);
+
+  const row: UcapanRow = {
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    template_slug: "amplop-cinta",
+    to_name: "Nadia",
+    from_name: "Raka",
+    title: "Jangan dibuka dulu!",
+    message: "Isi surat rahasia sebelum countdown habis.",
+    photos: ["https://cdn.example.com/p.webp"],
+    music_url: "https://cdn.example.com/m.mp3",
+    email: "raka@example.com",
+    timeline,
+    paid: true,
+    paid_at: "2026-01-01T00:00:00Z",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  const mapped = mapUcapanRow(row);
+  assert.equal(mapped.unlockAt, futureIso);
+
+  const redacted = stripLockedUcapan(mapped);
+  assert.equal(redacted.locked, true);
+  assert.equal(redacted.unlockAt, futureIso);
+  assert.equal(redacted.title, "");
+  assert.equal(redacted.message, "");
+  assert.deepEqual(redacted.photos, []);
+  assert.equal(redacted.musicUrl, undefined);
+});
+
+test("templates: bonceng-malam tetap comingSoon / non-aktif dan tier signature aktif untuk kaca-berembun", () => {
+  assert.equal(getTemplate("bonceng-malam")?.active, false);
+  assert.equal(getTemplate("bonceng-malam")?.comingSoon, true);
+  assert.equal(getTemplate("kaca-berembun")?.active, true);
+});
+
+test("brand: normalizeWhatsAppDigits menormalisasi awalan 08 dan menolak nomor pendek", () => {
+  assert.equal(normalizeWhatsAppDigits("0812-3456-7890"), "6281234567890");
+  assert.equal(normalizeWhatsAppDigits("+62 812 3456 7890"), "6281234567890");
+  assert.equal(normalizeWhatsAppDigits("   1234  "), "");
+  assert.equal(normalizeWhatsAppDigits(""), "");
 });

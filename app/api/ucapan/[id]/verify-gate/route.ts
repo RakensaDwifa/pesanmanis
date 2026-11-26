@@ -6,10 +6,12 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { attachGateUnlockCookie } from "@/lib/gate-cookie";
 import { safeStringEqual } from "@/lib/gate-token";
 import {
+  extractUnlockAtFromTimeline,
   mapUcapanRow,
   stripPublicUcapan,
   type UcapanRow,
 } from "@/lib/supabase/rows";
+import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import { asTrimmedString, isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +81,20 @@ export async function POST(
 
   if (!typedRow.gate_type || !typedRow.gate_data) {
     return NextResponse.json({ ok: false, error: "GATE_NOT_CONFIGURED" }, { status: 400 });
+  }
+
+  if (
+    typedRow.paid &&
+    isUcapanCountdownLocked(extractUnlockAtFromTimeline(typedRow.timeline))
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "COUNTDOWN_LOCKED",
+        message: "Ucapan ini belum waktunya dibuka.",
+      },
+      { status: 403 }
+    );
   }
 
   const isPin = typedRow.gate_type === "pin";

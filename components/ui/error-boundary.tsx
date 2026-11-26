@@ -68,8 +68,8 @@ export default class ErrorBoundary extends Component<
       return (
         <div className="min-h-screen flex items-center justify-center bg-surface px-5">
           <div className="max-w-md w-full px-5 text-center">
-            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="h-8 w-8 text-red-500" />
+            <div className="w-16 h-16 rounded-full bg-red-500/12 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="h-8 w-8 text-red-500 dark:text-red-400" />
             </div>
             <h1 className="font-heading text-headline-md text-on-surface mb-2">
               Terjadi Kesalahan

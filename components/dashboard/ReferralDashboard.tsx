@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Copy, Gift, Users, Wallet } from "lucide-react";
+import { Copy, Gift, RefreshCw, Users, Wallet } from "lucide-react";
+import { toast } from "sonner";
 import { AnalyticsEvents } from "@/lib/analytics";
 import {
   REFERRAL_MAX_REWARDED_PER_REFERRER,
@@ -39,22 +40,33 @@ export default function ReferralDashboard({
   });
   const [copied, setCopied] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const reduced = useReducedMotion();
 
-  useEffect(() => {
+  const loadReferral = useCallback(() => {
     fetch("/api/referral")
       .then(async (r) => {
         const json = await r.json();
         if (json.demo) {
+          setLoadFailed(false);
           setIsDemoMode(true);
-        } else if (json.ok) {
+        } else if (r.ok && json.ok) {
+          setLoadFailed(false);
           setCode(json.code);
           setStats(json.stats);
+        } else {
+          setLoadFailed(true);
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        setLoadFailed(true);
+      })
       .finally(() => setLoaded(true));
   }, []);
+
+  useEffect(() => {
+    loadReferral();
+  }, [loadReferral]);
 
   const link =
     code && typeof window !== "undefined"
@@ -66,15 +78,16 @@ export default function ReferralDashboard({
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
+      toast.success("Link referral tersalin!");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      toast.error("Gagal menyalin link. Silakan salin manual.");
     }
   };
 
   const content = (
     <>
-      <ReferralHeader />
+      <ReferralHeader embedded={embedded} />
 
       <AnimatePresence mode="wait" initial={false}>
         {!loaded ? (
@@ -85,7 +98,7 @@ export default function ReferralDashboard({
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: EASE_WARM }}
           >
-            <ReferralContentSkeleton />
+            <ReferralContentSkeleton embedded={embedded} />
           </motion.div>
         ) : (
           <motion.div
@@ -143,14 +156,29 @@ export default function ReferralDashboard({
                   )}
                 </>
               ) : (
-                <p className="text-body-md text-red-600 dark:text-red-400">
-                  Gagal memuat kode referral. Coba refresh halaman.
-                </p>
+                <div className="space-y-3">
+                  <p className="text-body-md text-red-600 dark:text-red-400">
+                    Gagal memuat kode referral. Coba muat ulang.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoadFailed(false);
+                      setLoaded(false);
+                      loadReferral();
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container text-on-surface text-label-md font-semibold hover:bg-surface-container-high transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Coba Lagi
+                  </button>
+                </div>
               )}
             </div>
 
               {/* Statistik */}
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
+              {!loadFailed && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
                 {[
                   { icon: Users, label: "Diundang", value: String(stats.invited) },
                   {
@@ -162,8 +190,9 @@ export default function ReferralDashboard({
                     icon: Wallet,
                     label: "Saldo",
                     value: `Rp ${(stats.balance ?? stats.earned).toLocaleString("id-ID")}`,
+                    spanTwo: true,
                   },
-                ].map(({ icon: Icon, label, value }, idx) => (
+                ].map(({ icon: Icon, label, value, spanTwo }, idx) => (
                   <motion.div
                     key={label}
                     initial={reduced ? false : { opacity: 0, y: 10 }}
@@ -173,7 +202,9 @@ export default function ReferralDashboard({
                       delay: 0.04 + idx * 0.05,
                       ease: EASE_WARM,
                     }}
-                    className="bg-white rounded-2xl sm:rounded-3xl border border-outline-variant/30 shadow-card p-3.5 sm:p-6 text-center"
+                    className={`bg-white rounded-2xl sm:rounded-3xl border border-outline-variant/30 shadow-card p-3.5 sm:p-6 text-center ${
+                      spanTwo ? "col-span-2 sm:col-span-1" : ""
+                    }`}
                   >
                     <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-primary-fixed/40 flex items-center justify-center mx-auto mb-2 sm:mb-3">
                       <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
@@ -187,6 +218,7 @@ export default function ReferralDashboard({
                   </motion.div>
                 ))}
               </div>
+              )}
 
               {/* Cara kerja */}
               <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8">

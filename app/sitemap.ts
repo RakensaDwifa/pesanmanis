@@ -1,7 +1,6 @@
 import type { MetadataRoute } from "next";
 import { BRAND } from "@/lib/brand";
 import { SEO_TOPICS } from "@/lib/seo-topics";
-import { getActiveTemplates } from "@/lib/templates";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = BRAND.baseUrl;
@@ -40,13 +39,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const previewRoutes: MetadataRoute.Sitemap = getActiveTemplates().map((tpl) => ({
-    url: `${base}/preview/${tpl.slug}`,
-    lastModified: now,
-    changeFrequency: "monthly",
-    priority: 0.75,
-  }));
-
   const topicRoutes: MetadataRoute.Sitemap = SEO_TOPICS.map((topic) => ({
     url: `${base}/ucapan/${topic.slug}`,
     lastModified: now,
@@ -54,5 +46,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.85,
   }));
 
-  return [...staticRoutes, ...previewRoutes, ...topicRoutes];
+  return [...staticRoutes, ...topicRoutes];
 }

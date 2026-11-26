@@ -134,6 +134,9 @@ begin
     if new.recipient_response is distinct from old.recipient_response then
       raise exception 'Kolom recipient_response hanya bisa diubah oleh sistem';
     end if;
+    if old.paid is true and new.template_slug is distinct from old.template_slug then
+      raise exception 'Kolom template_slug tidak boleh diubah setelah pembayaran lunas';
+    end if;
     if old.paid is true and new.draft_addons is distinct from old.draft_addons then
       raise exception 'Kolom draft_addons tidak boleh diubah setelah pembayaran lunas';
     end if;

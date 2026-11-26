@@ -324,7 +324,7 @@ export default function QrCodeCard({
           color: "#241914",
           borderColor: "#d9c3b5",
         }}
-        className="w-fit max-w-full mx-auto sm:mx-0 rounded-2xl border shadow-sm px-5 py-4 flex flex-col items-center text-center"
+        className="w-fit max-w-full mx-auto sm:mx-0 rounded-2xl border shadow-sm px-3.5 sm:px-5 py-4 flex flex-col items-center text-center"
       >
         <p
           style={{ color: "#de7038" }}
@@ -335,9 +335,9 @@ export default function QrCodeCard({
 
         <motion.div
           key={qrShape}
-          initial={reduced ? false : { opacity: 0.65, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.24, ease: EASE_WARM }}
+          initial={reduced ? false : { scale: 0.96 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.2, ease: EASE_WARM }}
         >
           {qrShape === "classic" ? (
             <div style={{ backgroundColor: "#ffffff" }} className="p-2 rounded-xl">
@@ -362,7 +362,9 @@ export default function QrCodeCard({
           ) : (
             <div
               className={`relative flex items-center justify-center ${
-                compact ? "w-[196px] h-[188px]" : "w-[250px] h-[240px]"
+                compact
+                  ? "w-[196px] h-[188px]"
+                  : "w-[218px] sm:w-[250px] h-[210px] sm:h-[240px]"
               }`}
             >
               <ShapedQrBackdrop shape={qrShape} />
@@ -372,7 +374,7 @@ export default function QrCodeCard({
                   backgroundColor: "#ffffff",
                   boxShadow: "0 2px 8px rgba(36, 25, 20, 0.08)",
                 }}
-                className={`relative z-[1] p-1.5 rounded-xl ${qrContainerOffsetClass}`}
+                className={`relative z-[1] ${compact ? "p-1.5" : "p-2"} rounded-xl ${qrContainerOffsetClass}`}
               >
                 <QRCodeSVG
                   value={url}

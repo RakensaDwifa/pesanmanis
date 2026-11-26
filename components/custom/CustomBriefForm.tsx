@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Check, Copy, Mail, MessageCircle, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { BRAND } from "@/lib/brand";
+import { BRAND, normalizeWhatsAppDigits } from "@/lib/brand";
 
 const MOMEN_OPTIONS = [
   "Anniversary / LDR",
@@ -60,10 +60,6 @@ function buildBriefMessage({
   ].join("\n");
 }
 
-function getWhatsAppDigits(): string {
-  return (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
-}
-
 export default function CustomBriefForm() {
   const [senderName, setSenderName] = useState("");
   const [recipientName, setRecipientName] = useState("");
@@ -72,7 +68,9 @@ export default function CustomBriefForm() {
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const waDigits = getWhatsAppDigits();
+  const waDigits = normalizeWhatsAppDigits(
+    process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
+  );
   const hasWhatsApp = waDigits.length >= 8;
 
   const previewText =
@@ -105,18 +103,19 @@ export default function CustomBriefForm() {
 
     if (hasWhatsApp) {
       const waUrl = `https://wa.me/${waDigits}?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, "_blank", "noopener,noreferrer");
+      const popup = window.open(waUrl, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.href = waUrl;
+      }
       toast.success("Membuka WhatsApp dengan brief kamu…");
       return;
     }
 
     // Fallback aman jika NEXT_PUBLIC_WHATSAPP_NUMBER belum diisi
-    const mailUrl = BRAND.supportUrl.startsWith("mailto:")
-      ? `mailto:${BRAND.contactEmail}?subject=${encodeURIComponent(
-          `Request Kado Custom — ${moment}`
-        )}&body=${encodeURIComponent(message)}`
-      : BRAND.supportUrl;
-    window.open(mailUrl, "_blank", "noopener,noreferrer");
+    const mailUrl = `mailto:${BRAND.contactEmail}?subject=${encodeURIComponent(
+      `Request Kado Custom — ${moment}`
+    )}&body=${encodeURIComponent(message)}`;
+    window.location.href = mailUrl;
     toast.info("Membuka aplikasi email untuk mengirim brief kamu");
   };
 

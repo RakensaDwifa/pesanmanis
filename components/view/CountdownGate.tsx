@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { getCountdownParts } from "@/lib/unlock-schedule";
 
+const emptySubscribe = () => () => {};
+const ZERO_PARTS = { days: 0, hours: 0, minutes: 0, seconds: 0, total: 1 };
+
 interface CountdownGateProps {
   toName: string;
   unlockAt: string;
+  clockOffsetMs?: number;
   onUnlocked: () => void;
 }
 
@@ -15,7 +19,7 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function formatUnlockDate(iso: string): string {
+function formatUnlockDate(iso: string, timeZone?: string): string {
   try {
     const d = new Date(iso);
     const dateStr = d.toLocaleDateString("id-ID", {
@@ -23,10 +27,12 @@ function formatUnlockDate(iso: string): string {
       day: "numeric",
       month: "long",
       year: "numeric",
+      ...(timeZone ? { timeZone } : {}),
     });
     const timeStr = d.toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
+      ...(timeZone ? { timeZone } : {}),
     });
     return `${dateStr} pukul ${timeStr}`;
   } catch {
@@ -37,33 +43,51 @@ function formatUnlockDate(iso: string): string {
 export default function CountdownGate({
   toName,
   unlockAt,
+  clockOffsetMs = 0,
   onUnlocked,
 }: CountdownGateProps) {
-  const [parts, setParts] = useState(() => getCountdownParts(unlockAt));
+  const isClient = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+  const [parts, setParts] = useState(() =>
+    getCountdownParts(unlockAt, Date.now() + clockOffsetMs)
+  );
   const onUnlockedRef = useRef(onUnlocked);
+  const notifiedRef = useRef(false);
 
   useEffect(() => {
     onUnlockedRef.current = onUnlocked;
   }, [onUnlocked]);
 
+  const notifyOnce = useCallback(() => {
+    if (notifiedRef.current) return;
+    notifiedRef.current = true;
+    onUnlockedRef.current();
+  }, []);
+
   const tick = useCallback(() => {
-    const p = getCountdownParts(unlockAt);
+    const p = getCountdownParts(unlockAt, Date.now() + clockOffsetMs);
     setParts(p);
     if (p.total <= 0) {
-      onUnlockedRef.current();
+      notifyOnce();
     }
-  }, [unlockAt]);
+  }, [unlockAt, clockOffsetMs, notifyOnce]);
 
   useEffect(() => {
     if (parts.total <= 0) {
-      onUnlockedRef.current();
+      notifyOnce();
       return;
     }
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [tick, parts.total]);
+  }, [tick, parts.total, notifyOnce]);
 
-  const unlockDateLabel = formatUnlockDate(unlockAt);
+  const displayParts = isClient ? parts : ZERO_PARTS;
+  const unlockDateLabel = isClient
+    ? formatUnlockDate(unlockAt)
+    : formatUnlockDate(unlockAt, "Asia/Jakarta");
 
   return (
     <motion.div
@@ -110,10 +134,10 @@ export default function CountdownGate({
           </p>
           <div className="grid grid-cols-4 gap-3">
             {[
-              { value: parts.days, label: "Hari" },
-              { value: parts.hours, label: "Jam" },
-              { value: parts.minutes, label: "Menit" },
-              { value: parts.seconds, label: "Detik" },
+              { value: displayParts.days, label: "Hari" },
+              { value: displayParts.hours, label: "Jam" },
+              { value: displayParts.minutes, label: "Menit" },
+              { value: displayParts.seconds, label: "Detik" },
             ].map(({ value, label }) => (
               <div key={label} className="flex flex-col items-center gap-1.5">
                 <div className="w-full rounded-2xl bg-white/80 border border-[#DE7038]/20 shadow-sm py-3 px-1">

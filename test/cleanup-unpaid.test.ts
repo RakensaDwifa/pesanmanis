@@ -191,3 +191,36 @@ test("cleanup-unpaid: hanya menghapus path Storage milik owner dan menghormati s
     { fotoPaths: [], audioPaths: [] }
   );
 });
+
+test("cleanup-unpaid: membersihkan voiceNoteUrl yatim di timeline namun melindungi milik sibling", () => {
+  const supabaseUrl = "https://demo-proj.supabase.co";
+  const ownerId = "11111111-1111-1111-1111-111111111111";
+  const vnOnlyDraft = `${supabaseUrl}/storage/v1/object/public/musik/${ownerId}/voice-notes/draft-only.m4a`;
+  const vnShared = `${supabaseUrl}/storage/v1/object/public/musik/${ownerId}/voice-notes/shared.webm`;
+
+  const draft = {
+    ...makeDraft({ id: "draft-vn", owner_id: ownerId }),
+    timeline: [
+      { date: "__pm_meta__", title: "", voiceNoteUrl: vnOnlyDraft },
+      { date: "__pm_meta__", title: "", voiceNoteUrl: vnShared },
+    ],
+  };
+
+  const siblings = [
+    {
+      id: "paid-clone",
+      photos: [],
+      music_url: null,
+      timeline: [{ date: "__pm_meta__", title: "", voiceNoteUrl: vnShared }],
+    },
+  ];
+
+  const guarded = collectSafeCleanupStoragePaths(draft, siblings, supabaseUrl);
+  assert.deepEqual(guarded.audioPaths, [`${ownerId}/voice-notes/draft-only.m4a`]);
+
+  const unguarded = collectSafeCleanupStoragePaths(draft, [], supabaseUrl);
+  assert.deepEqual(unguarded.audioPaths, [
+    `${ownerId}/voice-notes/draft-only.m4a`,
+    `${ownerId}/voice-notes/shared.webm`,
+  ]);
+});

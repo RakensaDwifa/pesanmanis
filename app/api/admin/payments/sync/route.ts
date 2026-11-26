@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: payment, error: fetchErr } = await admin
     .from("payments")
-    .select("id, merchant_ref, status")
+    .select("id, merchant_ref, status, ucapan_id, amount, tripay_ref")
     .eq("merchant_ref", merchantRef)
     .maybeSingle();
 
@@ -59,6 +59,35 @@ export async function POST(request: Request) {
   }
 
   if (payment.status === "PAID") {
+    if (payment.ucapan_id) {
+      const { data: targetUcapan } = await admin
+        .from("ucapan")
+        .select("paid")
+        .eq("id", payment.ucapan_id)
+        .maybeSingle();
+
+      if (targetUcapan && !targetUcapan.paid) {
+        const repair = await activatePaidPayment({
+          merchantRef,
+          grossAmount: String(payment.amount ?? 0),
+          paymentType: "snap",
+          transactionId: payment.tripay_ref ?? null,
+        });
+        if (!repair.ok) {
+          return NextResponse.json(
+            { ok: false, error: "ACTIVATION_FAILED", message: "Gagal memulihkan aktivasi ucapan." },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json({
+          ok: true,
+          status: "PAID",
+          activated: true,
+          alreadyPaid: false,
+        });
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       status: "PAID",

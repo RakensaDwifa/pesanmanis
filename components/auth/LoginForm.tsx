@@ -130,7 +130,7 @@ function LoginFormInner({ remote }: { remote: boolean }) {
           </div>
         </div>
         <p className="relative text-label-md text-white/70">
-          © 2026 {BRAND.name}.com — Dibuat dengan penuh cinta
+          © 2026 {BRAND.domain} — Dibuat dengan penuh cinta
         </p>
       </div>
 

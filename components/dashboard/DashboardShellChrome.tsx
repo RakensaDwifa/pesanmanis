@@ -126,9 +126,9 @@ export function DashboardMobileHeader({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-title-lg text-on-surface truncate">
+            <p className="font-heading text-title-lg text-on-surface truncate">
               Dashboard Kamu
-            </h1>
+            </p>
             {realtimeLive && !demo && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -190,12 +190,13 @@ export function DashboardMobileHeader({
 }
 
 /** Shared static header for `/dashboard/referral` and its route loading shell. */
-export function ReferralHeader() {
+export function ReferralHeader({ embedded = false }: { embedded?: boolean }) {
+  const Heading = embedded ? "h2" : "h1";
   return (
     <div className="mb-8 sm:mb-10">
-      <h1 className="font-heading text-headline-md sm:text-headline-lg text-primary mb-1">
+      <Heading className="font-heading text-headline-md sm:text-headline-lg text-primary mb-1">
         Program Referral
-      </h1>
+      </Heading>
       <p className="text-body-md text-on-surface-variant">
         Ajak temanmu bikin kejutan — kamu dapat saldo Rp{" "}
         {REFERRAL_REWARD_AMOUNT.toLocaleString("id-ID")} untuk setiap teman yang

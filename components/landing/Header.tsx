@@ -84,8 +84,18 @@ export default function Header({
         setProfileOpen(false);
       }
     };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setProfileOpen(false);
+        setOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("keydown", keyHandler);
+    };
   }, []);
 
   const logout = async () => {
@@ -103,6 +113,7 @@ export default function Header({
     <img
       src={userAvatar}
       alt={userName ?? "Profil"}
+      referrerPolicy="no-referrer"
       className="h-9 w-9 rounded-full object-cover border border-outline-variant"
     />
   ) : (
@@ -255,7 +266,10 @@ export default function Header({
             transition={{ duration: 0.24, ease: EASE_WARM }}
             className="lg:hidden overflow-hidden bg-surface border-t border-surface-container-low"
           >
-            <div className="px-5 pb-6 pt-2 flex flex-col gap-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
+            <div
+              data-lenis-prevent
+              className="px-5 pb-6 pt-2 flex flex-col gap-4 max-h-[calc(100vh-5rem)] overflow-y-auto"
+            >
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}

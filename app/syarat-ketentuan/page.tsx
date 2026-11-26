@@ -1,17 +1,24 @@
+import type { Metadata } from "next";
 import { BRAND } from "@/lib/brand";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Syarat & Ketentuan",
   description: `Syarat dan ketentuan penggunaan layanan ${BRAND.name}.`,
+  alternates: {
+    canonical: "/syarat-ketentuan",
+  },
 };
 
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-surface pt-24 sm:pt-32 pb-24 sm:pb-20">
       <div className="max-w-3xl mx-auto px-5 md:px-16">
-        <h1 className="font-heading text-headline-md sm:text-headline-lg text-primary mb-5 sm:mb-6">
+        <h1 className="font-heading text-headline-md sm:text-headline-lg text-primary mb-2">
           Syarat &amp; Ketentuan Layanan
         </h1>
+        <p className="text-label-md text-on-surface-variant mb-5 sm:mb-6">
+          Terakhir diperbarui: November 2026
+        </p>
         <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-8 space-y-4 sm:space-y-5 text-body-md leading-relaxed text-on-surface">
           <p>
             <strong>1. Layanan Produk Digital.</strong> {BRAND.name} menyediakan platform
@@ -19,10 +26,12 @@ export default function TermsPage() {
             pembelian produk digital sekali bayar (tanpa biaya langganan bulanan).
           </p>
           <p>
-            <strong>2. Aktivasi & Masa Edit.</strong> Link ucapan akan langsung aktif
-            secara otomatis setelah pembayaran terverifikasi. Pemilik ucapan dapat
-            mengubah isi teks, foto, dan musik hingga <strong>7 (tujuh) hari</strong>{" "}
-            sejak tanggal pembayaran melalui halaman Dashboard.
+            <strong>2. Aktivasi, Masa Edit, &amp; Penguncian Fitur.</strong> Link ucapan
+            akan langsung aktif secara otomatis setelah pembayaran terverifikasi. Pemilik
+            ucapan dapat mengubah isi teks, foto, dan musik hingga{" "}
+            <strong>7 (tujuh) hari</strong> sejak tanggal pembayaran melalui Dashboard.
+            Pilihan template serta konfigurasi add-on berbayar (seperti Link Cantik, Kunci
+            Rahasia, Voice Note, dan Struk Cinta) terkunci setelah pembayaran lunas.
           </p>
           <p>
             <strong>3. Kebijakan Pengembalian Dana (Refund).</strong> Karena sifat produk
@@ -32,19 +41,26 @@ export default function TermsPage() {
             menyebabkan ucapan tidak dapat diakses sama sekali.
           </p>
           <p>
-            <strong>4. Tanggung Jawab Konten.</strong> Pengguna bertanggung jawab penuh
-            atas teks, foto, dan tautan yang diunggah. Dilarang mengunggah konten yang
-            melanggar hukum, mengandung unsur penipuan, pelecehan, ujaran kebencian,
-            atau pelanggaran hak cipta pihak ketiga.
+            <strong>4. Layanan Kado Custom.</strong> Pesanan website Kado Custom melalui
+            halaman <code>/custom</code> disepakati secara terpisah bersama admin
+            termasuk rincian harga, uang muka (DP), batas revisi desain, serta estimasi
+            pengerjaan. Pembatalan setelah pengerjaan dimulai mengikuti kesepakatan
+            brief awal.
           </p>
           <p>
-            <strong>5. Program Referral.</strong> Saldo reward referral diberikan untuk
+            <strong>5. Tanggung Jawab Konten.</strong> Pengguna bertanggung jawab penuh
+            atas teks, foto, audio, dan tautan yang diunggah. Dilarang mengunggah konten
+            yang melanggar hukum, mengandung unsur penipuan, pelecehan, ujaran
+            kebencian, atau pelanggaran hak cipta pihak ketiga.
+          </p>
+          <p>
+            <strong>6. Program Referral.</strong> Saldo reward referral diberikan untuk
             undangan pengguna baru yang menyelesaikan transaksi pembayaran pertama
             (maksimal 5 teman per akun pengundang) dan dapat digunakan sebagai potongan
-            harga pada checkout berikutnya.
+            harga pada checkout berikutnya sesuai ketentuan saldo minimum pembayaran.
           </p>
           <p>
-            <strong>6. Kontak Bantuan.</strong> Jika terdapat kendala pembayaran atau
+            <strong>7. Kontak Bantuan.</strong> Jika terdapat kendala pembayaran atau
             pertanyaan terkait layanan, hubungi tim kami melalui email{" "}
             <a
               href={`mailto:${BRAND.contactEmail}`}

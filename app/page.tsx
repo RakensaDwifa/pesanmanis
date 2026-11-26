@@ -110,11 +110,14 @@ export default function HomePage() {
     name: BRAND.name,
     applicationCategory: "LifestyleApplication",
     operatingSystem: "Web",
+    inLanguage: "id-ID",
     url: BRAND.baseUrl,
     description: BRAND.description,
     offers: {
-      "@type": "Offer",
-      price: String(BRAND.price),
+      "@type": "AggregateOffer",
+      lowPrice: String(BRAND.price),
+      highPrice: String(BRAND.signaturePrice),
+      offerCount: "2",
       priceCurrency: "IDR",
       availability: "https://schema.org/InStock",
       url: `${BRAND.baseUrl}/templates`,
@@ -126,7 +129,9 @@ export default function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(productJsonLd).replace(/</g, "\\u003c"),
+        }}
       />
       {/* HERO — split 2 kolom di desktop + live preview template asli */}
       <section className="w-full relative bg-surface overflow-hidden">
@@ -264,7 +269,7 @@ export default function HomePage() {
       <CourierGame />
 
       {/* CARA KERJA — timeline horizontal */}
-      <section className="w-full relative bg-primary overflow-hidden" id="cara-kerja">
+      <section className="w-full relative bg-primary overflow-hidden scroll-mt-20" id="cara-kerja">
         <div className="relative z-[1] px-5 md:px-16 max-w-[1200px] mx-auto py-16 md:py-[110px]">
           <div className="mb-14 text-center">
             <MotionTextReveal
@@ -304,7 +309,7 @@ export default function HomePage() {
       </section>
 
       {/* FITUR — bento grid */}
-      <section className="w-full relative bg-surface" id="fitur">
+      <section className="w-full relative bg-surface scroll-mt-20" id="fitur">
         <div className="relative z-[1] px-5 md:px-16 max-w-[1200px] mx-auto py-16 md:py-[110px]">
           <div className="mb-12 text-center">
             <MotionTextReveal

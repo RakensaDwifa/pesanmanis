@@ -9,6 +9,7 @@
 import {
   extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
+  isRecord,
 } from "./validation.ts";
 
 export const UNPAID_RETENTION_DAYS = 21;
@@ -21,6 +22,7 @@ export interface CleanupDraftCandidate {
   owner_id: string | null;
   photos?: string[] | null;
   music_url?: string | null;
+  timeline?: unknown[] | null;
   paid: boolean;
   created_at: string;
   updated_at: string;
@@ -36,6 +38,7 @@ export interface CleanupSiblingMediaRow {
   id: string;
   photos?: string[] | null;
   music_url?: string | null;
+  timeline?: unknown[] | null;
 }
 
 export interface SafeStoragePathsToRemove {
@@ -98,7 +101,10 @@ export function isDraftEligibleForCleanup(
  * `ucapan` owned by the same user.
  */
 export function collectSafeCleanupStoragePaths(
-  draft: Pick<CleanupDraftCandidate, "id" | "owner_id" | "photos" | "music_url">,
+  draft: Pick<
+    CleanupDraftCandidate,
+    "id" | "owner_id" | "photos" | "music_url" | "timeline"
+  >,
   siblingRows: readonly CleanupSiblingMediaRow[],
   configuredSupabaseUrl: string
 ): SafeStoragePathsToRemove {
@@ -106,6 +112,16 @@ export function collectSafeCleanupStoragePaths(
   if (!ownerId || !configuredSupabaseUrl) {
     return { fotoPaths: [], audioPaths: [] };
   }
+
+  const extractVoiceNotes = (timeline: unknown[] | null | undefined): string[] => {
+    const urls: string[] = [];
+    for (const entry of timeline ?? []) {
+      if (isRecord(entry) && typeof entry.voiceNoteUrl === "string" && entry.voiceNoteUrl) {
+        urls.push(entry.voiceNoteUrl);
+      }
+    }
+    return urls;
+  };
 
   const usedPhotosBySiblings = new Set<string>();
   const usedAudioBySiblings = new Set<string>();
@@ -116,12 +132,14 @@ export function collectSafeCleanupStoragePaths(
       const sp = extractOwnedFotoStoragePath(p, configuredSupabaseUrl, ownerId);
       if (sp) usedPhotosBySiblings.add(sp);
     }
-    const ap = extractOwnedAudioStoragePath(
-      sibling.music_url,
-      configuredSupabaseUrl,
-      ownerId
-    );
-    if (ap) usedAudioBySiblings.add(ap);
+    for (const audioUrl of [sibling.music_url, ...extractVoiceNotes(sibling.timeline)]) {
+      const ap = extractOwnedAudioStoragePath(
+        audioUrl,
+        configuredSupabaseUrl,
+        ownerId
+      );
+      if (ap) usedAudioBySiblings.add(ap);
+    }
   }
 
   const fotoSet = new Set<string>();
@@ -132,18 +150,20 @@ export function collectSafeCleanupStoragePaths(
     }
   }
 
-  const audioPaths: string[] = [];
-  const audioPath = extractOwnedAudioStoragePath(
-    draft.music_url,
-    configuredSupabaseUrl,
-    ownerId
-  );
-  if (audioPath && !usedAudioBySiblings.has(audioPath)) {
-    audioPaths.push(audioPath);
+  const audioSet = new Set<string>();
+  for (const audioUrl of [draft.music_url, ...extractVoiceNotes(draft.timeline)]) {
+    const audioPath = extractOwnedAudioStoragePath(
+      audioUrl,
+      configuredSupabaseUrl,
+      ownerId
+    );
+    if (audioPath && !usedAudioBySiblings.has(audioPath)) {
+      audioSet.add(audioPath);
+    }
   }
 
   return {
     fotoPaths: Array.from(fotoSet),
-    audioPaths,
+    audioPaths: Array.from(audioSet),
   };
 }

@@ -4,6 +4,7 @@
 
 @theme {
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-fraunces), Georgia, serif;
 
   /* Palet peach / apricot hangat */
@@ -15,6 +16,7 @@
   --color-primary-fixed-dim: #ffb597;
   --color-on-primary-fixed: #3e1400;
   --color-on-primary-fixed-variant: #8f3a10;
+  --color-error: #dc2626;
 
   --color-surface: #fff9f5;
   --color-on-surface: #241914;
@@ -35,30 +37,45 @@
   --text-display-md: 45px;
   --text-display-md--line-height: 52px;
   --text-display-md--font-weight: 400;
+  --text-display-sm: 36px;
+  --text-display-sm--line-height: 44px;
+  --text-display-sm--font-weight: 400;
   --text-headline-lg: 32px;
   --text-headline-lg--line-height: 40px;
   --text-headline-lg--font-weight: 400;
   --text-headline-md: 28px;
   --text-headline-md--line-height: 36px;
   --text-headline-md--font-weight: 400;
+  --text-headline-sm: 24px;
+  --text-headline-sm--line-height: 32px;
+  --text-headline-sm--font-weight: 400;
   --text-title-lg: 22px;
   --text-title-lg--line-height: 28px;
   --text-title-lg--font-weight: 400;
   --text-title-md: 16px;
   --text-title-md--line-height: 24px;
   --text-title-md--font-weight: 500;
+  --text-title-sm: 14px;
+  --text-title-sm--line-height: 20px;
+  --text-title-sm--font-weight: 500;
   --text-body-lg: 16px;
   --text-body-lg--line-height: 24px;
   --text-body-lg--font-weight: 400;
   --text-body-md: 14px;
   --text-body-md--line-height: 20px;
   --text-body-md--font-weight: 400;
+  --text-body-sm: 12px;
+  --text-body-sm--line-height: 16px;
+  --text-body-sm--font-weight: 400;
   --text-label-lg: 14px;
   --text-label-lg--line-height: 20px;
   --text-label-lg--font-weight: 500;
   --text-label-md: 12px;
   --text-label-md--line-height: 16px;
   --text-label-md--font-weight: 500;
+  --text-label-sm: 11px;
+  --text-label-sm--line-height: 16px;
+  --text-label-sm--font-weight: 500;
 
   --shadow-card: 0 1px 3px rgba(36, 25, 20, 0.08), 0 4px 12px rgba(36, 25, 20, 0.06);
   --shadow-card-hover: 0 2px 6px rgba(36, 25, 20, 0.1), 0 12px 28px rgba(222, 112, 56, 0.14);
@@ -111,12 +128,15 @@ body {
 }
 
 /* ---------- DARK MODE ---------- */
-.dark {
+/* Hanya berlaku di halaman utama/dashboard; halaman immersive (/t/, /u/, /preview/)
+   selalu menggunakan palet terang/kustom template agar overlay di luar TemplateShell tetap terbaca. */
+html:not([data-immersive]).dark {
   --color-primary-container: #58220b;
   --color-on-primary-container: #ffdbcb;
   --color-primary-fixed: #63290f;
   --color-on-primary-fixed: #ffdbcb;
   --color-on-primary-fixed-variant: #ffb597;
+  --color-error: #f87171;
 
   --color-surface: #191210;
   --color-on-surface: #f8eee7;
@@ -130,24 +150,23 @@ body {
   --color-outline-variant: #52433b;
 }
 
-.dark body {
+html:not([data-immersive]).dark body {
   background: var(--color-surface);
   color: var(--color-on-surface);
 }
 
-/* Kartu-kartu yang memakai bg-white hardcode ikut gelap di halaman utama/dashboard,
-   namun dikecualikan di halaman immersive (/t/, /u/, /preview/) dan frame preview Builder
-   agar palet template & kertas struk cinta tetap konsisten. */
-html:not([data-immersive]).dark .bg-white:not([data-light-card]):not([data-light-card] *) {
-  background-color: var(--color-surface-container-low);
+/* Kartu-kartu yang memakai bg-white hardcode ikut gelap di halaman utama/dashboard
+   dengan tone sedikit lebih tinggi (#2a201b) agar kontras terhadap bg-surface-container-low (#231a16).
+   Dibungkus :where() agar utility dark:bg-* eksplisit tetap menang. */
+:where(html:not([data-immersive]).dark) :where(.bg-white:not([data-light-card]):not([data-light-card] *)) {
+  background-color: #2a201b;
 }
 
-html:not([data-immersive]).dark .text-gray-600:not([data-light-card] *),
-html:not([data-immersive]).dark .text-gray-500:not([data-light-card] *) {
+:where(html:not([data-immersive]).dark) :where(.text-gray-600:not([data-light-card] *), .text-gray-500:not([data-light-card] *)) {
   color: var(--color-on-surface-variant);
 }
 
-.dark .shadow-card {
+html:not([data-immersive]).dark .shadow-card {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
@@ -172,6 +191,19 @@ html:not([data-immersive]).dark .text-gray-500:not([data-light-card] *) {
 
 .animate-ping-soft {
   animation: ping-soft 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out both;
 }
 
 @keyframes pm-float-heart {

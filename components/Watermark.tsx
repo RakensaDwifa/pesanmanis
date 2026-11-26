@@ -8,7 +8,7 @@ export default function Watermark() {
       href="/templates"
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-3 right-3 z-50 select-none rounded-full bg-black/40 hover:bg-black/60 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm transition-colors"
+      className="fixed bottom-7 right-20 z-40 select-none rounded-full bg-black/45 hover:bg-black/65 px-3 py-1 text-[11px] font-medium text-white/95 backdrop-blur-sm transition-colors whitespace-nowrap"
       title={`Buat kejutan serupa di ${BRAND.name}`}
     >
       ✨ Buat di {BRAND.name}

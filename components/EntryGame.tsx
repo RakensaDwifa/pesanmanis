@@ -60,7 +60,8 @@ export default function EntryGame({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-b from-[#FFF1F6] via-[#FFE0EC] to-[#FFD0C0]"
+      data-light-card
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-b from-[#FFF1F6] via-[#FFE0EC] to-[#FFD0C0] text-[#55443c]"
       initial={{ opacity: 1 }}
       animate={opening ? { opacity: 0, scale: 1.15 } : { opacity: 1 }}
       transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}

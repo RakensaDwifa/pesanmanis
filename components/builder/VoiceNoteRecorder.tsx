@@ -12,6 +12,17 @@ const MAX_DURATION_SEC = 180; // 3 menit
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_DEMO_DATA_URL_BYTES = 2 * 1024 * 1024; // 2 MB agar aman untuk localStorage Demo Mode
 const ALLOWED_EXTS = new Set(["mp3", "m4a", "wav", "ogg", "webm"]);
+const ALLOWED_UPLOAD_MIMES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/ogg",
+  "audio/webm",
+]);
 const emptySubscribe = () => () => {};
 
 interface VoiceNoteRecorderProps {
@@ -31,10 +42,12 @@ function formatTimer(sec: number): string {
 
 function pickSupportedMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
+  // Prioritaskan MP4/M4A bila didukung browser agar kompatibel di iOS Safari & desktop.
   const candidates = [
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
     "audio/webm;codecs=opus",
     "audio/webm",
-    "audio/mp4",
     "audio/ogg;codecs=opus",
     "audio/ogg",
   ];
@@ -255,17 +268,16 @@ export default function VoiceNoteRecorder({
       recorder.start(250);
       setRecording(true);
       setElapsedSec(0);
+      const startedAt = Date.now();
 
       timerRef.current = window.setInterval(() => {
-        setElapsedSec((prev) => {
-          const next = prev + 1;
-          if (next >= MAX_DURATION_SEC) {
-            window.setTimeout(() => stopRecording(), 0);
-            toast.info("Rekaman mencapai batas maksimal 3 menit.");
-          }
-          return next;
-        });
-      }, 1000);
+        const next = Math.floor((Date.now() - startedAt) / 1000);
+        setElapsedSec(Math.min(MAX_DURATION_SEC, next));
+        if (next >= MAX_DURATION_SEC) {
+          stopRecording();
+          toast.info("Rekaman mencapai batas maksimal 3 menit.");
+        }
+      }, 500);
     } catch {
       stopStreamAndTimer();
       setMicPermissionDenied(true);
@@ -278,7 +290,8 @@ export default function VoiceNoteRecorder({
     e.target.value = "";
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!file.type.startsWith("audio/") && !ALLOWED_EXTS.has(ext)) {
+    const normalizedMime = file.type.split(";")[0].toLowerCase();
+    if (!ALLOWED_UPLOAD_MIMES.has(normalizedMime) && !ALLOWED_EXTS.has(ext)) {
       toast.error("Format audio harus MP3, M4A, WAV, OGG, atau WebM.");
       return;
     }
@@ -439,7 +452,7 @@ export default function VoiceNoteRecorder({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".mp3,.m4a,.wav,.ogg,.webm,audio/*"
+            accept=".mp3,.m4a,.wav,.ogg,.webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
             onChange={handleFileChange}
             className="hidden"
           />

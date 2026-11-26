@@ -39,7 +39,7 @@ export async function cleanupExpiredUnpaidDrafts(
 
   const { data: candidatesRaw, error: candError } = await admin
     .from("ucapan")
-    .select("id, owner_id, photos, music_url, paid, created_at, updated_at")
+    .select("id, owner_id, photos, music_url, timeline, paid, created_at, updated_at")
     .eq("paid", false)
     .lt("created_at", cutoffIso)
     .lt("updated_at", cutoffIso)
@@ -130,7 +130,7 @@ export async function cleanupExpiredUnpaidDrafts(
   if (ownerIds.length > 0) {
     const { data: ownerRows, error: ownerErr } = await admin
       .from("ucapan")
-      .select("id, owner_id, photos, music_url")
+      .select("id, owner_id, photos, music_url, timeline")
       .in("owner_id", ownerIds);
 
     if (ownerErr) {
@@ -155,6 +155,7 @@ export async function cleanupExpiredUnpaidDrafts(
         id: raw.id,
         photos: raw.photos,
         music_url: raw.music_url,
+        timeline: raw.timeline,
       });
       siblingsByOwner.set(raw.owner_id, list);
     }

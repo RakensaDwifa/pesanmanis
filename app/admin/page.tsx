@@ -4,6 +4,8 @@ import AdminDashboard from "@/components/admin/AdminDashboard";
 import { isRemote } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Admin Control Panel",
   description: "Kelola statistik, transaksi, dan ucapan pengguna.",

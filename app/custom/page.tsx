@@ -29,6 +29,21 @@ export const metadata: Metadata = {
     type: "website",
     siteName: BRAND.name,
     locale: "id_ID",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `Kado Custom ${BRAND.name}`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `Kado Custom ${BRAND.name} — Dibuatkan Penuh Sesuai Ceritamu`,
+    description:
+      "Layanan pembuatan website ucapan personal dari nol dengan ilustrasi & interaksi khusus. Mulai Rp 50.000 – Rp 150.000/order, aktif selamanya.",
+    images: ["/twitter-image"],
   },
 };
 

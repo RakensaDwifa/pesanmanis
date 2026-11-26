@@ -243,6 +243,9 @@ test("slug: validasi aturan penamaan slug dan reserved words", () => {
   assert.equal(validateSlugFormat("admin").valid, false);
   assert.equal(validateSlugFormat("api").valid, false);
   assert.equal(validateSlugFormat("checkout").valid, false);
+  assert.equal(validateSlugFormat("custom").valid, false);
+  assert.equal(validateSlugFormat("ucapan").valid, false);
+  assert.equal(validateSlugFormat("syarat-ketentuan").valid, false);
 });
 
 test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {

@@ -6,6 +6,8 @@ import { isRemote } from "@/lib/supabase/config";
 import Dashboard from "@/components/dashboard/Dashboard";
 import { DashboardShellSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Dashboard",
   description: "Kelola ucapan dan pantau kunjungan.",

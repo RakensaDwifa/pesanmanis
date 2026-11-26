@@ -51,13 +51,15 @@ export default function NotFound() {
               <Search className="h-4 w-4 text-primary" />
               Cari Template
             </Link>
-            <Link
-              href="/kebijakan-privasi"
+            <a
+              href={BRAND.supportUrl}
+              target={BRAND.supportUrl.startsWith("http") ? "_blank" : undefined}
+              rel={BRAND.supportUrl.startsWith("http") ? "noopener noreferrer" : undefined}
               className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white border border-outline-variant/30 text-body-md font-semibold text-on-surface hover:bg-surface-container-low transition-colors"
             >
               <Mail className="h-4 w-4 text-primary" />
               Hubungi Kami
-            </Link>
+            </a>
           </div>
 
           <p className="text-label-md text-on-surface-variant mt-8">

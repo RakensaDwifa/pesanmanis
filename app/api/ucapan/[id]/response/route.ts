@@ -1,48 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRemote } from "@/lib/supabase/config";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { hasValidGateCookie } from "@/lib/gate-cookie";
+import { canAccessPublicUcapan } from "@/lib/public-ucapan-access";
 import { validateRecipientResponseInput } from "@/lib/supabase/rows";
 import type { RecipientResponse } from "@/lib/types";
 import { isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
-
-async function canAccessPublicUcapan(
-  id: string
-): Promise<"ok" | "not_found" | "locked"> {
-  const admin = createAdminClient();
-  const { data: target } = await admin
-    .from("ucapan")
-    .select("id, paid, gate_type, owner_id")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!target) return "not_found";
-
-  if (!target.paid) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && target.owner_id === user.id) return "ok";
-    return "not_found";
-  }
-
-  if (target.gate_type) {
-    if (await hasValidGateCookie(id)) return "ok";
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user && target.owner_id === user.id) return "ok";
-    return "locked";
-  }
-
-  return "ok";
-}
 
 export async function POST(
   request: Request,
@@ -92,16 +57,47 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "LOCKED" }, { status: 403 });
   }
 
+  const admin = createAdminClient();
+  const { data: targetRow, error: fetchErr } = await admin
+    .from("ucapan")
+    .select("template_slug, recipient_response")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr) {
+    if (fetchErr.code === "42703") {
+      console.warn(
+        "[recipient-response] kolom recipient_response belum ada di DB (schema_v9 perlu dijalankan)"
+      );
+      return NextResponse.json({ ok: true, persisted: false });
+    }
+    return NextResponse.json({ ok: false, error: "DB_ERROR" }, { status: 500 });
+  }
+  if (!targetRow || targetRow.template_slug !== "permintaan-maaf") {
+    return NextResponse.json(
+      { ok: false, error: "INVALID_TEMPLATE" },
+      { status: 400 }
+    );
+  }
+  if (targetRow.recipient_response !== null && targetRow.recipient_response !== undefined) {
+    return NextResponse.json({
+      ok: true,
+      persisted: false,
+      alreadyRecorded: true,
+      response: targetRow.recipient_response,
+    });
+  }
+
   const payload: RecipientResponse = {
     ...validation.data,
     respondedAt: Date.now(),
   };
 
-  const admin = createAdminClient();
   const { error } = await admin
     .from("ucapan")
     .update({ recipient_response: payload })
-    .eq("id", id);
+    .eq("id", id)
+    .is("recipient_response", null);
 
   if (error) {
     if (error.code === "42703") {

@@ -138,7 +138,7 @@ export const SEO_TOPICS: SeoTopic[] = [
   {
     slug: "kado-digital-ldr",
     label: "Kado Digital LDR",
-    title: "Kado Digital LDR yang Berkesan & Aktif Selamanya — PesanManis",
+    title: "Kado Digital LDR yang Berkesan & Aktif Selamanya",
     metaDescription:
       "Jarak bukan halangan memberi kejutan. Kirim kado digital LDR berupa website surat cinta, pesan suara, foto kenangan, dan kunci PIN rahasia.",
     heroHeading: "Dekatkan Jarak dengan Kado Digital yang Bisa Dibuka Kapan Saja",
@@ -175,7 +175,7 @@ export const SEO_TOPICS: SeoTopic[] = [
   {
     slug: "confess-gebetan",
     label: "Cara Confess ke Gebetan",
-    title: "Cara Confess ke Gebetan Lewat Website Interaktif — PesanManis",
+    title: "Cara Confess ke Gebetan Lewat Website Interaktif",
     metaDescription:
       "Ungkapkan perasaan ke gebetan dengan cara elegan dan berkesan. Kirim link website ucapan interaktif dengan alur pembuka manis yang nggak bikin awkward.",
     heroHeading: "Ungkapkan Perasaanmu dengan Cara yang Manis & Sulit Dilupakan",
@@ -249,7 +249,7 @@ export const SEO_TOPICS: SeoTopic[] = [
   {
     slug: "valentine-romantis",
     label: "Kartu Ucapan Valentine Digital",
-    title: "Kartu Ucapan Valentine Digital & Musik Latar — PesanManis",
+    title: "Kartu Ucapan Valentine Digital & Musik Latar",
     metaDescription:
       "Kirim kartu ucapan Valentine digital interaktif dengan animasi hati, hujan kelopak mawar, musik latar romantis, dan link cantik /u/[nama].",
     heroHeading: "Kirim Kartu Valentine Digital Penuh Cinta dengan Lagu Favorit Kalian",
@@ -286,7 +286,7 @@ export const SEO_TOPICS: SeoTopic[] = [
   {
     slug: "surat-cinta-online",
     label: "Buat Surat Cinta Online",
-    title: "Buat Surat Cinta Online dengan Kunci PIN & QR Code — PesanManis",
+    title: "Buat Surat Cinta Online dengan Kunci PIN & QR Code",
     metaDescription:
       "Tulis surat cinta online layaknya kertas surat sungguhan lengkap dengan stempel hati, kunci PIN 4-6 digit, musik latar, dan Struk Cinta.",
     heroHeading: "Tulis Surat Cinta Online yang Hangat, Personal, dan Penuh Rahasia",

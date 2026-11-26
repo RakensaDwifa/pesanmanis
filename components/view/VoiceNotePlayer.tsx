@@ -9,6 +9,7 @@ interface VoiceNotePlayerProps {
   url: string;
   fromName?: string;
   variant?: "floating" | "embedded";
+  floatingOffsetClass?: string;
 }
 
 function formatSec(sec: number): string {
@@ -22,6 +23,7 @@ export default function VoiceNotePlayer({
   url,
   fromName,
   variant = "floating",
+  floatingOffsetClass = "bottom-24 right-5",
 }: VoiceNotePlayerProps) {
   const reactId = useId();
   const sourceId = `voice-note-${reactId}`;
@@ -30,6 +32,7 @@ export default function VoiceNotePlayer({
   const [playing, setPlaying] = useState(false);
   const [currentSec, setCurrentSec] = useState(0);
   const [durationSec, setDurationSec] = useState(0);
+  const [playbackError, setPlaybackError] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -70,6 +73,11 @@ export default function VoiceNotePlayer({
         setCurrentSec(0);
         notifyVideoStop(sourceId);
       };
+      el.onerror = () => {
+        setPlaying(false);
+        setPlaybackError(true);
+        notifyVideoStop(sourceId);
+      };
       audioRef.current = el;
     }
 
@@ -78,6 +86,7 @@ export default function VoiceNotePlayer({
       setPlaying(false);
       notifyVideoStop(sourceId);
     } else {
+      setPlaybackError(false);
       notifyVideoPlay(sourceId);
       el.play()
         .then(() => {
@@ -85,6 +94,7 @@ export default function VoiceNotePlayer({
         })
         .catch(() => {
           setPlaying(false);
+          setPlaybackError(true);
           notifyVideoStop(sourceId);
         });
     }
@@ -99,7 +109,7 @@ export default function VoiceNotePlayer({
       className={cn(
         "flex items-center gap-2.5 rounded-full bg-white/95 backdrop-blur-md border border-[#DE7038]/25 shadow-[0_8px_28px_rgba(36,25,20,0.12)] px-2.5 py-2 transition-all",
         variant === "floating"
-          ? "fixed bottom-36 left-5 z-50 max-w-[260px] sm:max-w-[290px]"
+          ? `fixed ${floatingOffsetClass} z-40 max-w-[215px] sm:max-w-[270px]`
           : "absolute bottom-14 left-3 z-20 max-w-[235px]"
       )}
     >
@@ -120,7 +130,11 @@ export default function VoiceNotePlayer({
         <div className="flex items-center gap-1 text-[11px] font-semibold text-[#3D1E0F] truncate">
           <Mic className="h-3 w-3 text-[#DE7038] shrink-0" />
           <span className="truncate">
-            {fromName ? `Suara ${fromName}` : "Pesan Suara"}
+            {playbackError
+              ? "Format audio tak didukung"
+              : fromName
+                ? `Suara ${fromName}`
+                : "Pesan Suara"}
           </span>
         </div>
         <div className="mt-1 flex items-center gap-1.5">

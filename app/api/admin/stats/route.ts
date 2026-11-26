@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/admin-auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,14 @@ interface CheckoutSessionJoinRow {
 export async function GET(request: Request) {
   const auth = await requireAdminUser();
   if (!auth.ok) return auth.response;
+
+  const { success } = await checkRateLimit(`admin-stats:${getClientIp(request)}`, 30, 60000);
+  if (!success) {
+    return NextResponse.json(
+      { ok: false, error: "RATE_LIMIT_EXCEEDED" },
+      { status: 429 }
+    );
+  }
 
   const url = new URL(request.url);
   const rawLimit = Number(url.searchParams.get("limit") ?? 100);

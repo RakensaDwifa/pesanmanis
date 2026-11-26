@@ -43,6 +43,20 @@ export async function generateMetadata({
       type: "website",
       siteName: BRAND.name,
       locale: "id_ID",
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: topic.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: topic.title,
+      description: topic.metaDescription,
+      images: ["/twitter-image"],
     },
   };
 }
@@ -75,11 +89,41 @@ export default async function SeoTopicPage({
     })),
   };
 
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Beranda",
+        item: BRAND.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Template",
+        item: `${BRAND.baseUrl}/templates`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: topic.label,
+        item: `${BRAND.baseUrl}/ucapan/${topic.slug}`,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-surface text-on-surface relative overflow-x-clip">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([faqJsonLd, breadcrumbJsonLd]).replace(
+            /</g,
+            "\\u003c"
+          ),
+        }}
       />
 
       {/* Subtle warm radial background */}

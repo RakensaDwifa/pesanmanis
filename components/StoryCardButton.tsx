@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toPng } from "html-to-image";
 import { Download, Share2, X, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import type { StoredUcapan } from "@/lib/store";
 import { BRAND } from "@/lib/brand";
 import { trackEvent } from "@/lib/analytics";
@@ -58,7 +59,31 @@ function StoryCard({ ucapan }: { ucapan: StoredUcapan }) {
 export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [viewport, setViewport] = useState<{ w: number; h: number }>({ w: 800, h: 800 });
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const syncViewport = () => {
+      setViewport({ w: window.innerWidth, h: window.innerHeight });
+    };
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const cardScale = Math.min(
+    1,
+    Math.max(0.45, (viewport.w - 48) / CARD_W),
+    Math.max(0.45, (viewport.h * 0.68) / CARD_H)
+  );
 
   const exportPng = async (): Promise<string | null> => {
     if (!cardRef.current) return null;
@@ -73,7 +98,10 @@ export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
     setBusy(true);
     const url = await exportPng();
     setBusy(false);
-    if (!url) return;
+    if (!url) {
+      toast.error("Gagal membuat gambar Story Card. Coba lagi ya.");
+      return;
+    }
     const link = document.createElement("a");
     link.download = `pesanmanis-${(ucapan.id ?? "story").slice(0, 8)}.png`;
     link.href = url;
@@ -85,7 +113,10 @@ export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
     setBusy(true);
     const url = await exportPng();
     setBusy(false);
-    if (!url) return;
+    if (!url) {
+      toast.error("Gagal menyiapkan Story Card untuk dibagikan.");
+      return;
+    }
     try {
       const blob = await (await fetch(url)).blob();
       const file = new File([blob], "pesanmanis.png", { type: "image/png" });
@@ -131,7 +162,10 @@ export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
             onClick={() => setOpen(false)}
           >
             <motion.div
-              className="relative flex flex-col items-center"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Pratinjau Story Card"
+              className="relative flex flex-col items-center max-w-full"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -141,20 +175,29 @@ export default function StoryCardButton({ ucapan }: { ucapan: StoredUcapan }) {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Tutup"
-                className="absolute -top-3 -right-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-white text-[#7A2E45] shadow-lg"
+                className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-white text-[#7A2E45] shadow-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
 
               <div
-                className="max-h-[78vh] overflow-hidden"
+                className="overflow-hidden rounded-[28px]"
                 style={{
-                  transform: `scale(${Math.min(1, (typeof window !== "undefined" ? window.innerHeight : 800) * 0.74 / CARD_H)})`,
-                  transformOrigin: "center",
+                  width: Math.round(CARD_W * cardScale),
+                  height: Math.round(CARD_H * cardScale),
                 }}
               >
-                <div ref={cardRef}>
-                  <StoryCard ucapan={ucapan} />
+                <div
+                  style={{
+                    width: CARD_W,
+                    height: CARD_H,
+                    transform: `scale(${cardScale})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <div ref={cardRef}>
+                    <StoryCard ucapan={ucapan} />
+                  </div>
                 </div>
               </div>
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isRemote } from "@/lib/supabase/config";
 import type { UcapanRow } from "@/lib/supabase/rows";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getTemplate } from "@/lib/templates";
 import { isRecord, isValidUuid } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,16 @@ export async function POST(request: Request) {
   }
 
   const src = source as UcapanRow;
+  if (!getTemplate(src.template_slug)?.active) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "TEMPLATE_UNAVAILABLE",
+        message: "Template ucapan ini belum tersedia untuk diduplikat.",
+      },
+      { status: 400 }
+    );
+  }
   const now = new Date().toISOString();
 
   // Clone: konten sama, status unpaid, judul dibatasi <= 120 karakter

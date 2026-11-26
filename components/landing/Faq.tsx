@@ -39,7 +39,7 @@ export default function Faq() {
   const [openIndex, setOpenIndex] = useState<number>(0);
 
   return (
-    <section className="w-full relative bg-surface" id="faq">
+    <section className="w-full relative bg-surface scroll-mt-20" id="faq">
       <div className="relative z-[1] px-5 md:px-16 max-w-4xl mx-auto py-14 md:py-[100px]">
         <div className="mb-12 text-center">
           <MotionFadeUp y={10}>

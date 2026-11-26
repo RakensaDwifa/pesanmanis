@@ -6,6 +6,11 @@
 const MIN_YEAR = 2020;
 const MAX_YEAR = 2100;
 
+/** Returns current epoch milliseconds (isolated helper for server components). */
+export function currentEpochMs(): number {
+  return Date.now();
+}
+
 /** Normalize an arbitrary input to a valid ISO 8601 string, or null if invalid. */
 export function normalizeUnlockAt(raw: unknown): string | null {
   if (raw === null || raw === undefined || raw === "") return null;

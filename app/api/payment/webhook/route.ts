@@ -47,21 +47,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   }
 
-  // Fast idempotency check by Midtrans transaction_id
+  // Fast idempotency check by Midtrans transaction_id — only skip if ucapan is already active too.
   if (transactionId) {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
     const { data: existingPayment } = await admin
       .from("payments")
-      .select("status")
+      .select("status, ucapan_id")
       .eq("tripay_ref", transactionId)
       .maybeSingle();
-    if (existingPayment?.status === "PAID") {
-      console.info("[payment-webhook] idempotent skip: transaction_id sudah diproses", {
-        transactionId: maskId(transactionId),
-        merchantRef: maskId(orderId),
-      });
-      return NextResponse.json({ success: true, idempotent: true });
+    if (existingPayment?.status === "PAID" && existingPayment.ucapan_id) {
+      const { data: existingUcapan } = await admin
+        .from("ucapan")
+        .select("paid")
+        .eq("id", existingPayment.ucapan_id)
+        .maybeSingle();
+      if (existingUcapan?.paid) {
+        console.info("[payment-webhook] idempotent skip: transaction_id sudah diproses", {
+          transactionId: maskId(transactionId),
+          merchantRef: maskId(orderId),
+        });
+        return NextResponse.json({ success: true, idempotent: true });
+      }
     }
   }
 
@@ -80,6 +87,15 @@ export async function POST(request: Request) {
     if (res.mismatch) {
       // Return 200 so Midtrans does not retry endlessly on tampered/mismatched amounts.
       return NextResponse.json({ success: true, mismatch: true });
+    }
+    if (res.notFound) {
+      return NextResponse.json({ success: true, notFound: true });
+    }
+    if (!res.ok) {
+      return NextResponse.json(
+        { success: false, error: "ACTIVATION_RETRY_NEEDED" },
+        { status: 500 }
+      );
     }
     return NextResponse.json({
       success: true,

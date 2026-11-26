@@ -101,7 +101,8 @@ export default function StoryFlow({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-b from-[#FFF1F6] via-[#FFE0EC] to-[#FFD0C0] px-6"
+      data-light-card
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-b from-[#FFF1F6] via-[#FFE0EC] to-[#FFD0C0] text-[#55443c] px-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

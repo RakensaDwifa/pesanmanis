@@ -384,6 +384,23 @@ function parseDraftAddons(raw: unknown): DraftAddonConfig | null {
   return config;
 }
 
+export function extractUnlockAtFromTimeline(timeline: unknown): string | null {
+  if (!Array.isArray(timeline)) return null;
+  let unlockAt: string | null = null;
+  for (const item of timeline) {
+    if (
+      isRecord(item) &&
+      item.date === META_TIMELINE_TAG &&
+      typeof item.unlockAt === "string" &&
+      item.unlockAt
+    ) {
+      const normalized = normalizeUnlockAt(item.unlockAt);
+      if (normalized) unlockAt = normalized;
+    }
+  }
+  return unlockAt;
+}
+
 export function mapUcapanRow(
   row: UcapanRow,
   stats?: UcapanStatsRow | null

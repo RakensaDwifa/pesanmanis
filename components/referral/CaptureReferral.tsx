@@ -56,12 +56,12 @@ export default function CaptureReferral() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: stored }),
         });
-        if (res.ok) {
+        if (res.ok || res.status === 409) {
+          // 200 berhasil atau 409 (sudah pernah referral / kode milik sendiri) → tandai permanen
           window.localStorage.setItem(userAppliedKey, "1");
           window.localStorage.removeItem(REF_KEY);
-        } else if (res.status === 409 || res.status === 404) {
-          // kode invalid/sudah pernah direferral/self → tandai untuk user ini & buang kode
-          window.localStorage.setItem(userAppliedKey, "1");
+        } else if (res.status === 404) {
+          // Kode tidak ditemukan → hapus kode salah agar user masih bisa memakai kode valid lain
           window.localStorage.removeItem(REF_KEY);
         }
       } catch {
