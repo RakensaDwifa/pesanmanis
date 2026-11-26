@@ -56,7 +56,7 @@ export default function KoleksiSection({
 
   return (
     <section
-      className="w-full relative bg-surface-container-low overflow-hidden scroll-mt-20"
+      className="w-full relative bg-surface-container-low overflow-x-clip scroll-mt-20"
       id="koleksi"
     >
       <div className="relative z-[1] py-16 md:py-24">

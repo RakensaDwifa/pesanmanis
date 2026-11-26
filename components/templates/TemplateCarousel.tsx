@@ -132,18 +132,16 @@ function CoverflowItem({
         opacity,
         transformPerspective: 600,
       }}
-      className={`flex items-center justify-center shrink-0 ${
+      className={`flex items-center justify-center shrink-0 will-change-transform ${
         isActive ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
-      } ${
-        isNear ? "will-change-transform" : ""
       }`}
       onClick={handleClick}
     >
       <div
-        className={`w-full bg-[#FFF9F5] dark:bg-[#281C17] rounded-3xl border border-[#E6D5CB] dark:border-[#4E3930] overflow-hidden flex flex-col select-none transition-shadow duration-200 ${
+        className={`w-full bg-[#FFF9F5] dark:bg-[#281C17] rounded-3xl border border-[#E6D5CB] dark:border-[#4E3930] overflow-hidden flex flex-col select-none [contain:layout_style_paint] ${
           isActive
-            ? "shadow-[0_14px_34px_rgba(36,25,20,0.18)]"
-            : "shadow-md"
+            ? "shadow-[0_10px_24px_rgba(36,25,20,0.14)]"
+            : "shadow-sm"
         }`}
       >
         <div
@@ -161,6 +159,7 @@ function CoverflowItem({
             width={390}
             height={780}
             sizes="(min-width: 640px) 260px, 220px"
+            priority={isActive}
             loading={isNear ? "eager" : "lazy"}
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover pointer-events-none"
