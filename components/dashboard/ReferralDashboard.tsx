@@ -20,8 +20,17 @@ interface Stats {
   balance?: number;
 }
 
-export default function ReferralDashboard() {
+interface ReferralDashboardProps {
+  embedded?: boolean;
+  demo?: boolean;
+}
+
+export default function ReferralDashboard({
+  embedded = false,
+  demo = false,
+}: ReferralDashboardProps) {
   const [code, setCode] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(demo);
   const [stats, setStats] = useState<Stats>({
     invited: 0,
     completed: 0,
@@ -36,7 +45,9 @@ export default function ReferralDashboard() {
     fetch("/api/referral")
       .then(async (r) => {
         const json = await r.json();
-        if (json.ok) {
+        if (json.demo) {
+          setIsDemoMode(true);
+        } else if (json.ok) {
           setCode(json.code);
           setStats(json.stats);
         }
@@ -61,76 +72,82 @@ export default function ReferralDashboard() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
-      <div className="max-w-[900px] mx-auto px-5 md:px-16">
-        <ReferralHeader />
+  const content = (
+    <>
+      <ReferralHeader />
 
-        <AnimatePresence mode="wait" initial={false}>
-          {!loaded ? (
-            <motion.div
-              key="referral-skeleton"
-              initial={reduced ? { opacity: 0 } : { opacity: 0.92 }}
-              animate={{ opacity: 1 }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.2, ease: EASE_WARM }}
-            >
-              <ReferralContentSkeleton />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="referral-content"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.34, ease: EASE_WARM }}
-            >
-              {/* Kode & link */}
-              <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8 mb-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Gift className="h-5 w-5 text-primary" />
-                  <h2 className="font-heading text-title-lg text-on-surface">
-                    Kode Referral Kamu
-                  </h2>
+      <AnimatePresence mode="wait" initial={false}>
+        {!loaded ? (
+          <motion.div
+            key="referral-skeleton"
+            initial={reduced ? { opacity: 0 } : { opacity: 0.92 }}
+            animate={{ opacity: 1 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: EASE_WARM }}
+          >
+            <ReferralContentSkeleton />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="referral-content"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.34, ease: EASE_WARM }}
+          >
+            {/* Kode & link */}
+            <div className="bg-white rounded-3xl border border-outline-variant/30 shadow-card p-5 sm:p-6 md:p-8 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Gift className="h-5 w-5 text-primary" />
+                <h2 className="font-heading text-title-lg text-on-surface">
+                  Kode Referral Kamu
+                </h2>
+              </div>
+
+              {isDemoMode ? (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/12 px-4 py-3.5 text-body-md text-amber-900 dark:text-amber-200 leading-relaxed">
+                  Program referral dan saldo reward aktif otomatis setelah akun
+                  terhubung ke Supabase.
                 </div>
-
-                {code ? (
-                  <>
-                    <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-container-low mb-4">
-                      <span className="font-mono text-title-md font-bold tracking-wider text-primary">
-                        {code}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          copyLink();
-                          AnalyticsEvents.referralShared(code);
-                        }}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary text-white text-label-lg font-semibold shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
-                      >
-                        <Copy className="h-4 w-4" />
-                        {copied ? "Tersalin!" : "Salin Link Referral"}
-                      </button>
+              ) : code ? (
+                <>
+                  <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-container-low mb-4">
+                    <span className="font-mono text-title-md font-bold tracking-wider text-primary">
+                      {code}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        copyLink();
+                        AnalyticsEvents.referralShared(code);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary text-white text-label-lg font-semibold shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer"
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copied ? "Tersalin!" : "Salin Link Referral"}
+                    </button>
+                    {!embedded && (
                       <Link
                         href="/dashboard"
                         className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-surface-container-low text-on-surface text-label-lg font-semibold hover:bg-surface-container transition-colors"
                       >
                         Kembali ke Dashboard
                       </Link>
-                    </div>
-                    {link && (
-                      <p className="text-label-md text-on-surface-variant mt-4 break-all">
-                        {link}
-                      </p>
                     )}
-                  </>
-                ) : (
-                  <p className="text-body-md text-red-600 dark:text-red-400">
-                    Gagal memuat kode referral. Coba refresh halaman.
-                  </p>
-                )}
-              </div>
+                  </div>
+                  {link && (
+                    <p className="text-label-md text-on-surface-variant mt-4 break-all">
+                      {link}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-body-md text-red-600 dark:text-red-400">
+                  Gagal memuat kode referral. Coba refresh halaman.
+                </p>
+              )}
+            </div>
 
               {/* Statistik */}
               <div className="grid grid-cols-3 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
@@ -196,7 +213,16 @@ export default function ReferralDashboard() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
+      <div className="max-w-[900px] mx-auto px-5 md:px-16">{content}</div>
     </div>
   );
 }

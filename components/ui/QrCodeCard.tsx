@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Download,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BRAND } from "@/lib/brand";
+import { EASE_WARM, SPRING_TACTILE } from "@/components/landing/MotionPrimitives";
 
 export type QrShape = "classic" | "heart" | "envelope" | "flower" | "star";
 
@@ -257,13 +259,17 @@ export default function QrCodeCard({
       link.download = `QR-${BRAND.name}-${shapeSuffix}${sanitizeFileSegment(toName)}.png`;
       link.href = dataUrl;
       link.click();
-      toast.success("QR Code PNG berhasil diunduh");
+      toast.success("QR Code PNG berhasil diunduh", { id: "qr-download" });
     } catch {
-      toast.error("Gagal mengunduh QR Code. Coba lagi ya.");
+      toast.error("Gagal mengunduh QR Code. Coba lagi ya.", {
+        id: "qr-download",
+      });
     } finally {
       setDownloading(false);
     }
   };
+
+  const reduced = useReducedMotion();
 
   const shapeSelector = (
     <div
@@ -278,13 +284,16 @@ export default function QrCodeCard({
       {QR_SHAPES.map(({ id, label, Icon }) => {
         const active = qrShape === id;
         return (
-          <button
+          <motion.button
             key={id}
             type="button"
             role="radio"
             aria-checked={active}
             onClick={() => setQrShape(id)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-label-md font-semibold border transition-colors motion-reduce:transition-none cursor-pointer ${
+            whileHover={reduced ? undefined : { y: -1, scale: 1.02 }}
+            whileTap={reduced ? undefined : { scale: 0.94 }}
+            transition={SPRING_TACTILE}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-label-md font-semibold border transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
               active
                 ? "bg-primary text-white border-primary shadow-xs"
                 : "bg-surface-container text-on-surface-variant border-outline-variant/40 hover:text-on-surface hover:bg-surface-container-high"
@@ -292,7 +301,7 @@ export default function QrCodeCard({
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
             <span>{label}</span>
-          </button>
+          </motion.button>
         );
       })}
     </div>
@@ -324,41 +333,14 @@ export default function QrCodeCard({
           Untuk {toName || "Kamu"} 💌
         </p>
 
-        {qrShape === "classic" ? (
-          <div style={{ backgroundColor: "#ffffff" }} className="p-2 rounded-xl">
-            <QRCodeSVG
-              value={url}
-              size={qrSize}
-              level="H"
-              fgColor="#241914"
-              bgColor="#ffffff"
-              imageSettings={
-                effectiveCenterSrc
-                  ? {
-                      src: effectiveCenterSrc,
-                      height: centerSize,
-                      width: centerSize,
-                      excavate: true,
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        ) : (
-          <div
-            className={`relative flex items-center justify-center ${
-              compact ? "w-[196px] h-[188px]" : "w-[250px] h-[240px]"
-            }`}
-          >
-            <ShapedQrBackdrop shape={qrShape} />
-            {/* Quiet zone putih bersih mengelilingi seluruh modul QR */}
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                boxShadow: "0 2px 8px rgba(36, 25, 20, 0.08)",
-              }}
-              className={`relative z-[1] p-1.5 rounded-xl ${qrContainerOffsetClass}`}
-            >
+        <motion.div
+          key={qrShape}
+          initial={reduced ? false : { opacity: 0.65, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.24, ease: EASE_WARM }}
+        >
+          {qrShape === "classic" ? (
+            <div style={{ backgroundColor: "#ffffff" }} className="p-2 rounded-xl">
               <QRCodeSVG
                 value={url}
                 size={qrSize}
@@ -377,8 +359,42 @@ export default function QrCodeCard({
                 }
               />
             </div>
-          </div>
-        )}
+          ) : (
+            <div
+              className={`relative flex items-center justify-center ${
+                compact ? "w-[196px] h-[188px]" : "w-[250px] h-[240px]"
+              }`}
+            >
+              <ShapedQrBackdrop shape={qrShape} />
+              {/* Quiet zone putih bersih mengelilingi seluruh modul QR */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  boxShadow: "0 2px 8px rgba(36, 25, 20, 0.08)",
+                }}
+                className={`relative z-[1] p-1.5 rounded-xl ${qrContainerOffsetClass}`}
+              >
+                <QRCodeSVG
+                  value={url}
+                  size={qrSize}
+                  level="H"
+                  fgColor="#241914"
+                  bgColor="#ffffff"
+                  imageSettings={
+                    effectiveCenterSrc
+                      ? {
+                          src: effectiveCenterSrc,
+                          height: centerSize,
+                          width: centerSize,
+                          excavate: true,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </motion.div>
 
         <p style={{ color: "#55443c" }} className="text-[11px] font-medium mt-2">
           Scan untuk membuka kejutan
@@ -416,11 +432,14 @@ export default function QrCodeCard({
           {shapeSelector}
         </div>
 
-        <button
+        <motion.button
           type="button"
           onClick={() => void handleDownloadPng()}
           disabled={downloading}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-primary text-white text-label-md font-semibold shadow-sm hover:-translate-y-0.5 transition-all motion-reduce:transition-none disabled:opacity-60 cursor-pointer"
+          whileHover={reduced || downloading ? undefined : { y: -1.5, scale: 1.02 }}
+          whileTap={reduced || downloading ? undefined : { scale: 0.96 }}
+          transition={SPRING_TACTILE}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-primary text-white text-label-md font-semibold shadow-sm transition-colors motion-reduce:transition-none disabled:opacity-60 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
         >
           {downloading ? (
             <>
@@ -431,7 +450,7 @@ export default function QrCodeCard({
               <Download className="h-4 w-4" /> Unduh QR PNG
             </>
           )}
-        </button>
+        </motion.button>
       </div>
     </div>
   );

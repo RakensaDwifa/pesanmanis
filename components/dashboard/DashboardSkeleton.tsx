@@ -96,29 +96,41 @@ export function DashboardContentSkeleton() {
                   className="h-3.5 w-44 rounded-full"
                 />
 
-                {/* Action buttons row placeholder */}
-                <div className="flex items-center gap-2 flex-wrap pt-1">
-                  <ShimmerBlock
-                    warm
-                    shimmerDelay={idx * 0.12 + 0.16}
-                    className="h-9 w-28 sm:w-32 rounded-full"
-                  />
-                  <ShimmerBlock
-                    shimmerDelay={idx * 0.12 + 0.18}
-                    className="h-9 w-9 rounded-full"
-                  />
-                  <ShimmerBlock
-                    shimmerDelay={idx * 0.12 + 0.2}
-                    className="h-9 w-12 rounded-full"
-                  />
-                  <ShimmerBlock
-                    shimmerDelay={idx * 0.12 + 0.22}
-                    className="h-9 w-9 rounded-full"
-                  />
-                  <ShimmerBlock
-                    shimmerDelay={idx * 0.12 + 0.24}
-                    className="h-9 w-9 rounded-full"
-                  />
+                {/* Action buttons row placeholder (2 balanced groups) */}
+                <div className="flex items-center justify-between gap-2.5 flex-wrap pt-3 border-t border-outline-variant/20">
+                  <div className="flex items-center gap-2">
+                    <ShimmerBlock
+                      warm
+                      shimmerDelay={idx * 0.12 + 0.16}
+                      className="h-10 w-28 sm:w-32 rounded-full"
+                    />
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.18}
+                      className="h-10 w-16 rounded-full"
+                    />
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.2}
+                      className="h-10 w-10 rounded-full"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 sm:ml-auto">
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.22}
+                      className="h-10 w-10 rounded-full"
+                    />
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.24}
+                      className="h-10 w-10 rounded-full"
+                    />
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.26}
+                      className="h-10 w-10 rounded-full"
+                    />
+                    <ShimmerBlock
+                      shimmerDelay={idx * 0.12 + 0.28}
+                      className="h-10 w-10 rounded-full"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -136,7 +148,7 @@ export function DashboardContentSkeleton() {
  */
 export function DashboardShellSkeleton() {
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-24 lg:pb-16">
+    <div className="min-h-[72vh] bg-surface pt-24 pb-16">
       <div className="max-w-[1200px] mx-auto px-5 md:px-10">
         <DashboardMobileHeader />
         <div className="grid lg:grid-cols-[280px_1fr] gap-8 items-start">
