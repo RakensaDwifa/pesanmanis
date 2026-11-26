@@ -95,7 +95,9 @@ import ParticleTouch from "@/components/effects/ParticleTouch";
 import GateOverlay from "@/components/effects/GateOverlay";
 import LoveReceiptModal from "@/components/effects/LoveReceiptModal";
 import VoiceNoteRecorder from "@/components/builder/VoiceNoteRecorder";
+import VideoUploader from "@/components/builder/VideoUploader";
 import VoiceNotePlayer from "@/components/view/VoiceNotePlayer";
+import { isYouTubeVideoUrl } from "@/lib/validation";
 import { smoothScrollTo } from "@/components/ui/smooth-scroll";
 import {
   toLocalDatetimeInputValue,
@@ -131,6 +133,7 @@ const ADDON_NOTES: Record<AddonKey, string> = {
   love_receipt: "Struk cinta bisa diunduh ke galeri HP",
   voice_note: "Rekam suara langsung atau unggah audio pesan pribadi (maks 3 menit)",
   extra_photos: "Tampilkan hingga 10 foto kenangan (bawaan 5 foto)",
+  local_video: "Unggah video langsung dari HP/laptop hingga 50 MB",
 };
 
 const TRIVIA_PROMPTS = [
@@ -247,6 +250,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
   const [previewInteractive, setPreviewInteractive] = useState(false);
   const [previewReplayKey, setPreviewReplayKey] = useState(0);
   const [videoPanelToggle, setVideoPanelToggle] = useState<boolean | null>(null);
+  const [videoTabOverride, setVideoTabOverride] = useState<"youtube" | "upload" | null>(null);
   const [timelinePanelToggle, setTimelinePanelToggle] = useState<boolean | null>(null);
   const [countdownPanelToggle, setCountdownPanelToggle] = useState<boolean | null>(null);
   const minUnlockDatetime = useSyncExternalStore(
@@ -572,6 +576,7 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
           if (u.receiptEnabled) restored.add("love_receipt");
           if (u.voiceNoteEnabled) restored.add("voice_note");
           if (u.extraPhotosEnabled) restored.add("extra_photos");
+          if (u.localVideoEnabled) restored.add("local_video");
           if (restored.size > 0) setSelectedAddons(restored);
           markRestored();
         }
@@ -1084,6 +1089,9 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
     (t) => t.date.trim() || t.title.trim()
   ).length;
   const isVideoPanelOpen = videoPanelToggle ?? hasVideo;
+  const activeVideoTab: "youtube" | "upload" =
+    videoTabOverride ??
+    (hasVideo && !isYouTubeVideoUrl(content.videoUrl) ? "upload" : "youtube");
   const isTimelinePanelOpen =
     timelinePanelToggle ?? (content.timeline?.length ?? 0) > 0;
   const isCountdownPanelOpen =
@@ -1698,24 +1706,108 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                       transition={{ duration: 0.22, ease: "easeInOut" }}
                                       className="overflow-hidden"
                                     >
-                                      <div className="px-4 pb-4 pt-1 border-t border-outline-variant/25">
-                                        <label
-                                          htmlFor="builder-video-url"
-                                          className="block text-label-md font-semibold text-on-surface-variant mb-1.5 mt-2"
+                                      <div className="px-4 pb-4 pt-3 border-t border-outline-variant/25 space-y-3">
+                                        <div
+                                          role="tablist"
+                                          aria-label="Sumber video ucapan"
+                                          className="grid grid-cols-2 gap-1.5 rounded-2xl bg-surface p-1 border border-outline-variant/40"
                                         >
-                                          Tautan Video (YouTube / MP4 HTTPS)
-                                        </label>
-                                        <input
-                                          id="builder-video-url"
-                                          className={inputClass}
-                                          placeholder="https://…/video.mp4 atau link YouTube"
-                                          maxLength={500}
-                                          value={content.videoUrl ?? ""}
-                                          onChange={(e) => set("videoUrl", e.target.value)}
-                                        />
-                                        <p className="text-[11px] text-on-surface-variant mt-1.5">
-                                          Mendukung tautan YouTube / Shorts atau URL video MP4 publik (HTTPS).
-                                        </p>
+                                          <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={activeVideoTab === "youtube"}
+                                            onClick={() => setVideoTabOverride("youtube")}
+                                            className={cn(
+                                              "rounded-xl px-3 py-2 text-label-md font-semibold transition-all cursor-pointer",
+                                              activeVideoTab === "youtube"
+                                                ? "bg-primary text-white shadow-xs"
+                                                : "text-on-surface-variant hover:text-on-surface"
+                                            )}
+                                          >
+                                            Link YouTube (Gratis)
+                                          </button>
+                                          <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={activeVideoTab === "upload"}
+                                            onClick={() => setVideoTabOverride("upload")}
+                                            className={cn(
+                                              "rounded-xl px-3 py-2 text-label-md font-semibold transition-all cursor-pointer",
+                                              activeVideoTab === "upload"
+                                                ? "bg-primary text-white shadow-xs"
+                                                : "text-on-surface-variant hover:text-on-surface"
+                                            )}
+                                          >
+                                            Upload Lokal (+{formatPrice(ADDON_PRICING.local_video.amount)})
+                                          </button>
+                                        </div>
+
+                                        {activeVideoTab === "youtube" ? (
+                                          <div>
+                                            <label
+                                              htmlFor="builder-video-url"
+                                              className="block text-label-md font-semibold text-on-surface-variant mb-1.5"
+                                            >
+                                              Tautan Video YouTube / Shorts
+                                            </label>
+                                            <input
+                                              id="builder-video-url"
+                                              className={inputClass}
+                                              placeholder="https://youtu.be/... atau https://youtube.com/shorts/..."
+                                              maxLength={500}
+                                              value={
+                                                content.videoUrl && isYouTubeVideoUrl(content.videoUrl)
+                                                  ? content.videoUrl
+                                                  : ""
+                                              }
+                                              onChange={(e) => set("videoUrl", e.target.value)}
+                                            />
+                                            <p className="text-[11px] text-on-surface-variant mt-1.5">
+                                              Gratis tanpa biaya tambahan. Musik latar otomatis meredup saat video diputar.
+                                            </p>
+                                          </div>
+                                        ) : isPaid && !selectedAddons.has("local_video") ? (
+                                          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-label-md text-amber-900 dark:text-amber-200">
+                                            Add-on Upload Video Lokal tidak aktif pada ucapan ini. Kamu tetap bisa menyematkan link YouTube gratis di tab sebelah.
+                                          </div>
+                                        ) : (
+                                          <div>
+                                            {!isPaid && hasVideo && !isYouTubeVideoUrl(content.videoUrl) && !selectedAddons.has("local_video") && (
+                                              <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-label-md text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2">
+                                                <span>
+                                                  Aktifkan add-on Upload Video Pribadi agar video tampil di link penerima.
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => toggleAddon("local_video")}
+                                                  className="shrink-0 font-semibold text-primary hover:underline cursor-pointer"
+                                                >
+                                                  Aktifkan
+                                                </button>
+                                              </div>
+                                            )}
+                                            <VideoUploader
+                                              value={content.videoUrl}
+                                              disabled={false}
+                                              slug={slug}
+                                              editId={editId}
+                                              onUploaded={(publicUrl) => {
+                                                set("videoUrl", publicUrl);
+                                                if (!isPaid && !selectedAddons.has("local_video")) {
+                                                  setSelectedAddons((prev) => {
+                                                    const next = new Set(prev);
+                                                    next.add("local_video");
+                                                    return next;
+                                                  });
+                                                  toast.info(
+                                                    `Add-on Upload Video Pribadi (+${formatPrice(ADDON_PRICING.local_video.amount)}) otomatis diaktifkan.`
+                                                  );
+                                                }
+                                              }}
+                                              onRemove={() => set("videoUrl", undefined)}
+                                            />
+                                          </div>
+                                        )}
                                       </div>
                                     </motion.div>
                                   )}
@@ -2264,6 +2356,14 @@ export default function BuilderPage({ slug, editId }: { slug: string; editId?: s
                                           {key === "extra_photos" && (
                                             <p className="text-label-md text-on-surface-variant leading-relaxed">
                                               Saat ini terpasang <strong>{photoCount} foto</strong>. Tanpa add-on ini, hanya {FREE_PHOTO_LIMIT} foto pertama yang ditampilkan di halaman penerima.
+                                            </p>
+                                          )}
+
+                                          {key === "local_video" && (
+                                            <p className="text-label-md text-on-surface-variant leading-relaxed">
+                                              {hasVideo && !isYouTubeVideoUrl(content.videoUrl)
+                                                ? "Video pribadi sudah terpasang dan siap diputar di halaman penerima."
+                                                : "Unggah video MP4/WebM/MOV hingga 50 MB di bagian Galeri & Musik → Video Ucapan. (Tautan YouTube tetap gratis.)"}
                                             </p>
                                           )}
                                         </div>

@@ -180,7 +180,7 @@ test("cleanup-unpaid: hanya menghapus path Storage milik owner dan menghormati s
       [],
       supabaseUrl
     ),
-    { fotoPaths: [], audioPaths: [] }
+    { fotoPaths: [], audioPaths: [], r2VideoKeys: [] }
   );
   assert.deepEqual(
     collectSafeCleanupStoragePaths(
@@ -188,7 +188,7 @@ test("cleanup-unpaid: hanya menghapus path Storage milik owner dan menghormati s
       [],
       supabaseUrl
     ),
-    { fotoPaths: [], audioPaths: [] }
+    { fotoPaths: [], audioPaths: [], r2VideoKeys: [] }
   );
 });
 

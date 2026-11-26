@@ -175,6 +175,12 @@ export const ADDON_PRICING = {
     description: "Tampilkan hingga 10 foto kenangan (bawaan 5 foto)",
     amount: 2000,
   },
+  local_video: {
+    id: "local_video",
+    label: "Upload Video Pribadi (MP4/MOV)",
+    description: "Unggah video langsung dari HP/laptop hingga 50 MB",
+    amount: 5000,
+  },
 } as const;
 
 export type AddonKey = keyof typeof ADDON_PRICING;
@@ -187,9 +193,10 @@ export const ALL_ADDON_KEYS: AddonKey[] = [
   "love_receipt",
   "voice_note",
   "extra_photos",
+  "local_video",
 ];
 
-export const ALL_IN_ONE_BUNDLE_AMOUNT = 11000;
+export const ALL_IN_ONE_BUNDLE_AMOUNT = 15000;
 export const COMBO_ESTETIKA_AMOUNT = 3000;
 export const COMBO_INTIM_AMOUNT = 3500;
 
@@ -231,7 +238,7 @@ export function calculateCheckoutTotal(
   // Hitung subtotal normal tanpa diskon
   const addonSubtotal = addons.reduce((sum, key) => sum + ADDON_PRICING[key].amount, 0);
 
-  // Cek apakah mengambil semua (All-in-One: 7 fitur)
+  // Cek apakah mengambil semua (All-in-One: 8 fitur)
   if (addons.length === ALL_ADDON_KEYS.length) {
     const addonTotal = ALL_IN_ONE_BUNDLE_AMOUNT;
     const discount = Math.max(0, addonSubtotal - addonTotal);

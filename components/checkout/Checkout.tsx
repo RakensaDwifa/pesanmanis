@@ -18,6 +18,7 @@ import {
   type AddonKey,
 } from "@/lib/pricing";
 import type { StoredUcapan } from "@/lib/types";
+import { isYouTubeVideoUrl } from "@/lib/validation";
 
 const PAYMENT_METHODS = [
   { icon: "📱", name: "QRIS", note: "GoPay, OVO, DANA, ShopeePay, LinkAja & m-banking" },
@@ -98,6 +99,7 @@ function persistDemoActivation(
     receiptEnabled: selected.includes("love_receipt"),
     voiceNoteEnabled: selected.includes("voice_note"),
     extraPhotosEnabled: selected.includes("extra_photos"),
+    localVideoEnabled: selected.includes("local_video"),
   });
 }
 
@@ -156,6 +158,7 @@ export default function Checkout({ id }: { id: string }) {
           if (u?.receiptEnabled) addons.push("love_receipt");
           if (u?.voiceNoteEnabled) addons.push("voice_note");
           if (u?.extraPhotosEnabled) addons.push("extra_photos");
+          if (u?.localVideoEnabled) addons.push("local_video");
           setSaved(
             addons.length > 0
               ? {
@@ -401,6 +404,13 @@ export default function Checkout({ id }: { id: string }) {
                             {ucapan.photos.length} foto terpasang
                           </p>
                         )}
+                        {key === "local_video" && (
+                          <p className="text-label-md text-on-surface-variant">
+                            {ucapan.videoUrl && !isYouTubeVideoUrl(ucapan.videoUrl)
+                              ? "Video pribadi siap diputar"
+                              : "Belum ada video diunggah"}
+                          </p>
+                        )}
                       </div>
                       <span className="text-label-md font-bold text-primary whitespace-nowrap">
                         +{formatPrice(ADDON_PRICING[key].amount)}
@@ -422,6 +432,12 @@ export default function Checkout({ id }: { id: string }) {
               {!selected.includes("extra_photos") && ucapan.photos.length > FREE_PHOTO_LIMIT && (
                 <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-label-md text-amber-900 dark:text-amber-200">
                   Kamu mengunggah {ucapan.photos.length} foto. Tanpa add-on Ekstra Slot Foto, hanya {FREE_PHOTO_LIMIT} foto pertama yang akan tampil di link penerima.
+                </div>
+              )}
+
+              {!selected.includes("local_video") && ucapan.videoUrl && !isYouTubeVideoUrl(ucapan.videoUrl) && (
+                <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-label-md text-amber-900 dark:text-amber-200">
+                  Kamu mengunggah video pribadi. Tanpa add-on Upload Video Pribadi, video tersebut tidak akan tampil di link penerima (tautan YouTube tetap gratis).
                 </div>
               )}
             </div>

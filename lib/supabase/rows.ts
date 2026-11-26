@@ -12,7 +12,7 @@ import type {
 import type { MoodKey } from "../mood.ts";
 import { FREE_PHOTO_LIMIT, sanitizeAddons } from "../pricing.ts";
 import { validateSlugFormat } from "../slug.ts";
-import { isRecord, isValidEmail, isValidMediaUrl } from "../validation.ts";
+import { isRecord, isValidEmail, isValidMediaUrl, isYouTubeVideoUrl } from "../validation.ts";
 import { normalizeUnlockAt } from "../unlock-schedule.ts";
 
 export type { DraftAddonConfig, GateData, StoredUcapan, ViewSummary };
@@ -155,6 +155,7 @@ export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, 
     receipt_enabled: state.addons.includes("love_receipt"),
     voice_note_enabled: state.addons.includes("voice_note"),
     extra_photos_enabled: state.addons.includes("extra_photos"),
+    local_video_enabled: state.addons.includes("local_video"),
   };
 }
 
@@ -290,6 +291,7 @@ export interface UcapanRow {
   receipt_enabled?: boolean;
   voice_note_enabled?: boolean;
   extra_photos_enabled?: boolean;
+  local_video_enabled?: boolean;
   recipient_response?: unknown;
   paid: boolean;
   paid_at: string | null;
@@ -511,6 +513,12 @@ export function mapUcapanRow(
       ? parsedDraft.addons.includes("extra_photos")
       : Boolean(row.extra_photos_enabled);
 
+  const effectiveLocalVideo = row.paid
+    ? Boolean(row.local_video_enabled)
+    : parsedDraft
+      ? parsedDraft.addons.includes("local_video")
+      : Boolean(row.local_video_enabled);
+
   return {
     id: row.id,
     templateSlug: row.template_slug,
@@ -536,6 +544,7 @@ export function mapUcapanRow(
     receiptEnabled: effectiveReceipt,
     voiceNoteEnabled: effectiveVoiceNote,
     extraPhotosEnabled: effectiveExtraPhotos,
+    localVideoEnabled: effectiveLocalVideo,
     draftAddons: parsedDraft,
     recipientResponse: recipientResponse ?? undefined,
     unlockAt: unlockAt ?? undefined,
@@ -600,9 +609,15 @@ export function stripPublicUcapan(ucapan: StoredUcapan): StoredUcapan {
     ucapan.paid && !ucapan.extraPhotosEnabled
       ? (ucapan.photos ?? []).slice(0, FREE_PHOTO_LIMIT)
       : ucapan.photos;
+  const allowVideo =
+    !ucapan.videoUrl ||
+    !ucapan.paid ||
+    Boolean(ucapan.localVideoEnabled) ||
+    isYouTubeVideoUrl(ucapan.videoUrl);
   return {
     ...ucapan,
     photos: effectivePhotos,
+    videoUrl: allowVideo ? ucapan.videoUrl : undefined,
     voiceNoteUrl: allowVoiceNote ? ucapan.voiceNoteUrl : undefined,
     email: undefined,
     draftAddons: undefined,
@@ -644,6 +659,7 @@ export function stripLockedUcapan(ucapan: StoredUcapan): StoredUcapan {
     receiptEnabled: ucapan.receiptEnabled,
     voiceNoteEnabled: ucapan.voiceNoteEnabled,
     extraPhotosEnabled: ucapan.extraPhotosEnabled,
+    localVideoEnabled: ucapan.localVideoEnabled,
     recipientResponse: undefined,
     // unlockAt dipertahankan agar CountdownGate tampil sebelum Intimate Gate
     unlockAt: ucapan.unlockAt,
