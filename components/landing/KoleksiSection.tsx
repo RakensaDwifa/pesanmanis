@@ -143,7 +143,7 @@ export default function KoleksiSection({
           </MotionFadeUp>
         </div>
 
-        <MotionFadeUp delay={0.16} y={16}>
+        <MotionFadeUp delay={0.12} y={0}>
           <TemplateCarousel
             templates={templates}
             carouselRef={carouselRef}

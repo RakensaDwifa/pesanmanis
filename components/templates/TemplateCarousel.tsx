@@ -161,7 +161,8 @@ function CoverflowItem({
             width={390}
             height={780}
             sizes="(min-width: 640px) 260px, 220px"
-            loading="lazy"
+            loading={isNear ? "eager" : "lazy"}
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover pointer-events-none"
           />
         </div>
