@@ -106,6 +106,54 @@ export function extractOwnedAudioStoragePath(
 }
 
 /**
+ * Returns true when a URL points to YouTube (watch, shorts, embed, or youtu.be).
+ */
+export function isYouTubeVideoUrl(rawUrl: unknown): boolean {
+  if (typeof rawUrl !== "string") return false;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    return (
+      host === "youtu.be" ||
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "youtube-nocookie.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extracts an R2 object key (`videos/<ownerUserId>/<file>`) belonging to the configured
+ * R2 public base URL. Returns null if external or not owned by `ownerUserId`.
+ */
+export function extractOwnedR2VideoKey(
+  rawUrl: unknown,
+  configuredR2PublicUrl: string,
+  ownerUserId: string
+): string | null {
+  if (typeof rawUrl !== "string" || !configuredR2PublicUrl || !ownerUserId) return null;
+  const base = configuredR2PublicUrl.trim().replace(/\/+$/, "");
+  const expectedPrefix = `${base}/`;
+  const trimmed = rawUrl.trim();
+  if (!trimmed.startsWith(expectedPrefix)) return null;
+
+  const rawKey = trimmed.slice(expectedPrefix.length).split("#")[0].split("?")[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawKey);
+  } catch {
+    return null;
+  }
+  if (!decoded || decoded.includes("..") || decoded.startsWith("/")) return null;
+  if (!decoded.startsWith(`videos/${ownerUserId}/`)) return null;
+  return decoded;
+}
+
+/**
  * Normalizes a base app URL from environment variables, handling empty strings and trailing slashes.
  */
 export function normalizeBaseUrl(raw: string | undefined, fallback: string): string {

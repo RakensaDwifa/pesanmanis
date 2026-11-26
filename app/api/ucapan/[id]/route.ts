@@ -19,9 +19,11 @@ import { isUcapanCountdownLocked } from "@/lib/unlock-schedule";
 import {
   extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
+  extractOwnedR2VideoKey,
   isRecord,
   isValidUuid,
 } from "@/lib/validation";
+import { deleteR2Objects, getR2PublicBaseUrl, isR2Configured } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -278,17 +280,27 @@ export async function DELETE(
 
   const supabase = await createClient();
   const configuredUrl = supabaseUrl();
+  const configuredR2Url = getR2PublicBaseUrl();
 
   // Only consider Storage paths strictly belonging to this user's own folder (<user.id>/...)
-  // and skip any photo/audio still referenced by another ucapan owned by the same user (e.g. cloned).
+  // and skip any photo/audio/video still referenced by another ucapan owned by the same user (e.g. cloned).
   const candidatePhotoPaths = (ucapan.photos ?? [])
     .map((url) => extractOwnedFotoStoragePath(url, configuredUrl, user.id))
     .filter((p): p is string => Boolean(p));
   const candidateAudioPaths = [ucapan.musicUrl, ucapan.voiceNoteUrl]
     .map((url) => extractOwnedAudioStoragePath(url, configuredUrl, user.id))
     .filter((p): p is string => Boolean(p));
+  const candidateR2VideoKey = extractOwnedR2VideoKey(
+    ucapan.videoUrl,
+    configuredR2Url,
+    user.id
+  );
 
-  if (candidatePhotoPaths.length > 0 || candidateAudioPaths.length > 0) {
+  if (
+    candidatePhotoPaths.length > 0 ||
+    candidateAudioPaths.length > 0 ||
+    candidateR2VideoKey
+  ) {
     try {
       const { data: siblingRows } = await supabase
         .from("ucapan")
@@ -298,6 +310,7 @@ export async function DELETE(
 
       const usedPhotosBySiblings = new Set<string>();
       const usedAudioBySiblings = new Set<string>();
+      const usedR2VideosBySiblings = new Set<string>();
       for (const row of siblingRows ?? []) {
         const typedRow = row as {
           photos?: string[] | null;
@@ -323,6 +336,14 @@ export async function DELETE(
             );
             if (vp) usedAudioBySiblings.add(vp);
           }
+          if (isRecord(entry) && typeof entry.videoUrl === "string") {
+            const vk = extractOwnedR2VideoKey(
+              entry.videoUrl,
+              configuredR2Url,
+              user.id
+            );
+            if (vk) usedR2VideosBySiblings.add(vk);
+          }
         }
       }
 
@@ -338,6 +359,13 @@ export async function DELETE(
       );
       if (safeAudioToRemove.length > 0) {
         await supabase.storage.from("musik").remove(safeAudioToRemove);
+      }
+      if (
+        candidateR2VideoKey &&
+        !usedR2VideosBySiblings.has(candidateR2VideoKey) &&
+        isR2Configured()
+      ) {
+        await deleteR2Objects([candidateR2VideoKey]);
       }
     } catch {
       // non-blocking: still delete the ucapan row

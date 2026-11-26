@@ -50,6 +50,7 @@ create table if not exists public.ucapan (
   receipt_enabled boolean not null default false,
   voice_note_enabled boolean not null default false,
   extra_photos_enabled boolean not null default false,
+  local_video_enabled boolean not null default false,
   recipient_response jsonb default null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -114,6 +115,7 @@ begin
       or new.receipt_enabled is true
       or new.voice_note_enabled is true
       or new.extra_photos_enabled is true
+      or new.local_video_enabled is true
       or new.recipient_response is not null
     then
       raise exception 'Kolom berbayar dan add-on hanya bisa diaktifkan oleh sistem';
@@ -176,6 +178,9 @@ begin
     end if;
     if new.extra_photos_enabled is distinct from old.extra_photos_enabled then
       raise exception 'Kolom extra_photos_enabled hanya bisa diubah oleh sistem';
+    end if;
+    if new.local_video_enabled is distinct from old.local_video_enabled then
+      raise exception 'Kolom local_video_enabled hanya bisa diubah oleh sistem';
     end if;
     if new.recipient_response is distinct from old.recipient_response then
       raise exception 'Kolom recipient_response hanya bisa diubah oleh sistem';

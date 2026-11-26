@@ -196,17 +196,17 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(comboIntim.discount, 1000);
   assert.equal(comboIntim.totalAmount, 12400);
 
-  // All-in-One: 7 add-on sekaligus (16000 -> 11000, hemat 5000)
+  // All-in-One: 8 add-on sekaligus (21000 -> 15000, hemat 6000)
   const allInOne = calculateCheckoutTotal(8900, ALL_ADDON_KEYS);
-  assert.equal(allInOne.addonSubtotal, 16000);
-  assert.equal(allInOne.addonTotal, 11000);
-  assert.equal(allInOne.discount, 5000);
-  assert.equal(allInOne.totalAmount, 19900);
+  assert.equal(allInOne.addonSubtotal, 21000);
+  assert.equal(allInOne.addonTotal, 15000);
+  assert.equal(allInOne.discount, 6000);
+  assert.equal(allInOne.totalAmount, 23900);
   assert.equal(allInOne.bundleApplied, "all_in_one");
 
-  // All-in-One pada harga normal Classic (12900 + 11000 = 23900)
+  // All-in-One pada harga normal Classic (12900 + 15000 = 27900)
   const allInOneNormal = calculateCheckoutTotal(12900, ALL_ADDON_KEYS);
-  assert.equal(allInOneNormal.totalAmount, 23900);
+  assert.equal(allInOneNormal.totalAmount, 27900);
 
   // Tier Signature: promo (14900) & normal (24900) dengan add-on / All-in-One
   const sigSingle = calculateCheckoutTotal(14900, ["custom_slug"]);
@@ -222,13 +222,17 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(extraPhotosSingle.addonTotal, 2000);
   assert.equal(extraPhotosSingle.totalAmount, 10900);
 
+  const localVideoSingle = calculateCheckoutTotal(8900, ["local_video"]);
+  assert.equal(localVideoSingle.addonTotal, 5000);
+  assert.equal(localVideoSingle.totalAmount, 13900);
+
   const sigAllInOnePromo = calculateCheckoutTotal(14900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOnePromo.addonTotal, 11000);
-  assert.equal(sigAllInOnePromo.discount, 5000);
-  assert.equal(sigAllInOnePromo.totalAmount, 25900);
+  assert.equal(sigAllInOnePromo.addonTotal, 15000);
+  assert.equal(sigAllInOnePromo.discount, 6000);
+  assert.equal(sigAllInOnePromo.totalAmount, 29900);
 
   const sigAllInOneNormal = calculateCheckoutTotal(24900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOneNormal.totalAmount, 35900);
+  assert.equal(sigAllInOneNormal.totalAmount, 39900);
 });
 
 test("slug: validasi aturan penamaan slug dan reserved words", () => {
@@ -256,7 +260,16 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.deepEqual(buildDraftAddonColumns(undefined), {});
 
   const full = buildDraftAddonColumns({
-    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt", "voice_note", "extra_photos"],
+    addons: [
+      "custom_slug",
+      "custom_qr",
+      "intimate_gate",
+      "touch_particles",
+      "love_receipt",
+      "voice_note",
+      "extra_photos",
+      "local_video",
+    ],
     customSlug: "Raka Nadia",
     pin: "1402",
     particleStyle: "roses",
@@ -269,6 +282,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.equal(full.receipt_enabled, true);
   assert.equal(full.voice_note_enabled, true);
   assert.equal(full.extra_photos_enabled, true);
+  assert.equal(full.local_video_enabled, true);
 
   // Saat semua add-on dilepas, kolom di-reset ke null/false
   const cleared = buildDraftAddonColumns({ addons: [] });
@@ -280,6 +294,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.equal(cleared.receipt_enabled, false);
   assert.equal(cleared.voice_note_enabled, false);
   assert.equal(cleared.extra_photos_enabled, false);
+  assert.equal(cleared.local_video_enabled, false);
 });
 
 test("extra_photos: stripPublicUcapan membatasi 5 foto jika tidak dibeli", () => {

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { supabaseUrl } from "@/lib/supabase/config";
+import { deleteR2Objects, getR2PublicBaseUrl, isR2Configured } from "@/lib/r2";
 import {
   CLEANUP_BATCH_LIMIT,
   UNPAID_RETENTION_MS,
@@ -162,17 +163,19 @@ export async function cleanupExpiredUnpaidDrafts(
   }
 
   const configuredUrl = supabaseUrl();
+  const configuredR2Url = getR2PublicBaseUrl();
   let cleanedDrafts = 0;
   let cleanedStorageFiles = 0;
   let failed = 0;
 
   for (const draft of eligible) {
-    if (draft.owner_id && configuredUrl) {
+    if (draft.owner_id && (configuredUrl || configuredR2Url)) {
       const ownerSiblings = siblingsByOwner.get(draft.owner_id) ?? [];
-      const { fotoPaths, audioPaths } = collectSafeCleanupStoragePaths(
+      const { fotoPaths, audioPaths, r2VideoKeys } = collectSafeCleanupStoragePaths(
         draft,
         ownerSiblings,
-        configuredUrl
+        configuredUrl,
+        configuredR2Url
       );
 
       // Non-blocking storage removals scoped strictly to owner_id paths
@@ -197,6 +200,14 @@ export async function cleanupExpiredUnpaidDrafts(
           if (!rmAudioErr) {
             cleanedStorageFiles += audioPaths.length;
           }
+        } catch {
+          // non-blocking
+        }
+      }
+
+      if (r2VideoKeys.length > 0 && isR2Configured()) {
+        try {
+          cleanedStorageFiles += await deleteR2Objects(r2VideoKeys);
         } catch {
           // non-blocking
         }

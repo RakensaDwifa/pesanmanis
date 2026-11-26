@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "music:build": "node scripts/build-music.mjs",
-    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts test/courier-game.test.ts test/music-library.test.ts test/media-sync.test.ts test/in-app-browser.test.ts test/templates-visibility.test.ts test/cleanup-unpaid.test.ts test/unlock-schedule.test.ts test/seo-topics.test.ts"
+    "test": "node --test --experimental-strip-types test/pricing-and-payment.test.ts test/story-flow.test.ts test/security-and-validation.test.ts test/p3-features.test.ts test/courier-game.test.ts test/music-library.test.ts test/media-sync.test.ts test/in-app-browser.test.ts test/templates-visibility.test.ts test/cleanup-unpaid.test.ts test/unlock-schedule.test.ts test/seo-topics.test.ts test/r2-video.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -89,6 +89,7 @@ async function activateUcapanFromPayment(
       receipt_enabled: paidAddons.includes("love_receipt"),
       voice_note_enabled: paidAddons.includes("voice_note"),
       extra_photos_enabled: paidAddons.includes("extra_photos"),
+      local_video_enabled: paidAddons.includes("local_video"),
       ...(paidAddons.includes("custom_slug") ? {} : { custom_slug: null }),
       ...(paidAddons.includes("touch_particles") ? {} : { touch_particles: null }),
       ...(paidAddons.includes("intimate_gate")

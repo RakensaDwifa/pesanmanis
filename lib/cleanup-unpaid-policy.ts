@@ -9,6 +9,7 @@
 import {
   extractOwnedAudioStoragePath,
   extractOwnedFotoStoragePath,
+  extractOwnedR2VideoKey,
   isRecord,
 } from "./validation.ts";
 
@@ -44,6 +45,7 @@ export interface CleanupSiblingMediaRow {
 export interface SafeStoragePathsToRemove {
   fotoPaths: string[];
   audioPaths: string[];
+  r2VideoKeys: string[];
 }
 
 function parseIsoMs(raw: string | null | undefined): number | null {
@@ -106,18 +108,23 @@ export function collectSafeCleanupStoragePaths(
     "id" | "owner_id" | "photos" | "music_url" | "timeline"
   >,
   siblingRows: readonly CleanupSiblingMediaRow[],
-  configuredSupabaseUrl: string
+  configuredSupabaseUrl: string,
+  configuredR2PublicUrl: string = ""
 ): SafeStoragePathsToRemove {
   const ownerId = draft.owner_id;
-  if (!ownerId || !configuredSupabaseUrl) {
-    return { fotoPaths: [], audioPaths: [] };
+  if (!ownerId || (!configuredSupabaseUrl && !configuredR2PublicUrl)) {
+    return { fotoPaths: [], audioPaths: [], r2VideoKeys: [] };
   }
 
-  const extractVoiceNotes = (timeline: unknown[] | null | undefined): string[] => {
+  const extractTimelineUrls = (
+    timeline: unknown[] | null | undefined,
+    field: "voiceNoteUrl" | "videoUrl"
+  ): string[] => {
     const urls: string[] = [];
     for (const entry of timeline ?? []) {
-      if (isRecord(entry) && typeof entry.voiceNoteUrl === "string" && entry.voiceNoteUrl) {
-        urls.push(entry.voiceNoteUrl);
+      const value = isRecord(entry) ? entry[field] : undefined;
+      if (typeof value === "string" && value) {
+        urls.push(value);
       }
     }
     return urls;
@@ -125,45 +132,77 @@ export function collectSafeCleanupStoragePaths(
 
   const usedPhotosBySiblings = new Set<string>();
   const usedAudioBySiblings = new Set<string>();
+  const usedR2VideosBySiblings = new Set<string>();
 
   for (const sibling of siblingRows) {
     if (sibling.id === draft.id) continue;
-    for (const p of sibling.photos ?? []) {
-      const sp = extractOwnedFotoStoragePath(p, configuredSupabaseUrl, ownerId);
-      if (sp) usedPhotosBySiblings.add(sp);
+    if (configuredSupabaseUrl) {
+      for (const p of sibling.photos ?? []) {
+        const sp = extractOwnedFotoStoragePath(p, configuredSupabaseUrl, ownerId);
+        if (sp) usedPhotosBySiblings.add(sp);
+      }
+      for (const audioUrl of [
+        sibling.music_url,
+        ...extractTimelineUrls(sibling.timeline, "voiceNoteUrl"),
+      ]) {
+        const ap = extractOwnedAudioStoragePath(
+          audioUrl,
+          configuredSupabaseUrl,
+          ownerId
+        );
+        if (ap) usedAudioBySiblings.add(ap);
+      }
     }
-    for (const audioUrl of [sibling.music_url, ...extractVoiceNotes(sibling.timeline)]) {
-      const ap = extractOwnedAudioStoragePath(
-        audioUrl,
-        configuredSupabaseUrl,
-        ownerId
-      );
-      if (ap) usedAudioBySiblings.add(ap);
+    if (configuredR2PublicUrl) {
+      for (const videoUrl of extractTimelineUrls(sibling.timeline, "videoUrl")) {
+        const vk = extractOwnedR2VideoKey(videoUrl, configuredR2PublicUrl, ownerId);
+        if (vk) usedR2VideosBySiblings.add(vk);
+      }
     }
   }
 
   const fotoSet = new Set<string>();
-  for (const p of draft.photos ?? []) {
-    const sp = extractOwnedFotoStoragePath(p, configuredSupabaseUrl, ownerId);
-    if (sp && !usedPhotosBySiblings.has(sp)) {
-      fotoSet.add(sp);
+  const audioSet = new Set<string>();
+  if (configuredSupabaseUrl) {
+    for (const p of draft.photos ?? []) {
+      const sp = extractOwnedFotoStoragePath(p, configuredSupabaseUrl, ownerId);
+      if (sp && !usedPhotosBySiblings.has(sp)) {
+        fotoSet.add(sp);
+      }
+    }
+
+    for (const audioUrl of [
+      draft.music_url,
+      ...extractTimelineUrls(draft.timeline, "voiceNoteUrl"),
+    ]) {
+      const audioPath = extractOwnedAudioStoragePath(
+        audioUrl,
+        configuredSupabaseUrl,
+        ownerId
+      );
+      if (audioPath && !usedAudioBySiblings.has(audioPath)) {
+        audioSet.add(audioPath);
+      }
     }
   }
 
-  const audioSet = new Set<string>();
-  for (const audioUrl of [draft.music_url, ...extractVoiceNotes(draft.timeline)]) {
-    const audioPath = extractOwnedAudioStoragePath(
-      audioUrl,
-      configuredSupabaseUrl,
-      ownerId
-    );
-    if (audioPath && !usedAudioBySiblings.has(audioPath)) {
-      audioSet.add(audioPath);
+  const r2VideoSet = new Set<string>();
+  if (configuredR2PublicUrl) {
+    for (const videoUrl of extractTimelineUrls(draft.timeline, "videoUrl")) {
+      const videoKey = extractOwnedR2VideoKey(
+        videoUrl,
+        configuredR2PublicUrl,
+        ownerId
+      );
+      if (videoKey && !usedR2VideosBySiblings.has(videoKey)) {
+        r2VideoSet.add(videoKey);
+      }
     }
   }
 
   return {
     fotoPaths: Array.from(fotoSet),
     audioPaths: Array.from(audioSet),
+    r2VideoKeys: Array.from(r2VideoSet),
   };
 }
