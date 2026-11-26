@@ -13,17 +13,30 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
+  let userName: string | undefined;
+
   if (isRemote()) {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) redirect("/login");
+
+    const meta = user.user_metadata as
+      | { full_name?: string; name?: string }
+      | undefined;
+    const rawName =
+      meta?.full_name?.trim() ||
+      meta?.name?.trim() ||
+      user.email?.split("@")[0];
+    if (rawName) {
+      userName = rawName;
+    }
   }
 
   return (
     <Suspense fallback={<DashboardShellSkeleton />}>
-      <Dashboard />
+      <Dashboard userName={userName} />
     </Suspense>
   );
 }

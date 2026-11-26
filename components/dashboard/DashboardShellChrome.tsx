@@ -12,6 +12,7 @@ export type DashboardTab = "ucapan" | "referral";
 interface DashboardShellChromeProps {
   demo?: boolean;
   realtimeLive?: boolean;
+  userName?: string;
   activeTab?: DashboardTab;
   onTabChange?: (tab: DashboardTab) => void;
 }
@@ -39,13 +40,16 @@ const NAV_ITEMS: {
 export function DashboardSidebar({
   demo = false,
   realtimeLive = false,
+  userName,
   activeTab = "ucapan",
   onTabChange,
 }: DashboardShellChromeProps) {
   return (
     <aside className="lg:sticky lg:top-24 self-start bg-white rounded-3xl border border-outline-variant/30 shadow-card p-6">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <p className="text-label-md text-on-surface-variant">Hai 👋</p>
+        <p className="text-label-md text-on-surface-variant truncate">
+          {userName ? `Hai, ${userName}` : "Hai"}
+        </p>
         {realtimeLive && !demo && (
           <span
             className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"

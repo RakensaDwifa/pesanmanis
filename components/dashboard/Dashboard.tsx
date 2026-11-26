@@ -88,7 +88,7 @@ function editWindowInfo(u: RemoteUcapan, now: number): {
   return { open: true, label: `Sisa edit ${daysLeft} hari` };
 }
 
-export default function Dashboard() {
+export default function Dashboard({ userName }: { userName?: string }) {
   const [ucapans, setUcapans] = useState<RemoteUcapan[]>([]);
   const [demo, setDemo] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -498,6 +498,7 @@ export default function Dashboard() {
             <DashboardSidebar
               demo={loaded && demo}
               realtimeLive={loaded && realtimeLive}
+              userName={userName}
               activeTab={activeTab}
               onTabChange={handleTabChange}
             />
