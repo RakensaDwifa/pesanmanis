@@ -10,7 +10,7 @@ import type {
   ViewSummary,
 } from "../types.ts";
 import type { MoodKey } from "../mood.ts";
-import { sanitizeAddons } from "../pricing.ts";
+import { FREE_PHOTO_LIMIT, sanitizeAddons } from "../pricing.ts";
 import { validateSlugFormat } from "../slug.ts";
 import { isRecord, isValidEmail, isValidMediaUrl } from "../validation.ts";
 import { normalizeUnlockAt } from "../unlock-schedule.ts";
@@ -154,6 +154,7 @@ export function buildDraftAddonColumns(input?: DraftAddonInput): Record<string, 
     gate_data: gateData,
     receipt_enabled: state.addons.includes("love_receipt"),
     voice_note_enabled: state.addons.includes("voice_note"),
+    extra_photos_enabled: state.addons.includes("extra_photos"),
   };
 }
 
@@ -288,6 +289,7 @@ export interface UcapanRow {
   gate_data?: GateData | null;
   receipt_enabled?: boolean;
   voice_note_enabled?: boolean;
+  extra_photos_enabled?: boolean;
   recipient_response?: unknown;
   paid: boolean;
   paid_at: string | null;
@@ -503,6 +505,12 @@ export function mapUcapanRow(
       ? parsedDraft.addons.includes("voice_note")
       : Boolean(row.voice_note_enabled);
 
+  const effectiveExtraPhotos = row.paid
+    ? Boolean(row.extra_photos_enabled)
+    : parsedDraft
+      ? parsedDraft.addons.includes("extra_photos")
+      : Boolean(row.extra_photos_enabled);
+
   return {
     id: row.id,
     templateSlug: row.template_slug,
@@ -527,6 +535,7 @@ export function mapUcapanRow(
     gateData: effectiveGateData,
     receiptEnabled: effectiveReceipt,
     voiceNoteEnabled: effectiveVoiceNote,
+    extraPhotosEnabled: effectiveExtraPhotos,
     draftAddons: parsedDraft,
     recipientResponse: recipientResponse ?? undefined,
     unlockAt: unlockAt ?? undefined,
@@ -587,8 +596,13 @@ export function stripPublicUcapan(ucapan: StoredUcapan): StoredUcapan {
   const safeGateData: GateData | null =
     ucapan.gateData?.question ? { question: ucapan.gateData.question } : null;
   const allowVoiceNote = !ucapan.paid || Boolean(ucapan.voiceNoteEnabled);
+  const effectivePhotos =
+    ucapan.paid && !ucapan.extraPhotosEnabled
+      ? (ucapan.photos ?? []).slice(0, FREE_PHOTO_LIMIT)
+      : ucapan.photos;
   return {
     ...ucapan,
+    photos: effectivePhotos,
     voiceNoteUrl: allowVoiceNote ? ucapan.voiceNoteUrl : undefined,
     email: undefined,
     draftAddons: undefined,
@@ -629,6 +643,7 @@ export function stripLockedUcapan(ucapan: StoredUcapan): StoredUcapan {
     gateData: safeGateData,
     receiptEnabled: ucapan.receiptEnabled,
     voiceNoteEnabled: ucapan.voiceNoteEnabled,
+    extraPhotosEnabled: ucapan.extraPhotosEnabled,
     recipientResponse: undefined,
     // unlockAt dipertahankan agar CountdownGate tampil sebelum Intimate Gate
     unlockAt: ucapan.unlockAt,

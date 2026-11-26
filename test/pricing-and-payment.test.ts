@@ -196,17 +196,17 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(comboIntim.discount, 1000);
   assert.equal(comboIntim.totalAmount, 12400);
 
-  // All-in-One: 6 add-on sekaligus (14000 -> 9500, hemat 4500)
+  // All-in-One: 7 add-on sekaligus (16000 -> 11000, hemat 5000)
   const allInOne = calculateCheckoutTotal(8900, ALL_ADDON_KEYS);
-  assert.equal(allInOne.addonSubtotal, 14000);
-  assert.equal(allInOne.addonTotal, 9500);
-  assert.equal(allInOne.discount, 4500);
-  assert.equal(allInOne.totalAmount, 18400);
+  assert.equal(allInOne.addonSubtotal, 16000);
+  assert.equal(allInOne.addonTotal, 11000);
+  assert.equal(allInOne.discount, 5000);
+  assert.equal(allInOne.totalAmount, 19900);
   assert.equal(allInOne.bundleApplied, "all_in_one");
 
-  // All-in-One pada harga normal Classic (12900 + 9500 = 22400)
+  // All-in-One pada harga normal Classic (12900 + 11000 = 23900)
   const allInOneNormal = calculateCheckoutTotal(12900, ALL_ADDON_KEYS);
-  assert.equal(allInOneNormal.totalAmount, 22400);
+  assert.equal(allInOneNormal.totalAmount, 23900);
 
   // Tier Signature: promo (14900) & normal (24900) dengan add-on / All-in-One
   const sigSingle = calculateCheckoutTotal(14900, ["custom_slug"]);
@@ -218,13 +218,17 @@ test("addons: sanitasi input dan kalkulasi paket bundling checkout", () => {
   assert.equal(sigVoiceNote.totalAmount, 11900);
   assert.equal(sigVoiceNote.bundleApplied, "none");
 
+  const extraPhotosSingle = calculateCheckoutTotal(8900, ["extra_photos"]);
+  assert.equal(extraPhotosSingle.addonTotal, 2000);
+  assert.equal(extraPhotosSingle.totalAmount, 10900);
+
   const sigAllInOnePromo = calculateCheckoutTotal(14900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOnePromo.addonTotal, 9500);
-  assert.equal(sigAllInOnePromo.discount, 4500);
-  assert.equal(sigAllInOnePromo.totalAmount, 24400);
+  assert.equal(sigAllInOnePromo.addonTotal, 11000);
+  assert.equal(sigAllInOnePromo.discount, 5000);
+  assert.equal(sigAllInOnePromo.totalAmount, 25900);
 
   const sigAllInOneNormal = calculateCheckoutTotal(24900, ALL_ADDON_KEYS);
-  assert.equal(sigAllInOneNormal.totalAmount, 34400);
+  assert.equal(sigAllInOneNormal.totalAmount, 35900);
 });
 
 test("slug: validasi aturan penamaan slug dan reserved words", () => {
@@ -252,7 +256,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.deepEqual(buildDraftAddonColumns(undefined), {});
 
   const full = buildDraftAddonColumns({
-    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt", "voice_note"],
+    addons: ["custom_slug", "custom_qr", "intimate_gate", "touch_particles", "love_receipt", "voice_note", "extra_photos"],
     customSlug: "Raka Nadia",
     pin: "1402",
     particleStyle: "roses",
@@ -264,6 +268,7 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.deepEqual(full.gate_data, { pin: "1402" });
   assert.equal(full.receipt_enabled, true);
   assert.equal(full.voice_note_enabled, true);
+  assert.equal(full.extra_photos_enabled, true);
 
   // Saat semua add-on dilepas, kolom di-reset ke null/false
   const cleared = buildDraftAddonColumns({ addons: [] });
@@ -274,6 +279,37 @@ test("rows: buildDraftAddonColumns sanitasi dan reset kolom add-on", () => {
   assert.equal(cleared.gate_data, null);
   assert.equal(cleared.receipt_enabled, false);
   assert.equal(cleared.voice_note_enabled, false);
+  assert.equal(cleared.extra_photos_enabled, false);
+});
+
+test("extra_photos: stripPublicUcapan membatasi 5 foto jika tidak dibeli", () => {
+  const tenPhotos = Array.from({ length: 10 }, (_, i) => `https://example.com/${i + 1}.jpg`);
+  const baseRow: UcapanRow = {
+    id: "00000000-0000-4000-8000-000000000002",
+    template_slug: "amplop-cinta",
+    to_name: "Nadia",
+    from_name: "Ari",
+    title: "Untuk Kamu",
+    message: "Foto kenangan",
+    photos: tenPhotos,
+    music_url: null,
+    email: "ari@example.com",
+    timeline: null,
+    extra_photos_enabled: false,
+    paid: true,
+    paid_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const withoutAddon = stripPublicUcapan(mapUcapanRow(baseRow));
+  assert.equal(withoutAddon.photos.length, 5);
+  assert.deepEqual(withoutAddon.photos, tenPhotos.slice(0, 5));
+
+  const withAddon = stripPublicUcapan(
+    mapUcapanRow({ ...baseRow, extra_photos_enabled: true })
+  );
+  assert.equal(withAddon.photos.length, 10);
 });
 
 test("voice_note: serialisasi metadata dan proteksi stripPublicUcapan", () => {

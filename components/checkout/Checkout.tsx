@@ -10,7 +10,13 @@ import { getUcapan, savePaidUcapan } from "@/lib/store";
 import { isRemote } from "@/lib/supabase/config";
 import { getTemplate, templateEmoji } from "@/lib/templates";
 import { usePricing } from "@/lib/use-pricing";
-import { ADDON_PRICING, calculateCheckoutTotal, formatPrice, type AddonKey } from "@/lib/pricing";
+import {
+  ADDON_PRICING,
+  FREE_PHOTO_LIMIT,
+  calculateCheckoutTotal,
+  formatPrice,
+  type AddonKey,
+} from "@/lib/pricing";
 import type { StoredUcapan } from "@/lib/types";
 
 const PAYMENT_METHODS = [
@@ -91,6 +97,7 @@ function persistDemoActivation(
         : null,
     receiptEnabled: selected.includes("love_receipt"),
     voiceNoteEnabled: selected.includes("voice_note"),
+    extraPhotosEnabled: selected.includes("extra_photos"),
   });
 }
 
@@ -148,6 +155,7 @@ export default function Checkout({ id }: { id: string }) {
           if (u?.gateType) addons.push("intimate_gate");
           if (u?.receiptEnabled) addons.push("love_receipt");
           if (u?.voiceNoteEnabled) addons.push("voice_note");
+          if (u?.extraPhotosEnabled) addons.push("extra_photos");
           setSaved(
             addons.length > 0
               ? {
@@ -388,6 +396,11 @@ export default function Checkout({ id }: { id: string }) {
                               : "Belum ada rekaman"}
                           </p>
                         )}
+                        {key === "extra_photos" && (
+                          <p className="text-label-md text-on-surface-variant">
+                            {ucapan.photos.length} foto terpasang
+                          </p>
+                        )}
                       </div>
                       <span className="text-label-md font-bold text-primary whitespace-nowrap">
                         +{formatPrice(ADDON_PRICING[key].amount)}
@@ -403,6 +416,12 @@ export default function Checkout({ id }: { id: string }) {
                   <span className="text-label-md font-bold text-emerald-700 dark:text-emerald-300">
                     −{formatPrice(calculation.discount)}
                   </span>
+                </div>
+              )}
+
+              {!selected.includes("extra_photos") && ucapan.photos.length > FREE_PHOTO_LIMIT && (
+                <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/12 px-4 py-2.5 text-label-md text-amber-900 dark:text-amber-200">
+                  Kamu mengunggah {ucapan.photos.length} foto. Tanpa add-on Ekstra Slot Foto, hanya {FREE_PHOTO_LIMIT} foto pertama yang akan tampil di link penerima.
                 </div>
               )}
             </div>

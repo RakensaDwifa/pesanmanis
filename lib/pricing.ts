@@ -129,6 +129,9 @@ export function amountMatchesPaid(
 // Katalog Add-on & Skema Bundling
 // ============================================================
 
+export const FREE_PHOTO_LIMIT = 5;
+export const EXTRA_PHOTO_LIMIT = 10;
+
 export const ADDON_PRICING = {
   custom_slug: {
     id: "custom_slug",
@@ -166,6 +169,12 @@ export const ADDON_PRICING = {
     description: "Rekam suara langsung atau unggah audio pesan pribadi (maks 3 menit)",
     amount: 3000,
   },
+  extra_photos: {
+    id: "extra_photos",
+    label: "Ekstra Slot Foto (10 Foto)",
+    description: "Tampilkan hingga 10 foto kenangan (bawaan 5 foto)",
+    amount: 2000,
+  },
 } as const;
 
 export type AddonKey = keyof typeof ADDON_PRICING;
@@ -177,9 +186,10 @@ export const ALL_ADDON_KEYS: AddonKey[] = [
   "intimate_gate",
   "love_receipt",
   "voice_note",
+  "extra_photos",
 ];
 
-export const ALL_IN_ONE_BUNDLE_AMOUNT = 9500;
+export const ALL_IN_ONE_BUNDLE_AMOUNT = 11000;
 export const COMBO_ESTETIKA_AMOUNT = 3000;
 export const COMBO_INTIM_AMOUNT = 3500;
 
@@ -221,7 +231,7 @@ export function calculateCheckoutTotal(
   // Hitung subtotal normal tanpa diskon
   const addonSubtotal = addons.reduce((sum, key) => sum + ADDON_PRICING[key].amount, 0);
 
-  // Cek apakah mengambil semua (All-in-One: 6 fitur)
+  // Cek apakah mengambil semua (All-in-One: 7 fitur)
   if (addons.length === ALL_ADDON_KEYS.length) {
     const addonTotal = ALL_IN_ONE_BUNDLE_AMOUNT;
     const discount = Math.max(0, addonSubtotal - addonTotal);

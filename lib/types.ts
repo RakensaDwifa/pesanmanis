@@ -109,6 +109,7 @@ export interface StoredUcapan extends UcapanContent {
   gateData?: GateData | null;
   receiptEnabled?: boolean;
   voiceNoteEnabled?: boolean;
+  extraPhotosEnabled?: boolean;
   draftAddons?: DraftAddonConfig | null;
   recipientResponse?: RecipientResponse | null;
   /** True when content is redacted server-side pending Intimate Gate verification. */
