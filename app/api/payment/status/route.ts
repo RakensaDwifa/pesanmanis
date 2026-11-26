@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       paymentType: result.paymentType ?? "snap",
       transactionId: result.transactionId ?? null,
     });
-    if (activation.mismatch) {
+    if (activation.mismatch || activation.ucapanUpdateFailed) {
       return NextResponse.json({ ok: false, status: "PENDING" });
     }
     return NextResponse.json({ ok: true, status: "PAID" });

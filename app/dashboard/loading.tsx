@@ -1,0 +1,5 @@
+import { DashboardShellSkeleton } from "@/components/dashboard/DashboardSkeleton";
+
+export default function DashboardLoading() {
+  return <DashboardShellSkeleton />;
+}
