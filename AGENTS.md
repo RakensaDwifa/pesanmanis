@@ -46,6 +46,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **JANGAN** mengedit file migrasi lama (`schema.sql` s/d `schema_v8.sql`); setiap perubahan skema harus dikonsolidasikan di migrasi terbaru (`supabase/schema_v9.sql`) dan disinkronkan ke `supabase/setup-production.sql`.
 - **JANGAN** mengubah atau menyentuh aset/kode template `bonceng-malam` (`BoncengMalam*.tsx`, `public/rive-assets/`) kecuali diminta secara spesifik oleh user.
 
+## 5. Alur Pengembangan Pasca-Live (Branching & Lokal)
+Karena PesanManis sudah *live* di `https://www.pesanmanis.web.id` (terhubung ke branch `master` di Vercel):
+- **Branch Terpisah:** Untuk setiap fitur baru atau perbaikan non-trivial, **wajib** buat branch baru dari `master` (`git checkout -b feat/<nama-fitur>` atau `fix/<nama-fix>`), jangan langsung bekerja di `master`.
+- **Lingkungan Lokal:** Gunakan **Demo Mode** (`localStorage`) untuk iterasi UI cepat, dan **`.env.local` (Midtrans Sandbox)** untuk menguji alur database/pembayaran di `http://localhost:3000`.
+- **Verifikasi & Preview:** Jalankan `npx tsc --noEmit`, `npm run lint`, `npm test`, dan `npm run build` sebelum *push* ke branch. Setelah *push*, verifikasi di **Preview URL Vercel** sebelum *merge* ke `master`.
+- **Keamanan DB:** Perubahan SQL pada Supabase produksi harus bersifat *idempotent* (`ADD COLUMN IF NOT EXISTS`) dan tidak boleh menghapus/mengubah data `paid = true`.
+
 ## 5. Referensi Dokumentasi Inti
 Bacalah dokumen berikut di folder `docs/` sesuai konteks tugas sebelum menulis kode:
 1. **`docs/PRD.md`** — Wajib dibaca saat menambah fitur produk, mengubah user flow Builder/Checkout/Dashboard, aturan harga promo/normal, paket bundling add-on, aturan referral/credits, atau mengecek status fitur yang masih WIP.
